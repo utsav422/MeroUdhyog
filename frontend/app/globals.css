@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@import "@mantine/core/styles.css";
+@import "@mantine/dates/styles.css";
+@import "@mantine/notifications/styles.css";
+
+@theme {
+  --color-brand-0: #f2f0ff;
+  --color-brand-1: #e0dbff;
+  --color-brand-2: #c7bdff;
+  --color-brand-3: #a894ff;
+  --color-brand-4: #8b6dff;
+  --color-brand-5: #6f4bff;
+  --color-brand-6: #5a35eb;
+  --color-brand-7: #4826c4;
+  --color-brand-8: #381c9c;
+  --color-brand-9: #2a1478;
+
+  --color-success-0: #eafbf0;
+  --color-success-1: #c8f5da;
+  --color-success-2: #9fedbf;
+  --color-success-3: #6fe3a0;
+  --color-success-4: #3fd383;
+  --color-success-5: #1fb968;
+  --color-success-6: #159654;
+  --color-success-7: #0f7743;
+  --color-success-8: #0b5c34;
+  --color-success-9: #074327;
+
+  --color-danger-0: #fdecec;
+  --color-danger-1: #fad0d0;
+  --color-danger-2: #f5a8a8;
+  --color-danger-3: #ee7a7a;
+  --color-danger-4: #e65252;
+  --color-danger-5: #dc2f2f;
+  --color-danger-6: #b82323;
+  --color-danger-7: #941c1c;
+  --color-danger-8: #711515;
+  --color-danger-9: #4f0f0f;
+
+  --color-warning-0: #fff6e5;
+  --color-warning-1: #ffe8b8;
+  --color-warning-2: #ffd685;
+  --color-warning-3: #ffc24d;
+  --color-warning-4: #ffae1f;
+  --color-warning-5: #f59700;
+  --color-warning-6: #cc7d00;
+  --color-warning-7: #a36300;
+  --color-warning-8: #7a4a00;
+  --color-warning-9: #523100;
+}
+
+:root {
+  --background: #f6f7fb;
+  --foreground: #0f172a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

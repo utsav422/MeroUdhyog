@@ -1,0 +1,63 @@
+import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.database import Base
+from app.modules.routes.models import Route
+from app.modules.tenants.models import Tenant
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "email", name="uq_customers_tenant_email"),
+        UniqueConstraint("tenant_id", "tax_id", name="uq_customers_tenant_tax_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    tenant: Mapped["Tenant"] = relationship(foreign_keys=[tenant_id], viewonly=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    tax_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    company: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    route_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("routes.id", ondelete="SET NULL"), nullable=True
+    )
+    route: Mapped[Route | None] = relationship(
+        foreign_keys=[route_id], viewonly=True
+    )
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    contact_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
+
+    def __str__(self) -> str:
+        return self.name
