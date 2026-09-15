@@ -1,6 +1,5 @@
 'use client';
 
-import { Card, Group, Text, ThemeIcon } from '@mantine/core';
 import { ArrowDownRight, ArrowUpRight } from '@phosphor-icons/react';
 
 function formatValue(value: number, prefix = '', compact = false): string {
@@ -35,45 +34,39 @@ export default function KPICard({
   trendDirection?: 'up' | 'down';
   format?: 'number' | 'currency' | 'compact';
 }) {
-  const displayMode = format;
-  const formatted = formatValue(value, prefix, displayMode === 'compact');
+  const formatted = formatValue(value, prefix, format === 'compact');
 
   return (
-    <Card className="flex flex-col gap-3">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
           {icon}
         </div>
         {typeof trend === 'number' && (
           <div
             className={`flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold ${
               trendDirection === 'up'
-                ? 'bg-success-50 text-success-600'
-                : 'bg-danger-50 text-danger-600'
+                ? 'bg-success-50 text-success-700'
+                : 'bg-danger-50 text-danger-700'
             }`}
           >
             {trendDirection === 'up' ? (
-              <ArrowUpRight size={14} weight="bold" />
+              <ArrowUpRight size={12} weight="bold" />
             ) : (
-              <ArrowDownRight size={14} weight="bold" />
+              <ArrowDownRight size={12} weight="bold" />
             )}
-            {trend}%
+            {Math.abs(trend)}%
           </div>
         )}
-      </Group>
-      <div>
-        <Text size="sm" c="dimmed" fw={500}>
-          {label}
-        </Text>
-        <Text size="xl" fw={700} className="mt-0.5 leading-tight">
-          {formatted}
-        </Text>
-        {trendLabel && (
-          <Text size="xs" c="dimmed" className="mt-0.5">
-            {trendLabel}
-          </Text>
-        )}
       </div>
-    </Card>
+
+      <p className="mt-3 text-2xl font-semibold leading-none tracking-tight text-[var(--foreground)]">
+        {formatted}
+      </p>
+      <p className="mt-1.5 text-sm text-[var(--muted)]">{label}</p>
+      {trendLabel && (
+        <p className="mt-2 text-xs text-[var(--muted)]/80">{trendLabel}</p>
+      )}
+    </div>
   );
 }

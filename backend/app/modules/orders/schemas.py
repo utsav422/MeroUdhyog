@@ -21,6 +21,7 @@ class OrderItemRead(BaseModel):
     variant_id: UUID | None
     product_name: str
     variant_name: str | None
+    unit: str | None = None
     quantity: Decimal
     unit_price: Decimal
     amount: Decimal
@@ -42,7 +43,6 @@ class OrderUpdate(BaseModel):
     delivery_lng: Decimal | None = Field(default=None, ge=-180, le=180)
     notes: str | None = None
     status: str | None = None
-    payment_status: str | None = None
     # When provided, replaces the order's existing line items.
     items: list[OrderItemCreate] | None = None
 
@@ -59,12 +59,17 @@ class OrderRead(BaseModel):
     status: str
     payment_status: str
     total_amount: Decimal
+    amount_paid: Decimal
     delivery_address: str | None
     delivery_lat: Decimal | None
     delivery_lng: Decimal | None
     notes: str | None
     created_by: UUID | None
     created_at: datetime
+    # Reorder chain: this order is a re-order of `reorder_of_id` (attempt #).
+    reorder_of_id: UUID | None = None
+    reorder_of_ref: str | None = None
+    reorder_attempt: int | None = None
     items: list[OrderItemRead] = []
     # Set only when an update transitioned the order to "ready": true if a
     # delivery was created for it, false if one already existed.

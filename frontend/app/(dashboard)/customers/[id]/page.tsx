@@ -5,11 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button, Table, Text, ActionIcon, Input } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, PencilSimple, MapPin, Phone, Envelope, BuildingOffice, Check, X } from '@phosphor-icons/react';
+import { ArrowLeft, PencilSimple, MapPin, Phone, Envelope, BuildingOffice, Check, X, ArrowsClockwise, Notebook } from '@phosphor-icons/react';
 import { useCustomer, useCustomerPrices, useCustomerOrders, customersKeys } from '@/features/customers/api';
 import { useProducts, defaultVariantPrice } from '@/features/products/api';
+import { useReorder, ReorderBadge, canReorder } from '@/features/orders/components/Reorder';
 import { LoadingState, ErrorState, StatusBadge } from '@/components/shared';
-import { formatMoney, formatDate } from '@/lib/format';
+import { formatMoney, formatDate, formatPriceUnit } from '@/lib/format';
 import { apiClient } from '@/lib/api-client';
 
 export default function CustomerDetailPage() {
@@ -19,15 +20,17 @@ export default function CustomerDetailPage() {
   const pricesQuery = useCustomerPrices(params.id);
   const ordersQuery = useCustomerOrders(params.id);
   const productsQuery = useProducts();
+  const reorder = useReorder();
 
   const variantMap = useMemo(() => {
-    const m = new Map<string, { product_name: string; variant_name: string; default_price: string }>();
+    const m = new Map<string, { product_name: string; variant_name: string; default_price: string; default_unit: string }>();
     for (const p of productsQuery.data ?? []) {
       for (const v of p.variants) {
         m.set(v.id, {
           product_name: p.name,
           variant_name: v.name,
           default_price: defaultVariantPrice(v),
+          default_unit: v.unit ?? '',
         });
       }
     }
@@ -58,6 +61,7 @@ export default function CustomerDetailPage() {
         productName: info.product_name,
         variantName: info.variant_name,
         defaultPrice: info.default_price,
+        defaultUnit: info.default_unit,
         override: priceMap.get(variantId)?.price ?? '',
       })),
     [variantMap, priceMap],
@@ -134,11 +138,11 @@ export default function CustomerDetailPage() {
                 <span
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                     customer.is_active
-                      ? 'bg-emerald-50 text-emerald-600'
+                      ? 'bg-success-50 text-success-700'
                       : 'bg-zinc-100 text-zinc-500'
                   }`}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${customer.is_active ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+                  <span className={`h-1.5 w-1.5 rounded-full ${customer.is_active ? 'bg-success-500' : 'bg-zinc-400'}`} />
                   {customer.is_active ? 'Active' : 'Inactive'}
                 </span>
               </div>
@@ -147,6 +151,13 @@ export default function CustomerDetailPage() {
               </Text>
             </div>
           </div>
+          <Button
+            variant="default"
+            leftSection={<Notebook size={16} />}
+            onClick={() => router.push(`/khata/${customer.id}`)}
+          >
+            Khata ledger
+          </Button>
           <Button
             variant="default"
             leftSection={<PencilSimple size={16} />}
@@ -159,21 +170,21 @@ export default function CustomerDetailPage() {
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <Envelope size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>Email</Text>
           <Text fw={600} size="sm" className="mt-0.5 truncate">{customer.email || '—'}</Text>
         </div>
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <Phone size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>Phone</Text>
           <Text fw={600} size="sm" className="mt-0.5">{customer.phone || '—'}</Text>
         </div>
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600">
             <MapPin size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>City</Text>
@@ -195,7 +206,7 @@ export default function CustomerDetailPage() {
           )}
         </div>
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-success-50 text-success-700">
             <BuildingOffice size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>Total orders</Text>
@@ -249,7 +260,7 @@ export default function CustomerDetailPage() {
                     <span className="text-zinc-500">{row.variantName}</span>
                   </Table.Td>
                   <Table.Td ta="right">
-                    <span className="text-zinc-500">{formatMoney(row.defaultPrice)}</span>
+                    <span className="text-zinc-500">{formatPriceUnit(row.defaultPrice, row.defaultUnit)}</span>
                   </Table.Td>
                   <Table.Td ta="right">
                     {isEditing ? (
@@ -286,7 +297,7 @@ export default function CustomerDetailPage() {
                       />
                     ) : row.override ? (
                       <span className="inline-flex items-center gap-2">
-                        <span className="font-semibold text-zinc-800">{formatMoney(row.override)}</span>
+                        <span className="font-semibold text-zinc-800">{formatPriceUnit(row.override, row.defaultUnit)}</span>
                         <ActionIcon
                           size="sm"
                           variant="subtle"
@@ -364,9 +375,26 @@ export default function CustomerDetailPage() {
                 onClick={() => router.push(`/orders/${order.id}`)}
               >
                 <Table.Td>
-                  <span className="font-mono text-sm font-semibold text-zinc-800">
-                    {order.order_ref}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-semibold text-zinc-800">
+                      {order.order_ref}
+                    </span>
+                    <ReorderBadge order={order} />
+                  </div>
+                  {canReorder(order) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        reorder.reorderOrder(order);
+                      }}
+                      disabled={reorder.isPending}
+                      className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand-600 transition-colors hover:text-brand-700 disabled:opacity-50"
+                    >
+                      <ArrowsClockwise size={12} weight="bold" />
+                      Re-order
+                    </button>
+                  )}
                 </Table.Td>
                 <Table.Td>
                   <span className="text-zinc-600">{order.items.length} items</span>

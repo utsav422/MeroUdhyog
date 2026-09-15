@@ -29,10 +29,18 @@ export type RowAction<T> = {
   show?: (row: T) => boolean;
 };
 
-function SwitchIcon({ state }: { state: SortState | undefined }) {
-  if (!state) return <CaretUpDown size={13} className="text-zinc-300" />;
+function SortIcon({ state }: { state: SortState | undefined }) {
+  if (!state) return <CaretUpDown size={13} className="text-[var(--muted)]/50" />;
   if (state.direction === 'asc') return <CaretDoubleUp size={13} className="text-brand-600" />;
   return <CaretDoubleDown size={13} className="text-brand-600" />;
+}
+
+function Frame({ children }: { children: ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+      {children}
+    </div>
+  );
 }
 
 export default function DataTable<T>({
@@ -79,43 +87,40 @@ export default function DataTable<T>({
 }) {
   if (isPermissionDenied) {
     return (
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
+      <Frame>
         <PermissionDeniedState />
-      </div>
+      </Frame>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
+      <Frame>
         <ErrorState retry={retry} />
-      </div>
+      </Frame>
     );
   }
 
   if (loading) {
     return (
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
+      <Frame>
         <LoadingState />
-      </div>
+      </Frame>
     );
   }
 
   if (data.length === 0) {
     return (
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
+      <Frame>
         <EmptyState title={emptyTitle} description={emptyDescription} />
-      </div>
+      </Frame>
     );
   }
 
-  const selectionEnabled =
-    selectable && !!selectedKeys && !!onSelectionChange;
+  const selectionEnabled = selectable && !!selectedKeys && !!onSelectionChange;
   const pageIds = data.map(getRowId);
   const allPageSelected =
-    selectionEnabled &&
-    pageIds.length > 0 &&
-    pageIds.every((id) => selectedKeys!.includes(id));
+    selectionEnabled && pageIds.length > 0 && pageIds.every((id) => selectedKeys!.includes(id));
   const somePageSelected =
     selectionEnabled && pageIds.some((id) => selectedKeys!.includes(id));
 
@@ -129,148 +134,140 @@ export default function DataTable<T>({
   };
 
   return (
-    <div className="overflow-x-auto rounded-2xl bg-white shadow-sm">
-      <Table
-        style={{ minWidth: minWidth }}
-        highlightOnHover
-        verticalSpacing="sm"
-        horizontalSpacing="md"
-      >
-        <Table.Thead>
-          <Table.Tr className="text-zinc-500">
-            {selectionEnabled && (
-              <Table.Th style={{ width: 40, whiteSpace: 'nowrap' }}>
-                <Checkbox
-                  checked={allPageSelected}
-                  indeterminate={!allPageSelected && somePageSelected}
-                  onChange={togglePage}
-                  aria-label="Select all on page"
-                />
-              </Table.Th>
-            )}
-            {columns.map((col) => (
-              <Table.Th
-                key={col.key}
-                style={{
-                  textAlign: col.align ?? 'left',
-                  width: col.width,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {col.sortable && onSortChange ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onSortChange({
-                        field: col.key,
-                        direction:
-                          sortState?.field === col.key && sortState.direction === 'asc'
-                            ? 'desc'
-                            : 'asc',
-                      })
-                    }
-                    className="inline-flex items-center gap-1 text-inherit transition-colors hover:text-zinc-800"
-                  >
-                    {col.header}
-                    <SwitchIcon
-                      state={
-                        sortState?.field === col.key ? sortState : undefined
-                      }
-                    />
-                  </button>
-                ) : (
-                  col.header
-                )}
-              </Table.Th>
-            ))}
-            {rowActions && rowActions.length > 0 && (
-              <Table.Th style={{ textAlign: 'right', whiteSpace: 'nowrap' }} />
-            )}
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {data.map((row) => {
-            const accent = rowAccent?.(row);
-            return (
-              <Table.Tr
-                key={getRowId(row)}
-                className={rowClassName?.(row)}
-                style={
-                  accent
-                    ? { borderLeft: `3px solid ${accent}` }
-                    : undefined
-                }
-              >
+    <Frame>
+      <div className="overflow-x-auto">
+        <Table style={{ minWidth }} verticalSpacing="sm" horizontalSpacing="md">
+          <Table.Thead>
+            <Table.Tr className="border-b border-[var(--border)]">
               {selectionEnabled && (
-                <Table.Td style={{ textAlign: 'left' }}>
+                <Table.Th
+                  style={{ width: 40, whiteSpace: 'nowrap' }}
+                  className="!bg-transparent !py-3"
+                >
                   <Checkbox
-                    aria-label="Select row"
-                    checked={selectedKeys!.includes(getRowId(row))}
-                    onChange={() => {
-                      const id = getRowId(row);
-                      if (selectedKeys!.includes(id)) {
-                        onSelectionChange!(selectedKeys!.filter((k) => k !== id));
-                      } else {
-                        onSelectionChange!([...selectedKeys!, id]);
-                      }
-                    }}
+                    checked={allPageSelected}
+                    indeterminate={!allPageSelected && somePageSelected}
+                    onChange={togglePage}
+                    aria-label="Select all on page"
                   />
-                </Table.Td>
+                </Table.Th>
               )}
               {columns.map((col) => (
-                <Table.Td
+                <Table.Th
                   key={col.key}
-                  style={{ textAlign: col.align ?? 'left' }}
+                  style={{ textAlign: col.align ?? 'left', width: col.width, whiteSpace: 'nowrap' }}
+                  className="!bg-transparent !py-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
                 >
-                  {col.render(row)}
-                </Table.Td>
+                  {col.sortable && onSortChange ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onSortChange({
+                          field: col.key,
+                          direction:
+                            sortState?.field === col.key && sortState.direction === 'asc'
+                              ? 'desc'
+                              : 'asc',
+                        })
+                      }
+                      className="inline-flex items-center gap-1 text-inherit transition-colors hover:text-[var(--foreground)]"
+                    >
+                      {col.header}
+                      <SortIcon state={sortState?.field === col.key ? sortState : undefined} />
+                    </button>
+                  ) : (
+                    col.header
+                  )}
+                </Table.Th>
               ))}
               {rowActions && rowActions.length > 0 && (
-                <Table.Td style={{ textAlign: 'right' }}>
-                  <div className="flex justify-end">
-                    {(() => {
-                      const visible = rowActions.filter((a) => (a.show ? a.show(row) : true));
-                      if (visible.length === 0) return null;
-                      return (
-                        <Menu shadow="md" width={180} position="bottom-end">
-                          <Menu.Target>
-                            <button
-                              type="button"
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
-                              aria-label="Row actions"
-                            >
-                              <DotsThree size={18} weight="bold" />
-                            </button>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            {visible.map((action, i) => (
-                              <Menu.Item
-                                key={i}
-                                leftSection={
-                                  typeof action.icon === 'function'
-                                    ? action.icon(row)
-                                    : action.icon
-                                }
-                                color={action.color}
-                                onClick={() => action.onClick(row)}
-                              >
-                                {typeof action.label === 'function'
-                                  ? action.label(row)
-                                  : action.label}
-                              </Menu.Item>
-                            ))}
-                          </Menu.Dropdown>
-                        </Menu>
-                      );
-                    })()}
-                  </div>
-                </Table.Td>
+                <Table.Th
+                  style={{ textAlign: 'right', whiteSpace: 'nowrap' }}
+                  className="!bg-transparent !py-3"
+                />
               )}
             </Table.Tr>
-            );
-          })}
-        </Table.Tbody>
-      </Table>
-    </div>
+          </Table.Thead>
+          <Table.Tbody>
+            {data.map((row) => {
+              const accent = rowAccent?.(row);
+              return (
+                <Table.Tr
+                  key={getRowId(row)}
+                  data-row-id={getRowId(row)}
+                  className={`border-b border-[var(--border)] transition-colors last:border-0 hover:bg-black/[0.02] ${
+                    rowClassName?.(row) ?? ''
+                  }`}
+                  style={accent ? { borderLeft: `3px solid ${accent}` } : undefined}
+                >
+                  {selectionEnabled && (
+                    <Table.Td style={{ textAlign: 'left' }} className="!py-3">
+                      <Checkbox
+                        aria-label="Select row"
+                        checked={selectedKeys!.includes(getRowId(row))}
+                        onChange={() => {
+                          const id = getRowId(row);
+                          if (selectedKeys!.includes(id)) {
+                            onSelectionChange!(selectedKeys!.filter((k) => k !== id));
+                          } else {
+                            onSelectionChange!([...selectedKeys!, id]);
+                          }
+                        }}
+                      />
+                    </Table.Td>
+                  )}
+                  {columns.map((col) => (
+                    <Table.Td key={col.key} style={{ textAlign: col.align ?? 'left' }} className="!py-3">
+                      {col.render(row)}
+                    </Table.Td>
+                  ))}
+                  {rowActions && rowActions.length > 0 && (
+                    <Table.Td style={{ textAlign: 'right' }} className="!py-3">
+                      <div className="flex justify-end">
+                        {(() => {
+                          const visible = rowActions.filter((a) => (a.show ? a.show(row) : true));
+                          if (visible.length === 0) return null;
+                          return (
+                            <Menu shadow="md" width={180} position="bottom-end">
+                              <Menu.Target>
+                                <button
+                                  type="button"
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] transition-colors hover:bg-black/5 hover:text-[var(--foreground)]"
+                                  aria-label="Row actions"
+                                >
+                                  <DotsThree size={18} weight="bold" />
+                                </button>
+                              </Menu.Target>
+                              <Menu.Dropdown>
+                                {visible.map((action, i) => (
+                                  <Menu.Item
+                                    key={i}
+                                    leftSection={
+                                      typeof action.icon === 'function'
+                                        ? action.icon(row)
+                                        : action.icon
+                                    }
+                                    color={action.color}
+                                    onClick={() => action.onClick(row)}
+                                  >
+                                    {typeof action.label === 'function'
+                                      ? action.label(row)
+                                      : action.label}
+                                  </Menu.Item>
+                                ))}
+                              </Menu.Dropdown>
+                            </Menu>
+                          );
+                        })()}
+                      </div>
+                    </Table.Td>
+                  )}
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </div>
+    </Frame>
   );
 }

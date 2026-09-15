@@ -101,6 +101,7 @@ class ProductVariant(Base):
     attributes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     size: Mapped[str | None] = mapped_column(String(50), nullable=True)
     size_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(30), nullable=True)
     images: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")

@@ -57,9 +57,27 @@ class Order(Base):
     route: Mapped[Route | None] = relationship(
         foreign_keys=[route_id], viewonly=True
     )
+    # Reorder chain: a reorder is a fresh order placed to replace a
+    # failed/cancelled one. `reorder_of_id` points at the order it replaces and
+    # `reorder_attempt` is how many times this same order has been re-ordered
+    # (1 = first reorder, 2 = second, ...), so the cancellation history of each
+    # order survives in its own record instead of being overwritten.
+    reorder_of_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True
+    )
+    reorder_of: Mapped["Order | None"] = relationship(
+        foreign_keys=[reorder_of_id], remote_side="Order.id", viewonly=True
+    )
+    reorder_attempt: Mapped[int | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="draft")
     payment_status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="unpaid")
     total_amount: Mapped[Decimal] = mapped_column(
+        Numeric(14, 2), nullable=False, server_default=text("0")
+    )
+    # Running total of ledger allocations settled against this order. Recomputed
+    # transactionally whenever a payment is recorded or voided — never set by
+    # hand (see the khata module). `payment_status` is derived from it.
+    amount_paid: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), nullable=False, server_default=text("0")
     )
     items: Mapped[list["OrderItem"]] = relationship(
@@ -86,6 +104,14 @@ class Order(Base):
         route = self.__dict__.get("route")
         if route is not None:
             return getattr(route, "name", None)
+        return None
+
+    @property
+    def reorder_of_ref(self) -> str | None:
+        # Readable ref of the order this one re-places (no lazy load).
+        source = self.__dict__.get("reorder_of")
+        if source is not None:
+            return getattr(source, "order_ref", None)
         return None
 
     def __str__(self) -> str:
@@ -124,6 +150,7 @@ class OrderItem(Base):
     )
     product_name: Mapped[str] = mapped_column(String(200), nullable=False)
     variant_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(30), nullable=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)

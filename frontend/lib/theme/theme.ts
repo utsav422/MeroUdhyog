@@ -3,10 +3,11 @@ import { MantineThemeOverride } from '@mantine/core';
 export const theme: MantineThemeOverride = {
   primaryColor: 'brand',
   colors: {
-    brand: ['#f2f0ff', '#e0dbff', '#c7bdff', '#a894ff', '#8b6dff', '#6f4bff', '#5a35eb', '#4826c4', '#381c9c', '#2a1478'],
+    brand: ['#eaf3ee', '#cbe2d5', '#a0cbb3', '#6cad8b', '#3d8c67', '#23724e', '#1b4332', '#163a2b', '#102b20', '#0a1c15'],
+    accent: ['#fff7e8', '#ffe9bd', '#ffd685', '#ffbf4d', '#ffab24', '#f59e0b', '#cc8000', '#a36300', '#7a4a00', '#523100'],
     success: ['#eafbf0', '#c8f5da', '#9fedbf', '#6fe3a0', '#3fd383', '#1fb968', '#159654', '#0f7743', '#0b5c34', '#074327'],
     danger: ['#fdecec', '#fad0d0', '#f5a8a8', '#ee7a7a', '#e65252', '#dc2f2f', '#b82323', '#941c1c', '#711515', '#4f0f0f'],
-    warning: ['#fff6e5', '#ffe8b8', '#ffd685', '#ffc24d', '#ffae1f', '#f59700', '#cc7d00', '#a36300', '#7a4a00', '#523100'],
+    warning: ['#fdf3e8', '#f9deb8', '#f3c485', '#eba74d', '#e28c24', '#d97706', '#b35f04', '#8c4a03', '#663602', '#402201'],
   },
   radius: { sm: '8px', md: '12px', lg: '16px', xl: '20px' },
   defaultRadius: 'lg',

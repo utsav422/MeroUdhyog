@@ -4,54 +4,69 @@
 @import "@mantine/notifications/styles.css";
 
 @theme {
-  --color-brand-0: #f2f0ff;
-  --color-brand-1: #e0dbff;
-  --color-brand-2: #c7bdff;
-  --color-brand-3: #a894ff;
-  --color-brand-4: #8b6dff;
-  --color-brand-5: #6f4bff;
-  --color-brand-6: #5a35eb;
-  --color-brand-7: #4826c4;
-  --color-brand-8: #381c9c;
-  --color-brand-9: #2a1478;
+  --color-brand-50: #eaf3ee;
+  --color-brand-100: #cbe2d5;
+  --color-brand-200: #a0cbb3;
+  --color-brand-300: #6cad8b;
+  --color-brand-400: #3d8c67;
+  --color-brand-500: #23724e;
+  --color-brand-600: #1b4332;
+  --color-brand-700: #163a2b;
+  --color-brand-800: #102b20;
+  --color-brand-900: #0a1c15;
 
-  --color-success-0: #eafbf0;
-  --color-success-1: #c8f5da;
-  --color-success-2: #9fedbf;
-  --color-success-3: #6fe3a0;
-  --color-success-4: #3fd383;
-  --color-success-5: #1fb968;
-  --color-success-6: #159654;
-  --color-success-7: #0f7743;
-  --color-success-8: #0b5c34;
-  --color-success-9: #074327;
+  --color-accent-50: #fff7e8;
+  --color-accent-100: #ffe9bd;
+  --color-accent-200: #ffd685;
+  --color-accent-300: #ffbf4d;
+  --color-accent-400: #ffab24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #cc8000;
+  --color-accent-700: #a36300;
+  --color-accent-800: #7a4a00;
+  --color-accent-900: #523100;
 
-  --color-danger-0: #fdecec;
-  --color-danger-1: #fad0d0;
-  --color-danger-2: #f5a8a8;
-  --color-danger-3: #ee7a7a;
-  --color-danger-4: #e65252;
-  --color-danger-5: #dc2f2f;
-  --color-danger-6: #b82323;
-  --color-danger-7: #941c1c;
-  --color-danger-8: #711515;
-  --color-danger-9: #4f0f0f;
+  --color-success-50: #eafbf0;
+  --color-success-100: #c8f5da;
+  --color-success-200: #9fedbf;
+  --color-success-300: #6fe3a0;
+  --color-success-400: #3fd383;
+  --color-success-500: #1fb968;
+  --color-success-600: #159654;
+  --color-success-700: #0f7743;
+  --color-success-800: #0b5c34;
+  --color-success-900: #074327;
 
-  --color-warning-0: #fff6e5;
-  --color-warning-1: #ffe8b8;
-  --color-warning-2: #ffd685;
-  --color-warning-3: #ffc24d;
-  --color-warning-4: #ffae1f;
-  --color-warning-5: #f59700;
-  --color-warning-6: #cc7d00;
-  --color-warning-7: #a36300;
-  --color-warning-8: #7a4a00;
-  --color-warning-9: #523100;
+  --color-danger-50: #fdecec;
+  --color-danger-100: #fad0d0;
+  --color-danger-200: #f5a8a8;
+  --color-danger-300: #ee7a7a;
+  --color-danger-400: #e65252;
+  --color-danger-500: #dc2f2f;
+  --color-danger-600: #b82323;
+  --color-danger-700: #941c1c;
+  --color-danger-800: #711515;
+  --color-danger-900: #4f0f0f;
+
+  --color-warning-50: #fdf3e8;
+  --color-warning-100: #f9deb8;
+  --color-warning-200: #f3c485;
+  --color-warning-300: #eba74d;
+  --color-warning-400: #e28c24;
+  --color-warning-500: #d97706;
+  --color-warning-600: #b35f04;
+  --color-warning-700: #8c4a03;
+  --color-warning-800: #663602;
+  --color-warning-900: #402201;
 }
 
 :root {
-  --background: #f6f7fb;
-  --foreground: #0f172a;
+  --background: #f6f5f1;
+  --surface: #ffffff;
+  --surface-1: #f1efe8;
+  --border: #e4e7ee;
+  --muted: #6b7280;
+  --foreground: #111827;
 }
 
 * {
@@ -67,6 +82,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "tnum" 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

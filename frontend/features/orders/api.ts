@@ -23,6 +23,7 @@ export type OrderItem = {
   variant_id: string | null;
   product_name: string;
   variant_name: string | null;
+  unit: string | null;
   quantity: string;
   unit_price: string;
   amount: string;
@@ -38,12 +39,16 @@ export type Order = {
   status: string;
   payment_status: string;
   total_amount: string;
+  amount_paid: string;
   delivery_address: string | null;
   delivery_lat: string | null;
   delivery_lng: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;
+  reorder_of_id: string | null;
+  reorder_of_ref: string | null;
+  reorder_attempt: number | null;
   items: OrderItem[];
   delivery_created?: boolean | null;
 };
@@ -169,6 +174,19 @@ export function useCreateDeliveryForOrder() {
       return created;
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: deliveriesKeys.all });
+    },
+  });
+}
+
+export function useReorderOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiClient.post<Order>(`/orders/${orderId}/reorder`);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ordersKeys.all });
       qc.invalidateQueries({ queryKey: deliveriesKeys.all });
     },
   });

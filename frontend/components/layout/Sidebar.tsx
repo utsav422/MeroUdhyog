@@ -17,6 +17,9 @@ import {
   FileArrowUp,
   ShieldCheck,
   UserGear,
+  CalendarBlank,
+  Notebook,
+  Stamp,
 } from '@phosphor-icons/react';
 import { useSession } from '@/lib/providers';
 
@@ -24,6 +27,7 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ReactNode;
+  ownerOnly?: boolean;
 };
 
 type NavGroup = {
@@ -51,6 +55,11 @@ const NAV_GROUPS: NavGroup[] = [
         icon: <ShoppingBag size={18} weight="duotone" />,
       },
       {
+        href: '/orders/calendar',
+        label: 'Activity Calendar',
+        icon: <CalendarBlank size={18} weight="duotone" />,
+      },
+      {
         href: '/deliveries',
         label: 'Deliveries',
         icon: <Truck size={18} weight="duotone" />,
@@ -59,6 +68,11 @@ const NAV_GROUPS: NavGroup[] = [
         href: '/customers',
         label: 'Customers',
         icon: <Users size={18} weight="duotone" />,
+      },
+      {
+        href: '/khata',
+        label: 'Khata',
+        icon: <Notebook size={18} weight="duotone" />,
       },
     ],
   },
@@ -95,6 +109,12 @@ const NAV_GROUPS: NavGroup[] = [
         label: 'Routes',
         icon: <MapTrifold size={18} weight="duotone" />,
       },
+      {
+        href: '/settings/bill-format',
+        label: 'Bill Format',
+        icon: <Stamp size={18} weight="duotone" />,
+        ownerOnly: true,
+      },
     ],
   },
   {
@@ -127,6 +147,7 @@ export default function Sidebar({
   const pathname = usePathname();
   const session = useSession();
   const isDeliveryAgent = session?.role === 'delivery';
+  const isOwner = session?.role === 'owner';
 
   const navGroups: NavGroup[] = isDeliveryAgent
     ? [
@@ -141,21 +162,19 @@ export default function Sidebar({
           ],
         },
       ]
-    : NAV_GROUPS.map((group) =>
-        group.label === 'Main'
-          ? {
-              ...group,
-              items: [
-                ...group.items,
-                {
-                  href: '/deliveries/portal',
-                  label: 'Delivery Map',
-                  icon: <MapTrifold size={18} weight="duotone" />,
-                },
-              ],
-            }
-          : group,
-      );
+    : NAV_GROUPS.map((group) => {
+        const deliveryMapItem: NavItem = {
+          href: '/deliveries/portal',
+          label: 'Delivery Map',
+          icon: <MapTrifold size={18} weight="duotone" />,
+        };
+        const items: NavItem[] =
+          group.label === 'Main' ? [...group.items, deliveryMapItem] : group.items;
+        return {
+          ...group,
+          items: items.filter((item) => !item.ownerOnly || isOwner),
+        };
+      });
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200/70 bg-white px-4 py-5 lg:flex">
@@ -164,7 +183,7 @@ export default function Sidebar({
           <Factory size={20} weight="duotone" />
         </div>
         <div className="leading-tight">
-          <div className="text-[15px] font-bold text-zinc-900">Factory OS</div>
+          <div className="text-[15px] font-bold text-zinc-900">Mero Udhyog</div>
           <div className="text-xs text-zinc-400">Tenant dashboard</div>
         </div>
       </div>
@@ -191,7 +210,7 @@ export default function Sidebar({
               {group.items.map((item) => {
                 const active =
                   pathname === item.href ||
-                  (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                  (item.href !== '/dashboard' && pathname.startsWith(item.href) && !(item.href === '/orders' && pathname.startsWith('/orders/calendar')));
                 return (
                   <Link
                     key={item.href}

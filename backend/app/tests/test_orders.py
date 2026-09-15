@@ -194,7 +194,7 @@ async def test_delivery_role_permissions(client):
 
 
 @pytest.mark.asyncio
-async def test_update_order_items_and_payment_status(client):
+async def test_update_order_items(client):
     await _register(client, f"t{uuid.uuid4().hex[:6]}")
     product = await _create_product(client, "Salsa")
     product2 = await _create_product(client, "Guac")
@@ -203,7 +203,6 @@ async def test_update_order_items_and_payment_status(client):
     r = await client.patch(
         f"/api/v1/orders/{order['id']}",
         json={
-            "payment_status": "paid",
             "items": [
                 {
                     "product_id": product2["id"],
@@ -215,11 +214,127 @@ async def test_update_order_items_and_payment_status(client):
     )
     assert r.status_code == 200, r.text
     updated = r.json()
-    assert updated["payment_status"] == "paid"
+    # payment status is owned by the khata ledger; it cannot be changed here
+    assert updated["payment_status"] == "unpaid"
     assert updated["total_amount"] == "30.00"
     assert len(updated["items"]) == 1
     assert updated["items"][0]["product_id"] == product2["id"]
     assert updated["items"][0]["quantity"] == "3.0000"
+
+
+@pytest.mark.asyncio
+async def test_reorder_cancelled_order_creates_draft_chain(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "Salsa")
+    customer = await _create_customer(client)
+    order = await _create_order(client, product, customer)
+    assert order["total_amount"] == "20.00"
+
+    r = await client.patch(f"/api/v1/orders/{order['id']}", json={"status": "cancelled"})
+    assert r.status_code == 200
+
+    r = await client.post(f"/api/v1/orders/{order['id']}/reorder")
+    assert r.status_code == 201, r.text
+    reorder = r.json()
+    assert reorder["status"] == "draft"
+    assert reorder["reorder_of_id"] == order["id"]
+    assert reorder["reorder_of_ref"] == order["order_ref"]
+    assert reorder["reorder_attempt"] == 1
+    assert reorder["customer_id"] == customer["id"]
+    assert reorder["total_amount"] == "20.00"
+    assert len(reorder["items"]) == 1
+
+    # The cancelled original is untouched — its history is preserved.
+    r = await client.get(f"/api/v1/orders/{order['id']}")
+    assert r.status_code == 200
+    cancelled = r.json()
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["reorder_of_id"] is None
+    assert cancelled["reorder_attempt"] is None
+
+    # Both are visible in the list.
+    r = await client.get("/api/v1/orders")
+    ids = [o["id"] for o in r.json()]
+    assert order["id"] in ids and reorder["id"] in ids
+
+
+@pytest.mark.asyncio
+async def test_reorder_repeated_cancellations_increment_attempt(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "Guac")
+    order = await _create_order(client, product)
+    await client.patch(f"/api/v1/orders/{order['id']}", json={"status": "cancelled"})
+
+    current = order
+    for attempt in range(1, 4):
+        r = await client.post(f"/api/v1/orders/{current['id']}/reorder")
+        assert r.status_code == 201, r.text
+        reorder = r.json()
+        # Each reorder is itself cancelled before the next one, so the
+        # history shows "once, twice, three times".
+        await client.patch(
+            f"/api/v1/orders/{reorder['id']}", json={"status": "cancelled"}
+        )
+        assert reorder["reorder_attempt"] == attempt
+        assert reorder["reorder_of_id"] == current["id"]
+        current = reorder
+
+    r = await client.get("/api/v1/orders")
+    ids = [o["id"] for o in r.json()]
+    assert order["id"] in ids
+    assert current["id"] in ids
+    assert len(ids) == 4
+
+
+@pytest.mark.asyncio
+async def test_reorder_only_allowed_for_failed_or_cancelled(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "Ketchup")
+    order = await _create_order(client, product)
+
+    r = await client.post(f"/api/v1/orders/{order['id']}/reorder")
+    assert r.status_code == 409
+
+    await client.patch(f"/api/v1/orders/{order['id']}", json={"status": "confirmed"})
+    r = await client.post(f"/api/v1/orders/{order['id']}/reorder")
+    assert r.status_code == 409
+
+    await client.patch(f"/api/v1/orders/{order['id']}", json={"status": "ready"})
+    r = await client.post(f"/api/v1/orders/{order['id']}/reorder")
+    assert r.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_reorder_requires_manage_catalog_permission(client):
+    tokens = await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    tenant_id = tokens["tenant_id"]
+    product = await _create_product(client, "Mayo")
+    order = await _create_order(client, product)
+    await client.patch(f"/api/v1/orders/{order['id']}", json={"status": "cancelled"})
+
+    delivery_id = await _create_role_user(
+        tenant_id, "delivery", f"d{uuid.uuid4().hex[:6]}@test.com"
+    )
+    client.cookies["access_token"] = create_access_token(delivery_id, tenant_id)
+    r = await client.post(f"/api/v1/orders/{order['id']}/reorder")
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_reorder_reserves_stock_again(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "Chilli")
+    order = await _create_order(client, product)
+    await client.patch(f"/api/v1/orders/{order['id']}", json={"status": "cancelled"})
+
+    r = await client.post(f"/api/v1/orders/{order['id']}/reorder")
+    assert r.status_code == 201
+
+    # Cancelled order returned its 2 units; the reorder reserved them again.
+    r = await client.get(f"/api/v1/products/{product['id']}")
+    assert r.status_code == 200
+    variant = r.json()["variants"][0]
+    assert float(variant["stock_quantity"]) == 98
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, Group, SegmentedControl, Text } from '@mantine/core';
+import { SegmentedControl } from '@mantine/core';
 
 export type PeriodToggleOption = {
   value: string;
@@ -28,20 +28,14 @@ export default function ChartCard({
 }) {
   const showToggle = periodToggle && periodToggle.length > 0;
   return (
-    <Card className="flex flex-col gap-4">
-      <Group justify="space-between" align="flex-start" wrap="wrap">
+    <div className="flex flex-col gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Text fw={600} size="md">
-            {title}
-          </Text>
-          {subtitle && (
-            <Text size="xs" c="dimmed" className="mt-0.5">
-              {subtitle}
-            </Text>
-          )}
+          <p className="text-sm font-semibold text-[var(--foreground)]">{title}</p>
+          {subtitle && <p className="mt-0.5 text-xs text-[var(--muted)]">{subtitle}</p>}
           {legend && <div className="mt-2">{legend}</div>}
         </div>
-        <Group gap="sm" wrap="nowrap">
+        <div className="flex items-center gap-2">
           {action}
           {showToggle && periodValue !== undefined && onPeriodChange && (
             <SegmentedControl
@@ -51,10 +45,10 @@ export default function ChartCard({
               data={periodToggle.map((o) => ({ value: o.value, label: o.label }))}
             />
           )}
-        </Group>
-      </Group>
+        </div>
+      </div>
       <div className="min-h-[240px] w-full">{children}</div>
-    </Card>
+    </div>
   );
 }
 
@@ -62,7 +56,7 @@ export function ChartLegend({ items }: { items: { label: string; color: string }
   return (
     <div className="flex flex-wrap items-center gap-4">
       {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-1.5 text-xs text-zinc-500">
+        <div key={item.label} className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
           <span
             className="h-2.5 w-2.5 rounded-full"
             style={{ backgroundColor: item.color }}

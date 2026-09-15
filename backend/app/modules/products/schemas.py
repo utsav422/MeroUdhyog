@@ -32,6 +32,7 @@ class VariantCreate(BaseModel):
     attributes: dict | None = None
     size: str | None = Field(default=None, max_length=50)
     size_type: str | None = Field(default=None, max_length=30)
+    unit: str | None = Field(default=None, max_length=30)
     images: list[str] | None = None
     stock_quantity: int = Field(default=0, ge=0)
     low_stock_threshold: int = Field(default=5, ge=0)
@@ -44,6 +45,7 @@ class VariantUpdate(BaseModel):
     sku: str | None = Field(default=None, max_length=100)
     size: str | None = Field(default=None, max_length=50)
     size_type: str | None = Field(default=None, max_length=30)
+    unit: str | None = Field(default=None, max_length=30)
     stock_quantity: int | None = Field(default=None, ge=0)
     low_stock_threshold: int | None = Field(default=None, ge=0)
     sort_order: int | None = None
@@ -91,6 +93,7 @@ class VariantRead(BaseModel):
     attributes: dict | None
     size: str | None
     size_type: str | None
+    unit: str | None
     images: list[str] | None
     sort_order: int
     is_active: bool

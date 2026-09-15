@@ -46,6 +46,7 @@ def _register_routers(application: FastAPI) -> None:
     from app.modules.deliveries.router import router as deliveries_router
     from app.modules.finance.router import router as finance_router
     from app.modules.imports.router import router as imports_router
+    from app.modules.khata.router import router as khata_router
     from app.modules.orders.router import router as orders_router
     from app.modules.predictions.router import router as predictions_router
     from app.modules.products.router import router as products_router
@@ -69,6 +70,7 @@ def _register_routers(application: FastAPI) -> None:
     application.include_router(transaction_types_router, prefix=settings.API_V1_PREFIX)
     application.include_router(transactions_router, prefix=settings.API_V1_PREFIX)
     application.include_router(imports_router, prefix=settings.API_V1_PREFIX)
+    application.include_router(khata_router, prefix=settings.API_V1_PREFIX)
     application.include_router(finance_router, prefix=settings.API_V1_PREFIX)
     application.include_router(orders_router, prefix=settings.API_V1_PREFIX)
     application.include_router(predictions_router, prefix=settings.API_V1_PREFIX)

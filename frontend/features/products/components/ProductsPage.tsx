@@ -25,10 +25,11 @@ import {
   FilterBar,
   PaginationBar,
   PageHeader,
+  StockBar,
 } from '@/components/shared';
 import type { Column, SortState } from '@/components/shared';
 import { apiClient, ApiClientError } from '@/lib/api-client';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, formatPriceUnit } from '@/lib/format';
 import ProductsImportModal from './ProductsImportModal';
 import {
   useProducts,
@@ -56,13 +57,13 @@ function ProductStatCard({
   color: string;
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${color}`}>
+    <div className="flex items-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${color}`}>
         {icon}
       </div>
       <div>
-        <Text size="xs" c="dimmed" fw={500}>{label}</Text>
-        <Text fw={700} size="xl" className="leading-tight">{value}</Text>
+        <Text size="xs" c="var(--muted)" fw={500}>{label}</Text>
+        <Text fw={700} size="xl" c="var(--foreground)" className="leading-tight">{value}</Text>
       </div>
     </div>
   );
@@ -183,12 +184,12 @@ export default function ProductsPage() {
             <button
               type="button"
               onClick={() => router.push(`/products/${p.id}`)}
-              className="block truncate text-sm font-semibold text-zinc-800 hover:text-brand-700"
+              className="block truncate text-sm font-semibold text-[var(--foreground)] hover:text-brand-700"
             >
               {p.name}
             </button>
             {p.description && (
-              <div className="mt-0.5 truncate text-xs text-zinc-400">{p.description}</div>
+              <div className="mt-0.5 truncate text-xs text-[var(--muted)]">{p.description}</div>
             )}
           </div>
         </div>
@@ -199,7 +200,7 @@ export default function ProductsPage() {
       header: 'SKU',
       sortable: true,
       render: (p) => (
-        <span className="rounded-lg bg-zinc-100 px-2 py-0.5 font-mono text-xs text-zinc-600">
+        <span className="rounded-lg bg-black/5 px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
           {p.sku ?? '—'}
         </span>
       ),
@@ -210,7 +211,7 @@ export default function ProductsPage() {
       render: (p) => (
         <Badge
           variant="light"
-          color={p.category_id ? 'blue' : 'gray'}
+          color={p.category_id ? 'brand' : 'gray'}
           radius="sm"
           styles={{ label: { textTransform: 'none', fontWeight: 500 } }}
         >
@@ -223,7 +224,7 @@ export default function ProductsPage() {
       header: 'Variants',
       align: 'center',
       render: (p) => (
-        <span className="inline-flex items-center gap-1 rounded-lg bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+        <span className="inline-flex items-center gap-1 rounded-lg bg-black/5 px-2 py-0.5 text-xs font-medium text-[var(--muted)]">
           <StackSimple size={12} />
           {p.variants.length}
         </span>
@@ -234,23 +235,10 @@ export default function ProductsPage() {
       header: 'Stock',
       align: 'right',
       render: (p) => {
-        if (p.variants.length === 0) return <span className="text-zinc-300">—</span>;
+        if (p.variants.length === 0) return <span className="text-[var(--muted)]/40">—</span>;
         const total = p.variants.reduce((s, v) => s + (v.stock_quantity || 0), 0);
-        const low = p.variants.some((v) => (v.stock_quantity || 0) <= v.low_stock_threshold);
-        return (
-          <span
-            className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-semibold ${
-              low && total > 0 ? 'bg-amber-50 text-amber-700' : ''
-            } ${low && total === 0 ? 'bg-red-50 text-red-700' : ''} ${
-              !low ? 'bg-zinc-100 text-zinc-600' : ''
-            }`}
-          >
-            <StackSimple size={12} />
-            {total}
-            {low && total === 0 && <span className="text-[10px] uppercase">out</span>}
-            {low && total > 0 && <span className="text-[10px] uppercase">low</span>}
-          </span>
-        );
+        const threshold = Math.min(...p.variants.map((v) => v.low_stock_threshold ?? 5));
+        return <StockBar stock={total} threshold={threshold} />;
       },
     },
     {
@@ -259,7 +247,9 @@ export default function ProductsPage() {
       align: 'right',
       sortable: true,
       render: (p) => (
-        <span className="font-semibold text-zinc-800">{formatMoney(moneyOf(p))}</span>
+        <span className="font-semibold text-[var(--foreground)]">
+          {formatPriceUnit(moneyOf(p), p.variants[0]?.unit)}
+        </span>
       ),
     },
     {
@@ -269,11 +259,11 @@ export default function ProductsPage() {
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
             p.is_active
-              ? 'bg-emerald-50 text-emerald-600'
-              : 'bg-zinc-100 text-zinc-500'
+              ? 'bg-success-50 text-success-700'
+              : 'bg-black/5 text-[var(--muted)]'
           }`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${p.is_active ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+          <span className={`h-1.5 w-1.5 rounded-full ${p.is_active ? 'bg-success-500' : 'bg-[var(--muted)]'}`} />
           {p.is_active ? 'Active' : 'Inactive'}
         </span>
       ),
@@ -343,25 +333,25 @@ export default function ProductsPage() {
           icon={<TrendUp size={22} weight="bold" />}
           label="Active"
           value={stats.active}
-          color="bg-emerald-50 text-emerald-600"
+          color="bg-success-50 text-success-600"
         />
         <ProductStatCard
           icon={<Tag size={22} weight="bold" />}
           label="Categories"
           value={allCategories.length}
-          color="bg-blue-50 text-blue-600"
+          color="bg-accent-50 text-accent-600"
         />
         <ProductStatCard
           icon={<CurrencyDollar size={22} weight="bold" />}
           label="Avg. price"
           value={formatMoney(stats.avgPrice)}
-          color="bg-violet-50 text-violet-600"
+          color="bg-brand-50 text-brand-600"
         />
       </div>
 
       {categoryStats.length > 0 && (
         <div>
-          <Text fw={600} size="sm" mb="sm" className="text-zinc-700">Categories</Text>
+          <Text fw={600} size="sm" mb="sm" c="var(--foreground)">Categories</Text>
           <div className="flex flex-wrap gap-2">
             {categoryStats.map((cat) => (
               <button
@@ -370,12 +360,12 @@ export default function ProductsPage() {
                 onClick={() => setCategoryFilter(categoryFilter === cat.id ? null : cat.id)}
                 className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
                   categoryFilter === cat.id
-                    ? 'border-brand-200 bg-brand-50 text-brand-700 shadow-sm'
-                    : 'border-zinc-100 bg-white text-zinc-600 hover:border-zinc-200 hover:bg-zinc-50'
+                    ? 'border-brand-200 bg-brand-50 text-brand-700'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--muted)] hover:text-[var(--foreground)]'
                 }`}
               >
                 <span className="text-xs">{cat.name}</span>
-                <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500">
+                <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
                   {cat.count}
                 </span>
               </button>

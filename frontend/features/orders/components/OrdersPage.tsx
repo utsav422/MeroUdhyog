@@ -31,6 +31,8 @@ import {
   Package,
   Warning,
   Truck,
+  DownloadSimple,
+  FilePdf,
 } from '@phosphor-icons/react';
 import {
   DataTable,
@@ -42,8 +44,10 @@ import {
 import type { Column, SortState } from '@/components/shared';
 import { apiClient } from '@/lib/api-client';
 import { formatMoney, formatDate, formatDateTime } from '@/lib/format';
+import { downloadCsv } from '@/lib/exportCsv';
 import { useOrders, ordersKeys, itemCount, useOrderStatusUpdate, useCreateDeliveryForOrder, useBulkOrderStatusUpdate, nextOrderStatuses } from '../api';
 import type { Order } from '../api';
+import { useReorder, ReorderBadge } from './Reorder';
 import { useDeliveries } from '../../deliveries/api';
 import type { Delivery } from '../../deliveries/api';
 import { useProducts, defaultVariantPrice } from '../../products/api';
@@ -113,6 +117,7 @@ export default function OrdersPage() {
   const statusMutation = useOrderStatusUpdate();
   const createDeliveryMutation = useCreateDeliveryForOrder();
   const bulkStatusMutation = useBulkOrderStatusUpdate();
+  const reorder = useReorder();
 
   const paymentMutation = useMutation({
     mutationFn: async ({ orderId, paymentStatus }: { orderId: string; paymentStatus: string }) => {
@@ -284,6 +289,36 @@ export default function OrdersPage() {
     return filtered.slice(start, start + pageSize);
   }, [filtered, page, pageSize]);
 
+  const handleExport = () => {
+    downloadCsv(
+      `orders-${new Date().toISOString().slice(0, 10)}.csv`,
+      [
+        'Order',
+        'Customer',
+        'Route',
+        'Date',
+        'Items',
+        'Total',
+        'Payment',
+        'Order status',
+        'Delivery',
+        'Notes',
+      ],
+      filtered.map((o) => [
+        o.order_ref,
+        o.customer_id ? customerMap.get(o.customer_id) ?? '' : '',
+        o.route_id ? routeMap.get(o.route_id) ?? '' : '',
+        formatDate(o.created_at),
+        itemCount(o),
+        o.total_amount ?? '',
+        o.payment_status,
+        o.status,
+        deliveryByOrder.get(o.id)?.status ?? '',
+        o.notes ?? '',
+      ]),
+    );
+  };
+
   const lineTotal = useMemo(() => {
     return items.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
   }, [items]);
@@ -451,13 +486,16 @@ export default function OrdersPage() {
       header: 'Order',
       sortable: true,
       render: (o) => (
-        <button
-          type="button"
-          onClick={() => router.push(`/orders/${o.id}`)}
-          className="font-semibold text-brand-700 hover:underline"
-        >
-          {o.order_ref}
-        </button>
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={() => router.push(`/orders/${o.id}`)}
+            className="font-semibold text-brand-700 hover:underline"
+          >
+            {o.order_ref}
+          </button>
+          <ReorderBadge order={o} className="mt-1" />
+        </div>
       ),
     },
     {
@@ -524,6 +562,24 @@ export default function OrdersPage() {
       ),
     },
     {
+      key: 'invoice',
+      header: 'Invoice',
+      render: (o) =>
+        ['draft', 'cancelled', 'failed'].includes(o.status) ? (
+          <span className="text-zinc-300">—</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => router.push(`/orders/${o.id}/invoice`)}
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+            title={`View invoice for ${o.order_ref}`}
+          >
+            <FilePdf size={14} />
+            Invoice
+          </button>
+        ),
+    },
+    {
       key: 'status',
       header: 'Order status',
       render: (o) => (
@@ -568,6 +624,12 @@ export default function OrdersPage() {
       show: (o: Order) =>
         !deliveryOrderIds.has(o.id) && ['ready', 'in_delivery'].includes(o.status),
       onClick: (o: Order) => createDeliveryForOrder(o),
+    },
+    {
+      label: 'Re-order',
+      icon: <ArrowsClockwise size={16} />,
+      show: (o: Order) => ['failed', 'cancelled'].includes(o.status),
+      onClick: (o: Order) => reorder.reorderOrder(o),
     },
   ];
 
@@ -624,13 +686,22 @@ export default function OrdersPage() {
         title="Orders"
         subtitle="Create and manage your sales orders"
         actions={
-          <Button
-            leftSection={<Plus size={16} weight="bold" />}
-            onClick={openCreate}
-            className="shadow-sm shadow-brand-200"
-          >
-            New Order
-          </Button>
+          <Group gap="sm">
+            <Button
+              variant="default"
+              leftSection={<DownloadSimple size={16} />}
+              onClick={handleExport}
+            >
+              Export CSV
+            </Button>
+            <Button
+              leftSection={<Plus size={16} weight="bold" />}
+              onClick={openCreate}
+              className="shadow-sm shadow-brand-200"
+            >
+              New Order
+            </Button>
+          </Group>
         }
       />
 
@@ -646,28 +717,28 @@ export default function OrdersPage() {
           label="Pending"
           value={stats.pending}
           subtext="Awaiting processing"
-          color="bg-amber-50 text-amber-600"
+          color="bg-accent-50 text-accent-600"
         />
         <OrderStatCard
           icon={<ArrowsClockwise size={22} weight="bold" />}
           label="Active"
           value={stats.active}
           subtext="In progress"
-          color="bg-blue-50 text-blue-600"
+          color="bg-brand-50 text-brand-600"
         />
         <OrderStatCard
           icon={<TrendUp size={22} weight="bold" />}
           label="Completed"
           value={stats.completed}
           subtext="Delivered"
-          color="bg-emerald-50 text-emerald-600"
+          color="bg-success-50 text-success-700"
         />
         <OrderStatCard
           icon={<CurrencyDollar size={22} weight="bold" />}
           label="Revenue"
           value={formatMoney(stats.revenue)}
           subtext="Paid orders"
-          color="bg-violet-50 text-violet-600"
+          color="bg-brand-50 text-brand-600"
         />
       </div>
 
@@ -886,7 +957,7 @@ export default function OrdersPage() {
                             {it.variant_id && (
                               <span
                                 className={`text-[10px] font-medium ${
-                                  availableFor(it.variant_id) === 0 ? 'text-red-500' : 'text-zinc-400'
+                                  availableFor(it.variant_id) === 0 ? 'text-danger-500' : 'text-zinc-400'
                                 }`}
                               >
                                 {availableFor(it.variant_id) === 0 ? 'Out of stock' : `${availableFor(it.variant_id)} available`}
@@ -895,13 +966,21 @@ export default function OrdersPage() {
                           </div>
                         </Table.Td>
                         <Table.Td ta="right">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={it.unit_price}
-                            onChange={(e) => updateLine(idx, { unit_price: e.currentTarget.value })}
-                            className="h-8 w-24 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-right text-sm outline-none focus:border-brand-400 focus:bg-white"
-                          />
+                          <div className="flex flex-col items-end gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={it.unit_price}
+                              onChange={(e) => updateLine(idx, { unit_price: e.currentTarget.value })}
+                              className="h-8 w-24 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-right text-sm outline-none focus:border-brand-400 focus:bg-white"
+                            />
+                            {(() => {
+                              const unit = variantOptions.find((o) => o.value === it.variant_id)?.data.unit;
+                              return unit ? (
+                                <span className="text-[10px] font-medium text-zinc-400">per {unit}</span>
+                              ) : null;
+                            })()}
+                          </div>
                         </Table.Td>
                         <Table.Td ta="right" fw={600} className="text-zinc-800">
                           {formatMoney(((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)).toString())}
@@ -911,7 +990,7 @@ export default function OrdersPage() {
                             type="button"
                             aria-label="Remove line"
                             onClick={() => removeLine(idx)}
-                            className="rounded-lg p-1 text-zinc-300 transition-colors hover:bg-red-50 hover:text-red-500"
+                            className="rounded-lg p-1 text-zinc-300 transition-colors hover:bg-danger-50 hover:text-danger-500"
                           >
                             <Trash size={14} />
                           </button>

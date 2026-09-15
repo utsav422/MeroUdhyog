@@ -14,6 +14,16 @@ export function formatMoney(value: string | number | null | undefined, currency 
   }
 }
 
+export function formatPriceUnit(
+  value: string | number | null | undefined,
+  unit?: string | null,
+  currency = 'INR',
+): string {
+  const money = formatMoney(value, currency);
+  if (unit && unit.trim()) return `${money} / ${unit.trim()}`;
+  return money;
+}
+
 export function formatNumber(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—';
   const num = Number(value);

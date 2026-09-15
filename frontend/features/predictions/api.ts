@@ -71,6 +71,7 @@ export type ProductAggregate = {
   due_soon_count: number;
   on_track_count: number;
   insufficient_count: number;
+  estimated_revenue: number;
 };
 
 export type Analysis = {
@@ -82,6 +83,53 @@ export type Analysis = {
 };
 
 export type CustomerDetail = CustomerPrediction;
+
+export type ProductCustomer = {
+  customer_id: string;
+  customer_name: string;
+  customer_email: string | null;
+  customer_phone: string | null;
+  product_id: string;
+  product_name: string;
+  sku: string | null;
+  variant_id: string | null;
+  variant_name: string | null;
+  order_count: number;
+  last_order_date: string | null;
+  avg_gap_days: number | null;
+  median_gap_days: number | null;
+  next_order_date: string | null;
+  days_until_next: number | null;
+  interest_score: number;
+  avg_quantity: number;
+  quantity_trend: string | null;
+  stock_status: string;
+  days_of_stock: number | null;
+  confidence: string;
+  recommendation: string;
+};
+
+export type ProductDetail = {
+  generated_at: string;
+  product_id: string;
+  product_name: string;
+  sku: string | null;
+  customer_count: number;
+  order_count: number;
+  last_order_date: string | null;
+  next_order_date: string | null;
+  days_until_next: number | null;
+  avg_quantity: number;
+  interest_score: number;
+  stock_status: string;
+  recommendation: string;
+  overdue_count: number;
+  due_soon_count: number;
+  on_track_count: number;
+  insufficient_count: number;
+  estimated_revenue: number;
+  customers: ProductCustomer[];
+};
 
 export type HistoryRow = {
   id: string;
@@ -115,6 +163,7 @@ export const predictionsKeys = {
   all: ['predictions'] as const,
   analysis: () => [...predictionsKeys.all, 'analysis'] as const,
   customer: (id: string) => [...predictionsKeys.all, 'customer', id] as const,
+  product: (id: string) => [...predictionsKeys.all, 'product', id] as const,
 };
 
 export function useAnalysis(enabled = true) {
@@ -129,6 +178,14 @@ export function useCustomerPrediction(id: string | null, enabled = true) {
   return useQuery({
     queryKey: predictionsKeys.customer(id ?? ''),
     queryFn: () => apiClient.get<CustomerDetail>(`/predictions/customers/${id}`),
+    enabled: enabled && !!id,
+  });
+}
+
+export function useProductPrediction(id: string | null, enabled = true) {
+  return useQuery({
+    queryKey: predictionsKeys.product(id ?? ''),
+    queryFn: () => apiClient.get<ProductDetail>(`/predictions/products/${id}`),
     enabled: enabled && !!id,
   });
 }

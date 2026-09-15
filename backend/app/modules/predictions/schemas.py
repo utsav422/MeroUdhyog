@@ -55,6 +55,7 @@ class ProductAggregateRead(BaseModel):
     due_soon_count: int
     on_track_count: int
     insufficient_count: int
+    estimated_revenue: int = 0
 
 
 class ImportRowResult(BaseModel):
@@ -123,6 +124,53 @@ class AnalysisRead(BaseModel):
     summary: AnalysisSummary
     customers: list[CustomerPredictionRead]
     products: list[ProductAggregateRead] = Field(default_factory=list)
+
+
+class ProductCustomerRead(BaseModel):
+    customer_id: UUID
+    customer_name: str
+    customer_email: str | None
+    customer_phone: str | None
+    product_id: UUID
+    product_name: str
+    sku: str | None
+    variant_id: UUID | None
+    variant_name: str | None
+    order_count: int
+    last_order_date: date | None
+    avg_gap_days: float | None
+    median_gap_days: float | None
+    next_order_date: date | None
+    days_until_next: int | None
+    interest_score: int
+    avg_quantity: float
+    quantity_trend: str | None = None
+    stock_status: str
+    days_of_stock: float | None
+    confidence: str
+    recommendation: str
+
+
+class ProductDetailRead(BaseModel):
+    generated_at: datetime
+    product_id: UUID
+    product_name: str
+    sku: str | None
+    customer_count: int
+    order_count: int
+    last_order_date: date | None
+    next_order_date: date | None
+    days_until_next: int | None
+    avg_quantity: float
+    interest_score: int
+    stock_status: str
+    recommendation: str
+    overdue_count: int
+    due_soon_count: int
+    on_track_count: int
+    insufficient_count: int
+    estimated_revenue: int = 0
+    customers: list[ProductCustomerRead] = Field(default_factory=list)
 
 
 class CustomerDetailRead(BaseModel):

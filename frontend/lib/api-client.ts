@@ -5,7 +5,7 @@ import axios, {
 } from 'axios';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8001/api/v1';
+  process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -140,6 +140,11 @@ function filenameFromDisposition(disposition: string): string | null {
   return match ? match[1] : null;
 }
 
+async function blobRequest(path: string): Promise<Blob> {
+  const response = await client.get<Blob>(path, { responseType: 'blob' });
+  return response.data;
+}
+
 async function downloadRequest(path: string, fallbackName: string): Promise<void> {
   const response = await client.get<Blob>(path, { responseType: 'blob' });
   const disposition = response.headers['content-disposition'] ?? '';
@@ -171,5 +176,6 @@ export const apiClient = {
   upload: <T>(path: string, file: File) => uploadRequest<T>(path, file),
   uploadForm: <T>(path: string, file: File, fields: Record<string, string>) =>
     uploadFormRequest<T>(path, file, fields),
+  getBlob: (path: string) => blobRequest(path),
   download: (path: string, fallbackName: string) => downloadRequest(path, fallbackName),
 };

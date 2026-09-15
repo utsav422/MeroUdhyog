@@ -1,19 +1,46 @@
 'use client';
 
-import { Loader, Text, ThemeIcon } from '@mantine/core';
+import { Loader } from '@mantine/core';
 import { Package, WarningCircle, LockKey } from '@phosphor-icons/react';
 
-export function LoadingState({
-  label = 'Loading…',
+function Frame({
+  icon,
+  tone,
+  title,
+  description,
+  action,
 }: {
-  label?: string;
+  icon: React.ReactNode;
+  tone: 'neutral' | 'danger' | 'warning';
+  title: string;
+  description: string;
+  action?: React.ReactNode;
 }) {
+  const toneClasses =
+    tone === 'danger'
+      ? 'bg-danger-50 text-danger-600'
+      : tone === 'warning'
+        ? 'bg-warning-50 text-warning-600'
+        : 'bg-black/5 text-[var(--muted)]';
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+      <div className={`flex h-12 w-12 items-center justify-center rounded-full ${toneClasses}`}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-[var(--foreground)]">{title}</p>
+        <p className="mt-0.5 text-sm text-[var(--muted)]">{description}</p>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function LoadingState({ label = 'Loading…' }: { label?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
       <Loader size="sm" color="gray.5" />
-      <Text size="sm" c="dimmed">
-        {label}
-      </Text>
+      <p className="text-sm text-[var(--muted)]">{label}</p>
     </div>
   );
 }
@@ -28,20 +55,13 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <ThemeIcon variant="light" color="gray" radius="xl" size={48}>
-        <Package size={22} weight="light" />
-      </ThemeIcon>
-      <div>
-        <Text fw={600} size="md">
-          {title}
-        </Text>
-        <Text size="sm" c="dimmed">
-          {description}
-        </Text>
-      </div>
-      {action}
-    </div>
+    <Frame
+      tone="neutral"
+      icon={<Package size={20} weight="light" />}
+      title={title}
+      description={description}
+      action={action}
+    />
   );
 }
 
@@ -53,28 +73,23 @@ export function ErrorState({
   retry?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <ThemeIcon variant="light" color="danger" radius="xl" size={48}>
-        <WarningCircle size={22} weight="light" />
-      </ThemeIcon>
-      <div>
-        <Text fw={600} size="md">
-          Unable to load data
-        </Text>
-        <Text size="sm" c="dimmed">
-          {message}
-        </Text>
-      </div>
-      {retry && (
-        <button
-          type="button"
-          onClick={retry}
-          className="mt-1 rounded-lg bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100"
-        >
-          Try again
-        </button>
-      )}
-    </div>
+    <Frame
+      tone="danger"
+      icon={<WarningCircle size={20} weight="light" />}
+      title="Unable to load data"
+      description={message}
+      action={
+        retry && (
+          <button
+            type="button"
+            onClick={retry}
+            className="mt-1 rounded-lg bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100"
+          >
+            Try again
+          </button>
+        )
+      }
+    />
   );
 }
 
@@ -84,18 +99,11 @@ export function PermissionDeniedState({
   message?: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <ThemeIcon variant="light" color="warning" radius="xl" size={48}>
-        <LockKey size={22} weight="light" />
-      </ThemeIcon>
-      <div>
-        <Text fw={600} size="md">
-          Permission denied
-        </Text>
-        <Text size="sm" c="dimmed">
-          {message}
-        </Text>
-      </div>
-    </div>
+    <Frame
+      tone="warning"
+      icon={<LockKey size={20} weight="light" />}
+      title="Permission denied"
+      description={message}
+    />
   );
 }

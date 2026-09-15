@@ -12,7 +12,7 @@ const STATUS_COLORS: Record<string, string> = {
   pending_assignment: '#71717a',
   assigned: '#3b82f6',
   picked_up: '#f59e0b',
-  in_transit: '#8b5cf6',
+  in_transit: '#2563eb',
   delivered: '#22c55e',
   failed: '#ef4444',
 };

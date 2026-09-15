@@ -26,9 +26,10 @@ import {
   inventoryKeys,
 } from '@/features/products/api';
 import type { Variant } from '@/features/products/api';
-import { LoadingState, ErrorState } from '@/components/shared';
+import UnitField from '@/features/products/components/UnitField';
+import { LoadingState, ErrorState, StockBar } from '@/components/shared';
 import { apiClient } from '@/lib/api-client';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, formatPriceUnit } from '@/lib/format';
 
 type EditableRow = {
   id: string | null;
@@ -38,6 +39,7 @@ type EditableRow = {
   sku: string;
   size: string;
   size_type: string;
+  unit: string;
   stock_quantity: number;
   low_stock_threshold: number;
   price: number;
@@ -57,6 +59,7 @@ function seedRows(variants: Variant[]): EditableRow[] {
       sku: v.sku ?? '',
       size: v.size ?? '',
       size_type: v.size_type ?? '',
+      unit: v.unit ?? '',
       stock_quantity: v.stock_quantity ?? 0,
       low_stock_threshold: v.low_stock_threshold ?? 5,
       price: Number(active?.price ?? 0),
@@ -112,6 +115,7 @@ export default function ProductDetailPage() {
         sku: '',
         size: '',
         size_type: '',
+        unit: '',
         stock_quantity: 0,
         low_stock_threshold: 5,
         price: 0,
@@ -139,6 +143,7 @@ export default function ProductDetailPage() {
             sku: row.sku.trim() || null,
             size: row.size.trim() || null,
             size_type: row.size_type.trim() || null,
+            unit: row.unit.trim() || null,
             stock_quantity: toUnit(row.stock_quantity),
             low_stock_threshold: toUnit(row.low_stock_threshold),
             sort_order: 0,
@@ -162,6 +167,9 @@ export default function ProductDetailPage() {
         if ((row.size.trim() || null) !== orig.size) variantPatch.size = row.size.trim() || null;
         if ((row.size_type.trim() || null) !== orig.size_type) {
           variantPatch.size_type = row.size_type.trim() || null;
+        }
+        if ((row.unit.trim() || null) !== orig.unit) {
+          variantPatch.unit = row.unit.trim() || null;
         }
         if (toUnit(row.stock_quantity) !== toUnit(orig.stock_quantity)) {
           variantPatch.stock_quantity = toUnit(row.stock_quantity);
@@ -267,10 +275,10 @@ export default function ProductDetailPage() {
                 </Text>
                 <span
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                    data.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-500'
+                    data.is_active ? 'bg-success-50 text-success-700' : 'bg-black/5 text-[var(--muted)]'
                   }`}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${data.is_active ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+                  <span className={`h-1.5 w-1.5 rounded-full ${data.is_active ? 'bg-success-500' : 'bg-[var(--muted)]'}`} />
                   {data.is_active ? 'Active' : 'Inactive'}
                 </span>
               </div>
@@ -299,7 +307,7 @@ export default function ProductDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <CurrencyDollar size={20} weight="bold" />
           </div>
@@ -308,8 +316,8 @@ export default function ProductDetailPage() {
           <Text size="xs" c="dimmed" className="mt-0.5">Across all variants</Text>
         </div>
 
-        <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-warning-50 text-warning-600">
             <Barbell size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>Total cost</Text>
@@ -317,8 +325,8 @@ export default function ProductDetailPage() {
           <Text size="xs" c="dimmed" className="mt-0.5">Cost of goods</Text>
         </div>
 
-        <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-success-50 text-success-700">
             <StackSimple size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>Units in stock</Text>
@@ -326,8 +334,8 @@ export default function ProductDetailPage() {
           <Text size="xs" c="dimmed" className="mt-0.5">Across all variants</Text>
         </div>
 
-        <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600">
             <Tag size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>Variants</Text>
@@ -337,20 +345,20 @@ export default function ProductDetailPage() {
       </div>
 
       {data.description && (
-        <div className="rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
           <div className="mb-3 flex items-center gap-2">
-            <Info size={18} className="text-zinc-500" />
-            <Text fw={600} size="sm" className="text-zinc-700">Description</Text>
+            <Info size={18} className="text-[var(--muted)]" />
+            <Text fw={600} size="sm" className="text-[var(--foreground)]">Description</Text>
           </div>
-          <Text size="sm" className="leading-relaxed text-zinc-600">{data.description}</Text>
+          <Text size="sm" className="leading-relaxed text-[var(--muted)]">{data.description}</Text>
         </div>
       )}
 
-      <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm">
-        <div className="border-b border-zinc-100 px-6 py-4">
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+        <div className="border-b border-[var(--border)] px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <Text fw={600} size="md" className="text-zinc-800">Variants & pricing</Text>
+              <Text fw={600} size="md" className="text-[var(--foreground)]">Variants & pricing</Text>
               <Text size="xs" c="dimmed" className="mt-0.5">
                 {editing
                   ? 'Edit stock and prices inline, then press Update'
@@ -373,11 +381,12 @@ export default function ProductDetailPage() {
         <div className="overflow-x-auto">
           <Table verticalSpacing="sm" horizontalSpacing="md">
             <Table.Thead>
-              <Table.Tr className="text-zinc-400">
+              <Table.Tr className="text-[var(--muted)]">
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">#</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Variant</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">SKU</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Size</Table.Th>
+                {editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider">Unit</Table.Th>}
                 {editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Stock</Table.Th>}
                 {editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Threshold</Table.Th>}
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Price</Table.Th>
@@ -402,65 +411,60 @@ export default function ProductDetailPage() {
                   return (
                     <Table.Tr key={v.id}>
                       <Table.Td>
-                        <span className="text-xs text-zinc-400">{idx + 1}</span>
+                        <span className="text-xs text-[var(--muted)]">{idx + 1}</span>
                       </Table.Td>
                       <Table.Td>
                         <div className="flex items-center gap-2.5">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
                             <Package size={14} weight="duotone" />
                           </div>
-                          <span className="font-medium text-zinc-800">{v.name}</span>
+                          <span className="font-medium text-[var(--foreground)]">{v.name}</span>
                         </div>
                       </Table.Td>
                       <Table.Td>
-                        <span className="rounded-lg bg-zinc-100 px-2 py-0.5 font-mono text-xs text-zinc-600">
+                        <span className="rounded-lg bg-black/5 px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
                           {v.sku ?? '—'}
                         </span>
                       </Table.Td>
                       <Table.Td>
-                        <span className="text-zinc-500">
+                        <span className="text-[var(--muted)]">
                           {v.size ? `${v.size}${v.size_type ? ` ${v.size_type}` : ''}` : '—'}
                         </span>
                       </Table.Td>
                       <Table.Td ta="right">
-                        <span className="font-semibold text-zinc-800">{formatMoney(defaultVariantPrice(v))}</span>
+                        <span className="font-semibold text-[var(--foreground)]">
+                          {formatPriceUnit(defaultVariantPrice(v), v.unit)}
+                        </span>
                       </Table.Td>
                       <Table.Td ta="right">
-                        <span className="text-zinc-600">
+                        <span className="text-[var(--muted)]">
                           {v.prices[0]?.cost_price ? formatMoney(v.prices[0].cost_price) : '—'}
                         </span>
                       </Table.Td>
                       <Table.Td ta="right">
                         <span
                           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            margin > 0 ? 'bg-emerald-50 text-emerald-600' : margin < 0 ? 'bg-red-50 text-red-600' : 'bg-zinc-100 text-zinc-500'
+                            margin > 0 ? 'bg-success-50 text-success-700' : margin < 0 ? 'bg-danger-50 text-danger-600' : 'bg-black/5 text-[var(--muted)]'
                           }`}
                         >
                           {price > 0 ? `${margin}%` : '—'}
                         </span>
                       </Table.Td>
                       <Table.Td ta="right">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-semibold ${
-                            low && stock === 0
-                              ? 'bg-red-50 text-red-700'
-                              : low
-                                ? 'bg-amber-50 text-amber-700'
-                                : 'bg-zinc-100 text-zinc-600'
-                          }`}
-                        >
-                          {stock}
-                          {low && stock === 0 && <span className="text-[10px] uppercase">out</span>}
-                          {low && stock > 0 && <span className="text-[10px] uppercase">low</span>}
-                        </span>
+                        <StockBar
+                          stock={stock}
+                          threshold={
+                            Number(v.low_stock_threshold) > 0 ? Number(v.low_stock_threshold) : 5
+                          }
+                        />
                       </Table.Td>
                       <Table.Td>
                         <span
                           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            v.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-zinc-100 text-zinc-500'
+                            v.is_active ? 'bg-success-50 text-success-700' : 'bg-black/5 text-[var(--muted)]'
                           }`}
                         >
-                          <span className={`h-1.5 w-1.5 rounded-full ${v.is_active ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+                          <span className={`h-1.5 w-1.5 rounded-full ${v.is_active ? 'bg-success-500' : 'bg-[var(--muted)]'}`} />
                           {v.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </Table.Td>
@@ -470,7 +474,7 @@ export default function ProductDetailPage() {
                             type="button"
                             aria-label="Edit variant"
                             onClick={startEditing}
-                            className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-brand-50 hover:text-brand-600"
+                            className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-brand-50 hover:text-brand-600"
                           >
                             <PencilSimple size={15} />
                           </button>
@@ -482,7 +486,7 @@ export default function ProductDetailPage() {
                                 deleteMutation.mutate(v.id);
                               }
                             }}
-                            className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                            className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-danger-50 hover:text-danger-500"
                           >
                             <TrashSimple size={15} />
                           </button>
@@ -499,7 +503,7 @@ export default function ProductDetailPage() {
                     className={row.id ? undefined : 'bg-brand-50/30'}
                   >
                     <Table.Td>
-                      <span className="text-xs text-zinc-400">{idx + 1}</span>
+                      <span className="text-xs text-[var(--muted)]">{idx + 1}</span>
                     </Table.Td>
                     <Table.Td>
                       <TextInput
@@ -535,6 +539,15 @@ export default function ProductDetailPage() {
                           onChange={(e) => updateRow(row.key, { size_type: e.currentTarget.value })}
                         />
                       </div>
+                    </Table.Td>
+                    <Table.Td>
+                      <UnitField
+                        compact
+                        value={row.unit}
+                        onChange={(u) => updateRow(row.key, { unit: u })}
+                        placeholder="e.g. carton"
+                        className="w-28"
+                      />
                     </Table.Td>
                     <Table.Td ta="right">
                       <NumberInput
@@ -614,7 +627,7 @@ export default function ProductDetailPage() {
                               setRows((prev) => (prev ?? []).filter((r) => r.key !== row.key));
                             }
                           }}
-                          className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                          className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-danger-50 hover:text-danger-500"
                         >
                           <TrashSimple size={15} />
                         </button>
@@ -627,7 +640,7 @@ export default function ProductDetailPage() {
         </div>
 
         {editing && (
-          <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-6 py-4">
+          <div className="flex items-center justify-end gap-2 border-t border-[var(--border)] px-6 py-4">
             <Button variant="default" size="sm" onClick={cancelEditing}>
               Cancel
             </Button>
@@ -643,7 +656,7 @@ export default function ProductDetailPage() {
               size="sm"
               leftSection={<Check size={14} weight="bold" />}
               loading={saveMutation.isPending}
-              className="shadow-sm shadow-brand-200"
+              className=""
               onClick={() => saveMutation.mutate()}
             >
               Update product

@@ -70,6 +70,20 @@ async def get_order(
     return await service.get(order_id)
 
 
+@router.post("/{order_id}/reorder", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
+async def reorder_order(
+    order_id: UUID,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
+    _=Depends(require_permission(Permissions.MANAGE_CATALOG)),
+):
+    """Create a fresh draft order from a failed/cancelled order, linked as a
+    reorder (#N) so the original keeps its cancellation history."""
+    service = await _service(db, tenant_id, user_id)
+    return await service.reorder(order_id)
+
+
 @router.patch("/{order_id}", response_model=OrderRead)
 async def update_order(
     order_id: UUID,

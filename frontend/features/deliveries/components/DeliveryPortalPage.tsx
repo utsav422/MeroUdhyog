@@ -302,7 +302,7 @@ export default function DeliveryPortalPage() {
       />
 
       {locationError && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="flex items-center gap-2 rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-800">
           <WarningCircle size={18} weight="fill" className="text-amber-500" />
           {locationError}
         </div>
@@ -319,19 +319,19 @@ export default function DeliveryPortalPage() {
           icon={<Package size={20} weight="bold" />}
           label="To collect / pending"
           value={stats.pending}
-          color="bg-blue-50 text-blue-600"
+          color="bg-brand-50 text-brand-600"
         />
         <StatCard
           icon={<NavigationArrow size={20} weight="bold" />}
           label="In transit"
           value={stats.inTransit}
-          color="bg-violet-50 text-violet-600"
+          color="bg-brand-50 text-brand-600"
         />
         <StatCard
           icon={<CheckCircle size={20} weight="bold" />}
           label="Delivered"
           value={stats.delivered}
-          color="bg-emerald-50 text-emerald-600"
+          color="bg-success-50 text-success-700"
         />
       </div>
 
@@ -352,7 +352,7 @@ export default function DeliveryPortalPage() {
               onSelect={setSelectedId}
             />
             {liveCount > 0 && (
-              <div className="pointer-events-none absolute right-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-blue-600 shadow-sm">
+              <div className="pointer-events-none absolute right-3 top-3 z-10 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-brand-600 shadow-sm">
                 {liveCount} agent{liveCount === 1 ? '' : 's'} live now
               </div>
             )}
@@ -363,7 +363,7 @@ export default function DeliveryPortalPage() {
               </div>
             )}
             {routeError && position && selectedId && (
-              <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 shadow-sm">
+              <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-full bg-warning-50 px-3 py-1.5 text-xs font-medium text-amber-700 shadow-sm">
                 {routeError}
               </div>
             )}
@@ -377,7 +377,7 @@ export default function DeliveryPortalPage() {
                   {s.replace(/_/g, ' ')}
                 </span>
               ))}
-              <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600">
+              <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-600">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: '#2563eb' }} />
                 agent
               </span>
@@ -608,7 +608,7 @@ function MAP_STATUS_COLOR(status: string): string {
     pending_assignment: '#71717a',
     assigned: '#3b82f6',
     picked_up: '#f59e0b',
-    in_transit: '#8b5cf6',
+    in_transit: '#2563eb',
     delivered: '#22c55e',
     failed: '#ef4444',
   };

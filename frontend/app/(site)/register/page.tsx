@@ -56,7 +56,7 @@ export default function RegisterPage() {
               required
               value={tenantName}
               onChange={(event) => setTenantName(event.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
             />
           </label>
           <label className="block">
@@ -68,7 +68,7 @@ export default function RegisterPage() {
               value={tenantSlug}
               onChange={(event) => setTenantSlug(event.target.value)}
               placeholder="my-factory"
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
             />
           </label>
           <label className="block">
@@ -77,7 +77,7 @@ export default function RegisterPage() {
               required
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
             />
           </label>
           <label className="block">
@@ -87,7 +87,7 @@ export default function RegisterPage() {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
             />
           </label>
           <label className="block">
@@ -98,7 +98,7 @@ export default function RegisterPage() {
               minLength={8}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
             />
           </label>
 
@@ -121,7 +121,7 @@ export default function RegisterPage() {
           Already have an account?{" "}
           <Link
             href="/login"
-            className="font-medium text-blue-600 hover:text-blue-800"
+            className="font-medium text-brand-600 hover:text-brand-700"
           >
             Log in
           </Link>

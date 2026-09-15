@@ -228,6 +228,7 @@ class ProductService:
             attributes=data.attributes,
             size=data.size,
             size_type=data.size_type,
+            unit=data.unit,
             images=data.images,
             stock_quantity=data.stock_quantity,
             low_stock_threshold=data.low_stock_threshold,
@@ -300,6 +301,7 @@ class ProductService:
                     sku=data.get("sku"),
                     size=data.get("size"),
                     size_type=data.get("size_type"),
+                    unit=data.get("unit") or None,
                     stock_quantity=_int_or_default(data.get("stock_quantity"), 0),
                     low_stock_threshold=_int_or_default(
                         data.get("low_stock_threshold"), 5

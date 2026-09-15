@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Alert,
@@ -23,6 +23,7 @@ import {
   Graph,
   Info,
   Package,
+  Plus,
   Trash,
   UsersThree,
   X,
@@ -50,7 +51,7 @@ import {
   StatusBadge,
 } from '@/components/shared';
 import type { Column } from '@/components/shared';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import { downloadCsv } from '@/lib/exportCsv';
 import {
   useAnalysis,
@@ -60,6 +61,7 @@ import {
 import type { CustomerPrediction, ProductAggregate } from '../api';
 import { STATUS_COLORS, STATUS_LABELS, STATUS_ORDER } from '../constants';
 import AddOrdersModal from './AddOrdersModal';
+import type { AddOrderPreset } from './AddOrdersModal';
 import CustomerPredictionCard from './CustomerPredictionCard';
 import InterestBadge from './InterestBadge';
 import PredictionSummary from './PredictionSummary';
@@ -68,14 +70,76 @@ import RecommendationAction from './RecommendationAction';
 import StatusLegend from './StatusLegend';
 import TableFilterBar from './TableFilterBar';
 
+type Restock = { label: string; caption: string; tone: string };
+
+function restockOf(p: ProductAggregate): Restock {
+  if (p.overdue_count > 0) {
+    return {
+      label: 'restock now',
+      caption: `${p.overdue_count} customer${p.overdue_count === 1 ? '' : 's'} overdue`,
+      tone: 'bg-danger-50 text-danger-700',
+    };
+  }
+  if (p.days_until_next != null) {
+    const days = Math.max(0, Math.round(p.days_until_next));
+    if (days <= 7) {
+      return {
+        label: `in ~${days} day${days === 1 ? '' : 's'}`,
+        caption: formatDate(p.next_order_date),
+        tone: 'bg-warning-50 text-warning-700',
+      };
+    }
+    return {
+      label: `in ~${days} days`,
+      caption: formatDate(p.next_order_date),
+      tone: 'bg-success-50 text-success-700',
+    };
+  }
+  if (p.due_soon_count > 0) {
+    return { label: 'due soon', caption: 'no date yet', tone: 'bg-warning-50 text-warning-700' };
+  }
+  return {
+    label: 'needs data',
+    caption: 'no forecast yet',
+    tone: 'bg-black/5 text-[var(--muted)]',
+  };
+}
+
+function opportunityOf(interest: number): { label: string; hint: string; tone: string } {
+  if (interest >= 60) {
+    return {
+      label: 'Invest',
+      hint: 'Demand is strong — worth improving quality and keeping stock ready.',
+      tone: 'bg-success-50 text-success-700',
+    };
+  }
+  if (interest >= 40) {
+    return {
+      label: 'Hold',
+      hint: 'Steady but quiet — keep the current quality until demand grows.',
+      tone: 'bg-warning-50 text-warning-700',
+    };
+  }
+  return {
+    label: 'Watch',
+    hint: 'Low demand — test small batches before producing more or upgrading quality.',
+    tone: 'bg-black/5 text-[var(--muted)]',
+  };
+}
+
 export default function PredictionsPage() {
   const analysis = useAnalysis();
   const clearHistory = useClearHistory();
   const markContacted = useMarkContacted();
   const router = useRouter();
-  const [addOpened, { open: openAdd, close: closeAdd }] = useDisclosure(false);
+  const [addOpened, { open: openAddModal, close: closeAdd }] = useDisclosure(false);
+  const [addPreset, setAddPreset] = useState<AddOrderPreset | null>(null);
+  const [highlight, setHighlight] = useState<{
+    tab: 'products' | 'customers';
+    id: string;
+  } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
-  const [tab, setTab] = useState<'products' | 'customers'>('products');
+  const [tab, setTab] = useState<'products' | 'customers'>('customers');
   const [productsSearch, setProductsSearch] = useState('');
   const [productsStatus, setProductsStatus] = useState('all');
   const [customersSearch, setCustomersSearch] = useState('');
@@ -83,6 +147,35 @@ export default function PredictionsPage() {
   const [contacted, setContacted] = useState<Record<string, string>>({});
   const [dataTipDismissed, setDataTipDismissed] = useState(false);
   const isMobile = useMediaQuery('(max-width: 768px)');
+
+  const openAdd = (preset?: AddOrderPreset | null) => {
+    setAddPreset(preset ?? null);
+    openAddModal();
+  };
+
+  const handleSaved = (info: { customerId: string | null; productId: string | null }) => {
+    if (info.productId) {
+      setTab('products');
+      setHighlight({ tab: 'products', id: info.productId });
+    } else if (info.customerId) {
+      setTab('customers');
+      setHighlight({ tab: 'customers', id: info.customerId });
+    }
+  };
+
+  useEffect(() => {
+    if (!highlight) return;
+    const timer = setTimeout(() => setHighlight(null), 4000);
+    return () => clearTimeout(timer);
+  }, [highlight]);
+
+  useEffect(() => {
+    if (!highlight) return;
+    const el = document.querySelector(
+      `[data-row-id="${highlight.id}"]`,
+    ) as HTMLElement | null;
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [highlight]);
 
   const data = analysis.data;
   const summary = data?.summary;
@@ -153,6 +246,40 @@ export default function PredictionsPage() {
     [products],
   );
 
+  const mostNeedyProduct = useMemo(
+    () =>
+      products.find((p) => p.insufficient_count > 0) ?? undefined,
+    [products],
+  );
+
+  const productChartCaption = useMemo(() => {
+    if (!products.length) return '';
+    const urgent = products.filter(
+      (p) => p.overdue_count > 0 || p.due_soon_count > 0,
+    );
+    const urgentCustomers = urgent.reduce(
+      (s, p) => s + p.overdue_count + p.due_soon_count,
+      0,
+    );
+    if (!urgent.length)
+      return 'Every product is on schedule — nothing needs action right now.';
+    return `${urgent.length} product${urgent.length === 1 ? '' : 's'} have ${urgentCustomers} customer${
+      urgentCustomers === 1 ? '' : 's'
+    } who need a follow-up this week.`;
+  }, [products]);
+
+  const customerChartCaption = useMemo(() => {
+    if (!customers.length) return '';
+    const overdue = customers.filter((c) => c.stock_status === 'overdue').length;
+    const dueSoon = customers.filter((c) => c.stock_status === 'due_soon').length;
+    if (overdue === 0 && dueSoon === 0)
+      return 'Every customer is on schedule — nothing needs action right now.';
+    const parts: string[] = [];
+    if (overdue > 0) parts.push(`${overdue} overdue (call)`);
+    if (dueSoon > 0) parts.push(`${dueSoon} due soon (message)`);
+    return `${parts.join(' · ')} — everyone else is on track.`;
+  }, [customers]);
+
   const toggleContacted = (customerId: string) => {
     if (contacted[customerId]) {
       setContacted((prev) => {
@@ -212,7 +339,7 @@ export default function PredictionsPage() {
         'Product',
         'SKU',
         'Status',
-        'Recommendation',
+        'Estimated value',
         'Next order',
         'Interest',
         'Orders',
@@ -226,7 +353,7 @@ export default function PredictionsPage() {
         p.product_name,
         p.sku ?? '',
         STATUS_LABELS[p.stock_status] ?? p.stock_status,
-        p.recommendation,
+        String(p.estimated_revenue),
         p.next_order_date ?? '',
         String(p.interest_score),
         String(p.order_count),
@@ -335,27 +462,72 @@ export default function PredictionsPage() {
     {
       key: 'customers',
       header: 'Customers',
-      width: 95,
+      width: 90,
       align: 'center',
       render: (p) => p.customer_count,
     },
     {
       key: 'orders',
       header: 'Orders',
-      width: 80,
+      width: 75,
       align: 'center',
       render: (p) => p.order_count,
     },
     {
-      key: 'next_order',
-      header: 'Next order',
-      render: (p) => formatDate(p.next_order_date),
+      key: 'urgency',
+      header: 'Restock urgency',
+      render: (p) => {
+        const u = restockOf(p);
+        return (
+          <div>
+            <span
+              className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${u.tone}`}
+            >
+              {u.label}
+            </span>
+            <div className="mt-0.5 text-xs text-zinc-400">{u.caption}</div>
+          </div>
+        );
+      },
     },
     {
-      key: 'interest',
-      header: 'Interest',
+      key: 'value',
+      header: 'Est. value',
+      align: 'right',
+      render: (p) => (
+        <div>
+          <div className="font-semibold text-zinc-800 tabular-nums">
+            {formatMoney(p.estimated_revenue)}
+          </div>
+          <div className="text-xs text-zinc-400">lifetime estimate</div>
+        </div>
+      ),
+    },
+    {
+      key: 'demand',
+      header: 'Demand',
       align: 'center',
-      render: (p) => <InterestBadge score={p.interest_score} />,
+      render: (p) => (
+        <div>
+          <InterestBadge score={p.interest_score} />
+          <div className="mt-0.5 text-xs text-zinc-400">0–100</div>
+        </div>
+      ),
+    },
+    {
+      key: 'opportunity',
+      header: 'Opportunity',
+      render: (p) => {
+        const o = opportunityOf(p.interest_score);
+        return (
+          <span
+            title={o.hint}
+            className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${o.tone}`}
+          >
+            {o.label}
+          </span>
+        );
+      },
     },
     {
       key: 'status',
@@ -378,18 +550,20 @@ export default function PredictionsPage() {
             </Badge>
           )}
           {p.insufficient_count > 0 && (
-            <Badge variant="light" color="gray" radius="sm">
-              {p.insufficient_count} need data
-            </Badge>
+            <button
+              type="button"
+              title="Add order history for this product"
+              onClick={() =>
+                openAdd({
+                  product: { id: p.product_id, name: p.product_name },
+                })
+              }
+              className="rounded-lg bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200 hover:text-zinc-800"
+            >
+              {p.insufficient_count} need data →
+            </button>
           )}
         </Group>
-      ),
-    },
-    {
-      key: 'recommendation',
-      header: 'Recommended',
-      render: (p) => (
-        <RecommendationAction rec={p.recommendation} phone={null} email={null} />
       ),
     },
   ];
@@ -420,7 +594,7 @@ export default function PredictionsPage() {
             >
               Refresh
             </Button>
-            <Button leftSection={<FileArrowUp size={16} />} onClick={openAdd}>
+            <Button leftSection={<FileArrowUp size={16} />} onClick={() => openAdd()}>
               Add order history
             </Button>
           </>
@@ -433,33 +607,33 @@ export default function PredictionsPage() {
             icon={<UsersThree size={22} />}
             label="Customers to reorder"
             value={summary.due_soon_count + summary.overdue_count}
-            trendLabel={`${summary.overdue_count} overdue, ${summary.due_soon_count} due soon`}
+            trendLabel={`${summary.overdue_count} overdue — call · ${summary.due_soon_count} due soon — message`}
           />
           <KPICard
             icon={<CalendarDots size={22} />}
             label="Next orders in 30 days"
             value={summary.next_30_days}
-            trendLabel={`${summary.next_7_days} due within 7 days`}
+            trendLabel={`${summary.next_7_days} due within 7 days — keep stock ready`}
           />
           <KPICard
             icon={<Graph size={22} />}
             label="Average interest"
             value={summary.avg_interest}
-            trendLabel="on a 0–100 scale"
+            trendLabel="0–100 · above 40 means a follow-up is worthwhile"
           />
           <KPICard
             icon={<Package size={22} />}
             label="Analysed products"
             value={summary.product_pairs}
-            trendLabel={`across ${summary.customer_count} customers`}
+            trendLabel={`across ${summary.customer_count} customers · open one to act`}
           />
         </SimpleGrid>
       )}
 
       {summary &&
         !dataTipDismissed &&
-        summary.customer_count > 0 &&
-        summary.insufficient_data_count / summary.customer_count > 0.5 && (
+        summary.product_pairs > 0 &&
+        summary.insufficient_data_count / summary.product_pairs > 0.5 && (
           <Alert
             color="blue"
             icon={<Info size={16} />}
@@ -468,12 +642,33 @@ export default function PredictionsPage() {
             title="Some predictions are still being learned"
             mb="md"
           >
-            <Text size="sm">
-              {summary.insufficient_data_count} of {summary.customer_count}{' '}
-              customers don&apos;t have enough order history yet for us to
-              predict when they&apos;ll next order. Add order history or log
-              confirmed orders, then refresh, to improve their predictions.
-            </Text>
+            <Stack gap="sm">
+              <Text size="sm">
+                {summary.insufficient_data_count} of {summary.product_pairs}{' '}
+                product–customer pairs don&apos;t have enough history yet to
+                predict the next order. Add a few real order dates and the
+                prediction switches on.
+              </Text>
+              {mostNeedyProduct && (
+                <div>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="brand"
+                    onClick={() =>
+                      openAdd({
+                        product: {
+                          id: mostNeedyProduct.product_id,
+                          name: mostNeedyProduct.product_name,
+                        },
+                      })
+                    }
+                  >
+                    Add history for those →
+                  </Button>
+                </div>
+              )}
+            </Stack>
           </Alert>
         )}
 
@@ -505,15 +700,15 @@ export default function PredictionsPage() {
         <Tabs
           value={tab}
           onChange={(value) =>
-            setTab((value ?? 'products') as 'products' | 'customers')
+            setTab((value ?? 'customers') as 'products' | 'customers')
           }
         >
           <Tabs.List mb="md">
-            <Tabs.Tab value="products" leftSection={<Package size={16} />}>
-              By product
-            </Tabs.Tab>
             <Tabs.Tab value="customers" leftSection={<UsersThree size={16} />}>
               By customer
+            </Tabs.Tab>
+            <Tabs.Tab value="products" leftSection={<Package size={16} />}>
+              By product
             </Tabs.Tab>
           </Tabs.List>
 
@@ -546,89 +741,114 @@ export default function PredictionsPage() {
             ) : (
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
                 <div className="xl:col-span-2">
-                  <ChartCard
-                    title="Customer re-orders per product"
-                    legend={
-                      <ChartLegend
-                        items={[
-                          { label: 'On track', color: STATUS_COLORS.on_track },
-                          { label: 'Due soon', color: STATUS_COLORS.due_soon },
-                          { label: 'Overdue', color: STATUS_COLORS.overdue },
-                        ]}
-                      />
+                  <DataTable
+                    columns={productColumns}
+                    data={filteredProducts}
+                    getRowId={(p) => p.product_id}
+                    minWidth={1000}
+                    emptyTitle={
+                      productsSearch || productsStatus !== 'all'
+                        ? 'No matches'
+                        : 'No product predictions yet'
                     }
-                  >
-                    {productChartData.length ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={productChartData}
-                          margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#f1f3f9"
-                            vertical={false}
-                          />
-                          <XAxis
-                            dataKey="name"
-                            tick={{ fontSize: 11, fill: '#a1a1aa' }}
-                            axisLine={false}
-                            tickLine={false}
-                          />
-                          <YAxis
-                            allowDecimals={false}
-                            tick={{ fontSize: 11, fill: '#a1a1aa' }}
-                            axisLine={false}
-                            tickLine={false}
-                            width={30}
-                          />
-                          <Tooltip
-                            cursor={{ fill: 'rgba(0,0,0,0.04)' }}
-                            contentStyle={{
-                              borderRadius: 12,
-                              border: '1px solid #e4e7ec',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                            }}
-                          />
-                          <Bar
-                            dataKey="On track"
-                            stackId="a"
-                            fill={STATUS_COLORS.on_track}
-                          />
-                          <Bar
-                            dataKey="Due soon"
-                            stackId="a"
-                            fill={STATUS_COLORS.due_soon}
-                          />
-                          <Bar
-                            dataKey="Overdue"
-                            stackId="a"
-                            fill={STATUS_COLORS.overdue}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <EmptyState description="No product predictions yet." />
-                    )}
-                  </ChartCard>
+                    emptyDescription={
+                      productsSearch || productsStatus !== 'all'
+                        ? 'Try a different search or status filter.'
+                        : 'Add order history for a product and customer, or create confirmed orders.'
+                    }
+                    rowAccent={(p) => STATUS_COLORS[p.stock_status]}
+                    rowClassName={(p) =>
+                      highlight?.tab === 'products' && highlight.id === p.product_id
+                        ? 'bg-brand-50/70'
+                        : undefined
+                    }
+                    rowActions={[
+                      {
+                        label: 'Add order history',
+                        icon: <Plus size={16} />,
+                        onClick: (p) =>
+                          openAdd({
+                            product: {
+                              id: p.product_id,
+                              name: p.product_name,
+                            },
+                          }),
+                      },
+                      {
+                        label: 'View details',
+                        icon: <Eye size={16} />,
+                        onClick: (p) =>
+                          router.push(`/predictions/products/${p.product_id}`),
+                      },
+                    ]}
+                  />
                 </div>
-                <DataTable
-                  columns={productColumns}
-                  data={filteredProducts}
-                  getRowId={(p) => p.product_id}
-                  minWidth={820}
-                  emptyTitle={
-                    productsSearch || productsStatus !== 'all'
-                      ? 'No matches'
-                      : 'No product predictions yet'
+                <ChartCard
+                  title="Customer re-orders per product"
+                  subtitle={productChartCaption}
+                  legend={
+                    <ChartLegend
+                      items={[
+                        { label: 'On track', color: STATUS_COLORS.on_track },
+                        { label: 'Due soon', color: STATUS_COLORS.due_soon },
+                        { label: 'Overdue', color: STATUS_COLORS.overdue },
+                      ]}
+                    />
                   }
-                  emptyDescription={
-                    productsSearch || productsStatus !== 'all'
-                      ? 'Try a different search or status filter.'
-                      : 'Add order history for a product and customer, or create confirmed orders.'
-                  }
-                  rowAccent={(p) => STATUS_COLORS[p.stock_status]}
-                />
+                >
+                  {productChartData.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={productChartData}
+                        margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                      >
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#f1f3f9"
+                          vertical={false}
+                        />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fontSize: 11, fill: '#a1a1aa' }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          allowDecimals={false}
+                          tick={{ fontSize: 11, fill: '#a1a1aa' }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={30}
+                        />
+                        <Tooltip
+                          cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                          contentStyle={{
+                            borderRadius: 12,
+                            border: '1px solid #e4e7ec',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                          }}
+                        />
+                        <Bar
+                          dataKey="On track"
+                          stackId="a"
+                          fill={STATUS_COLORS.on_track}
+                        />
+                        <Bar
+                          dataKey="Due soon"
+                          stackId="a"
+                          fill={STATUS_COLORS.due_soon}
+                        />
+                        <Bar
+                          dataKey="Overdue"
+                          stackId="a"
+                          fill={STATUS_COLORS.overdue}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyState description="No product predictions yet." />
+                  )}
+                </ChartCard>
               </div>
             )}
           </Tabs.Panel>
@@ -689,9 +909,28 @@ export default function PredictionsPage() {
                     }
                     rowAccent={(c) => STATUS_COLORS[c.stock_status]}
                     rowClassName={(c) =>
-                      contacted[c.customer_id] ? 'opacity-60' : undefined
+                      [
+                        contacted[c.customer_id] ? 'opacity-60' : undefined,
+                        highlight?.tab === 'customers' &&
+                        highlight.id === c.customer_id
+                          ? 'bg-brand-50/70'
+                          : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(' ') || undefined
                     }
                     rowActions={[
+                      {
+                        label: 'Add order history',
+                        icon: <Plus size={16} />,
+                        onClick: (c) =>
+                          openAdd({
+                            customer: {
+                              id: c.customer_id,
+                              name: c.customer_name,
+                            },
+                          }),
+                      },
                       {
                         label: 'View details',
                         icon: <Eye size={16} />,
@@ -716,11 +955,12 @@ export default function PredictionsPage() {
                 </div>
                 <ChartCard
                   title="Customers by status"
+                  subtitle={customerChartCaption}
                   legend={
                     <ChartLegend
                       items={customerStatusPie.map((s) => ({
                         label: STATUS_LABELS[s.key] ?? s.key,
-                        color: STATUS_COLORS[s.key] ?? '#6f4bff',
+                        color: STATUS_COLORS[s.key] ?? '#f59e0b',
                       }))}
                     />
                   }
@@ -745,7 +985,7 @@ export default function PredictionsPage() {
                           {customerStatusPie.map((entry) => (
                             <Cell
                               key={entry.key}
-                              fill={STATUS_COLORS[entry.key] ?? '#6f4bff'}
+                              fill={STATUS_COLORS[entry.key] ?? '#f59e0b'}
                             />
                           ))}
                         </Pie>
@@ -810,7 +1050,12 @@ export default function PredictionsPage() {
         </Alert>
       )}
 
-      <AddOrdersModal opened={addOpened} onClose={closeAdd} />
+      <AddOrdersModal
+        opened={addOpened}
+        onClose={closeAdd}
+        preset={addPreset}
+        onSaved={handleSaved}
+      />
     </div>
   );
 }

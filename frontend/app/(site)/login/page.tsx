@@ -45,7 +45,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
             />
           </label>
           <label className="block">
@@ -55,7 +55,7 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200"
             />
           </label>
 
@@ -78,7 +78,7 @@ export default function LoginPage() {
           No account yet?{" "}
           <Link
             href="/register"
-            className="font-medium text-blue-600 hover:text-blue-800"
+            className="font-medium text-brand-600 hover:text-brand-700"
           >
             Create a tenant
           </Link>

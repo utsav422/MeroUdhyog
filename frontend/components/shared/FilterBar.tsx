@@ -47,25 +47,33 @@ export default function FilterBar({
   const localFilters = filterDefs ?? [];
 
   return (
-    <Group gap="sm" align="center" wrap="wrap" mb="md">
+    <Group
+      gap="sm"
+      align="center"
+      wrap="wrap"
+      className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5"
+    >
       <TextInput
         placeholder={searchPlaceholder}
         defaultValue={searchValue}
-        leftSection={<MagnifyingGlass size={16} className="text-zinc-400" />}
+        leftSection={<MagnifyingGlass size={16} className="text-[var(--muted)]" />}
         onChange={(e) => handleSearch(e.currentTarget.value)}
         className="w-64"
         size="sm"
       />
+
+      {localFilters.length > 0 && <div className="h-6 w-px bg-[var(--border)]" />}
+
       {localFilters.map((def) => {
         if (def.type === 'select') {
           return (
             <Select
               key={def.key}
-              label={null}
               size="sm"
               placeholder={def.placeholder ?? def.label}
               clearable
               data={def.options}
+              value={(filterValues?.[def.key] as string) ?? null}
               onChange={(value) =>
                 onFiltersChange?.({ ...filterValues, [def.key]: value ?? null })
               }
@@ -80,6 +88,7 @@ export default function FilterBar({
               size="sm"
               placeholder={def.placeholder ?? def.label}
               data={def.options}
+              value={(filterValues?.[def.key] as string[]) ?? []}
               onChange={(value) =>
                 onFiltersChange?.({ ...filterValues, [def.key]: value })
               }
@@ -102,11 +111,12 @@ export default function FilterBar({
         }
         return null;
       })}
+
       {(hasActiveFilters || searchValue) && onClear && (
         <button
           type="button"
           onClick={onClear}
-          className="inline-flex items-center gap-1 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+          className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-[var(--muted)] transition-colors hover:bg-black/5 hover:text-[var(--foreground)]"
         >
           <X size={14} />
           Clear filters

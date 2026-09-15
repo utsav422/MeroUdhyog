@@ -25,7 +25,11 @@ class OrderRepository:
     ) -> list[Order]:
         stmt = (
             select(Order)
-            .options(selectinload(Order.items), selectinload(Order.route))
+            .options(
+                selectinload(Order.items),
+                selectinload(Order.route),
+                selectinload(Order.reorder_of),
+            )
             .where(Order.tenant_id == self.tenant_id)
         )
         if status:
@@ -41,7 +45,11 @@ class OrderRepository:
     async def get(self, order_id: UUID) -> Order:
         result = await self.session.execute(
             select(Order)
-            .options(selectinload(Order.items), selectinload(Order.route))
+            .options(
+                selectinload(Order.items),
+                selectinload(Order.route),
+                selectinload(Order.reorder_of),
+            )
             .where(Order.id == order_id, Order.tenant_id == self.tenant_id)
         )
         row = result.scalars().unique().one_or_none()

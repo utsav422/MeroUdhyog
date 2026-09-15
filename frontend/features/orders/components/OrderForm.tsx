@@ -291,7 +291,7 @@ export default function OrderForm({
                         {it.variant_id && (
                           <span
                             className={`text-[10px] font-medium ${
-                              availableFor(it.variant_id) === 0 ? 'text-red-500' : 'text-zinc-400'
+                              availableFor(it.variant_id) === 0 ? 'text-danger-500' : 'text-zinc-400'
                             }`}
                           >
                             {availableFor(it.variant_id) === 0 ? 'Out of stock' : `${availableFor(it.variant_id)} available`}
@@ -300,13 +300,21 @@ export default function OrderForm({
                       </div>
                     </Table.Td>
                     <Table.Td ta="right">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={it.unit_price}
-                        onChange={(e) => updateLine(idx, { unit_price: e.currentTarget.value })}
-                        className="h-8 w-24 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-right text-sm outline-none focus:border-brand-400 focus:bg-white"
-                      />
+                      <div className="flex flex-col items-end gap-1">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={it.unit_price}
+                          onChange={(e) => updateLine(idx, { unit_price: e.currentTarget.value })}
+                          className="h-8 w-24 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-right text-sm outline-none focus:border-brand-400 focus:bg-white"
+                        />
+                        {(() => {
+                          const unit = variantById(it.variant_id)?.data.unit;
+                          return unit ? (
+                            <span className="text-[10px] font-medium text-zinc-400">per {unit}</span>
+                          ) : null;
+                        })()}
+                      </div>
                     </Table.Td>
                     <Table.Td ta="right" fw={600} className="text-zinc-800">
                       {formatMoney(((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)).toString())}
@@ -316,7 +324,7 @@ export default function OrderForm({
                         type="button"
                         aria-label="Remove line"
                         onClick={() => removeLine(idx)}
-                        className="rounded-lg p-1 text-zinc-300 transition-colors hover:bg-red-50 hover:text-red-500"
+                        className="rounded-lg p-1 text-zinc-300 transition-colors hover:bg-danger-50 hover:text-danger-500"
                       >
                         <Trash size={14} />
                       </button>

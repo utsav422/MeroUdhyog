@@ -30,7 +30,7 @@ export default function CustomerPredictionCard({
       withBorder
       className="cursor-pointer transition-shadow hover:shadow-md"
       style={{
-        borderLeft: `4px solid ${STATUS_COLORS[customer.stock_status] ?? '#6f4bff'}`,
+        borderLeft: `4px solid ${STATUS_COLORS[customer.stock_status] ?? '#f59e0b'}`,
       }}
       onClick={() => onView(customer)}
     >

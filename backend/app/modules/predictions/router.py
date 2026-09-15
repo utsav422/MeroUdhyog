@@ -12,6 +12,7 @@ from app.modules.predictions.schemas import (
     HistoryCreate,
     ImportResult,
     OrderHistoryRead,
+    ProductDetailRead,
 )
 from app.modules.predictions.service import PredictionService
 
@@ -41,6 +42,17 @@ async def get_customer_detail(
 ):
     service = await _service(db, tenant_id)
     return await service.customer_detail(customer_id)
+
+
+@router.get("/products/{product_id}", response_model=ProductDetailRead)
+async def get_product_detail(
+    product_id: UUID,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    _=Depends(require_permission(Permissions.VIEW_ALL)),
+):
+    service = await _service(db, tenant_id)
+    return await service.product_detail(product_id)
 
 
 @router.get("/history", response_model=list[OrderHistoryRead])

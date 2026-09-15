@@ -18,7 +18,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from '@phosphor-icons/react';
 import { apiClient } from '@/lib/api-client';
-import { formatMoney } from '@/lib/format';
+import { formatPriceUnit } from '@/lib/format';
 import { useCustomerPrices, customersKeys } from '../api';
 import type { Customer, CustomerPrice } from '../api';
 import { useProducts, defaultVariantPrice } from '../../products/api';
@@ -44,6 +44,7 @@ type PriceRow = {
   product_name: string;
   variant_name: string;
   default_price: string;
+  default_unit: string;
   override: string;
 };
 
@@ -73,7 +74,7 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
   });
 
   const allVariants = useMemo(() => {
-    const list: { variant_id: string; product_name: string; variant_name: string; default_price: string }[] = [];
+    const list: { variant_id: string; product_name: string; variant_name: string; default_price: string; unit: string }[] = [];
     for (const p of productsQuery.data ?? []) {
       for (const v of p.variants) {
         list.push({
@@ -81,6 +82,7 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
           product_name: p.name,
           variant_name: v.name,
           default_price: defaultVariantPrice(v),
+          unit: v.unit ?? '',
         });
       }
     }
@@ -124,6 +126,7 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
         product_name: v.product_name,
         variant_name: v.variant_name,
         default_price: v.default_price,
+        default_unit: v.unit,
         override: overrideValues[v.variant_id] ?? '',
       })),
     [allVariants, overrideValues],
@@ -310,7 +313,7 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
                         <span className="text-zinc-500">{row.variant_name}</span>
                       </Table.Td>
                       <Table.Td ta="right">
-                        {formatMoney(row.default_price)}
+                        {formatPriceUnit(row.default_price, row.default_unit)}
                       </Table.Td>
                       <Table.Td ta="right">
                         <input

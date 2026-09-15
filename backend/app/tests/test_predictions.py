@@ -273,6 +273,85 @@ async def test_add_manual_history_drives_product_and_customer_aggregation(client
 
 
 @pytest.mark.asyncio
+async def test_product_detail_and_estimated_revenue(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "Sauce")
+    variant_id = product["variants"][0]["id"]
+    customer = await _create_customer(client, "Acme")
+
+    await client.post(
+        "/api/v1/predictions/history",
+        json={
+            "customer_id": customer["id"],
+            "product_id": product["id"],
+            "variant_id": variant_id,
+            "rows": [
+                {"order_date": "2026-05-10", "quantity": "10"},
+                {"order_date": "2026-06-10", "quantity": "12"},
+                {"order_date": "2026-07-12", "quantity": "14"},
+            ],
+        },
+    )
+
+    r = await client.get(f"/api/v1/predictions/products/{product['id']}")
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert detail["product_name"] == "Sauce"
+    assert detail["customer_count"] == 1
+    assert detail["order_count"] == 3
+    assert len(detail["customers"]) == 1
+    customer_row = detail["customers"][0]
+    assert customer_row["customer_name"] == "Acme"
+    assert customer_row["variant_id"] == variant_id
+    # estimated revenue = avg qty * order count * unit price (10.00)
+    expected = round(customer_row["avg_quantity"] * detail["order_count"] * 10)
+    assert detail["estimated_revenue"] == expected
+    assert detail["estimated_revenue"] > 0
+
+    r = await client.get(f"/api/v1/predictions/products/{uuid.uuid4()}")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_product_detail_zero_revenue_without_price(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    res = await client.post(
+        "/api/v1/products",
+        json={
+            "name": "Ghost",
+            "variants": [
+                {
+                    "name": "Default",
+                    "sku": f"GHOST-{uuid.uuid4().hex[:6]}",
+                    "prices": [],
+                }
+            ],
+        },
+    )
+    assert res.status_code == 201, res.text
+    product = res.json()
+    customer = await _create_customer(client, "Acme")
+
+    r = await client.post(
+        "/api/v1/predictions/history",
+        json={
+            "customer_id": customer["id"],
+            "product_id": product["id"],
+            "rows": [
+                {"order_date": "2026-05-10", "quantity": "10"},
+                {"order_date": "2026-06-10", "quantity": "12"},
+            ],
+        },
+    )
+    assert r.status_code == 201
+
+    r = await client.get(f"/api/v1/predictions/products/{product['id']}")
+    assert r.status_code == 200
+    detail = r.json()
+    assert detail["estimated_revenue"] == 0
+
+
+@pytest.mark.asyncio
 async def test_delete_single_manual_history_row_requires_import_permission(client):
     tokens = await _register(client, f"t{uuid.uuid4().hex[:6]}")
     tenant_id = tokens["tenant_id"]

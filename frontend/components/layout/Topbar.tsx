@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 const TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/products': 'Products',
+  '/orders/calendar': 'Activity Calendar',
   '/orders': 'Orders',
   '/deliveries': 'Deliveries',
   '/customers': 'Customers',
@@ -57,7 +58,7 @@ export default function Topbar({
     .toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-zinc-200/70 bg-[#f6f7fb]/90 px-6 py-3.5 backdrop-blur">
+    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-zinc-200/70 bg-[var(--background)]/90 px-6 py-3.5 backdrop-blur">
       <div>
         <Text fw={700} size="lg" className="leading-tight">
           {title}

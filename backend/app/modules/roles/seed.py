@@ -9,7 +9,7 @@ from app.core.permissions import ROLE_PERMISSIONS
 from app.modules.roles.models import Role
 
 # Built-in codes seeded for every tenant. 'owner' is the system super-role.
-DEFAULT_ROLE_CODES = ("owner", "admin", "manager", "accountant", "worker", "delivery", "viewer")
+DEFAULT_ROLE_CODES = ("owner", "admin", "manager", "accountant", "collector", "worker", "delivery", "viewer")
 
 
 async def seed_default_roles(session: AsyncSession, tenant_id: UUID) -> None:

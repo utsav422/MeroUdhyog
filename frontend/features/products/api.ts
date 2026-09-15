@@ -24,6 +24,7 @@ export type Variant = {
   attributes: Record<string, unknown> | null;
   size: string | null;
   size_type: string | null;
+  unit: string | null;
   images: string[] | null;
   sort_order: number;
   is_active: boolean;
@@ -90,6 +91,7 @@ export type VariantInput = {
   sku?: string | null;
   size?: string | null;
   size_type?: string | null;
+  unit?: string | null;
   stock_quantity?: number | null;
   low_stock_threshold?: number | null;
   sort_order?: number;

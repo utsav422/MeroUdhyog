@@ -111,6 +111,47 @@ class OrderService:
                     raise ValidationError(f"variant_id {item.variant_id} not found on this product")
 
     async def create(self, data: OrderCreate) -> OrderRead:
+        order = await self._create(data)
+        return OrderRead.model_validate(order)
+
+    async def reorder(self, order_id: UUID) -> OrderRead:
+        """Re-order a failed/cancelled order.
+
+        Creates a fresh draft order copying the original's customer, delivery
+        details, notes and line items, and links it back as a reorder (#N) so
+        the original's record — and the whole cancellation history of the chain
+        — stays intact. Stock is reserved again like any new order.
+        """
+        source = await self.repo.get(order_id)
+        if source.status not in {"failed", "cancelled"}:
+            raise ConflictError(
+                f"Only failed or cancelled orders can be re-ordered (got '{source.status}')"
+            )
+        data = OrderCreate(
+            customer_id=source.customer_id,
+            delivery_address=source.delivery_address,
+            delivery_lat=source.delivery_lat,
+            delivery_lng=source.delivery_lng,
+            notes=source.notes,
+            items=[
+                OrderItemCreate(
+                    product_id=item.product_id,
+                    variant_id=item.variant_id,
+                    quantity=item.quantity,
+                )
+                for item in source.items
+            ],
+        )
+        attempt = (source.reorder_attempt or 0) + 1
+        order = await self._create(data, reorder_of_id=source.id, reorder_attempt=attempt)
+        return OrderRead.model_validate(order)
+
+    async def _create(
+        self,
+        data: OrderCreate,
+        reorder_of_id: UUID | None = None,
+        reorder_attempt: int | None = None,
+    ) -> Order:
         await self._validate_refs(data)
         customer = None
         if data.customer_id:
@@ -142,6 +183,8 @@ class OrderService:
             delivery_lng=delivery_lng,
             notes=data.notes,
             created_by=self.user_id,
+            reorder_of_id=reorder_of_id,
+            reorder_attempt=reorder_attempt,
         )
         total = Decimal("0")
         items: list[OrderItem] = []
@@ -180,6 +223,7 @@ class OrderService:
                     variant_id=item.variant_id,
                     product_name=product_name,
                     variant_name=variant_name,
+                    unit=variant.unit if item.variant_id else None,
                     quantity=item.quantity,
                     unit_price=unit_price,
                     amount=amount,
@@ -201,7 +245,7 @@ class OrderService:
         created = await self.repo.create(order, items)
         for movement in movements:
             movement.order_id = created.id
-        return OrderRead.model_validate(created)
+        return created
 
     async def update(self, order_id: UUID, data: OrderUpdate) -> OrderRead:
         order = await self.repo.get(order_id)
@@ -218,8 +262,10 @@ class OrderService:
                 raise ConflictError(
                     f"Cannot transition from '{order.status}' to '{new_status}'"
                 )
-        if "payment_status" in updates and updates["payment_status"] not in VALID_PAYMENT_STATUSES:
-            raise ValidationError(f"Invalid payment_status: {updates['payment_status']}")
+        # `payment_status`/`amount_paid` are owned by the khata ledger and are
+        # recomputed transactionally on each payment record/void — they can no
+        # longer be set through this endpoint. OrderUpdate omits the field, so
+        # any leftover value arriving here is dropped before the loop below.
         new_items_raw = updates.pop("items", None)
         for field, value in updates.items():
             setattr(order, field, value)
@@ -365,6 +411,7 @@ class OrderService:
                     variant_id=item.variant_id,
                     product_name=product.name,
                     variant_name=variant.name if variant else None,
+                    unit=variant.unit if variant else None,
                     quantity=item.quantity,
                     unit_price=unit_price,
                     amount=amount,

@@ -21,6 +21,10 @@ class Permissions(StrEnum):
     MANAGE_AUDITS = "manage_audits"
     VIEW_ASSIGNED_DELIVERIES = "view_assigned_deliveries"
     UPDATE_DELIVERY_STATUS = "update_delivery_status"
+    MANAGE_KHATA = "manage_khata"
+    MANAGE_BILL_TEMPLATE = "manage_bill_template"
+    # Admin-only editable invoice/receipt documents (never touches the ledger).
+    MANAGE_INVOICES = "manage_invoices"
 
 
 ROLE_PERMISSIONS: dict[str, set[Permissions]] = {
@@ -36,6 +40,7 @@ ROLE_PERMISSIONS: dict[str, set[Permissions]] = {
         Permissions.MANAGE_ORDERS,
         Permissions.MANAGE_AUDITS,
         Permissions.UPDATE_DELIVERY_STATUS,
+        Permissions.MANAGE_INVOICES,
     },
     "manager": {
         Permissions.VIEW_ALL,
@@ -50,6 +55,9 @@ ROLE_PERMISSIONS: dict[str, set[Permissions]] = {
         Permissions.MANAGE_TRANSACTIONS,
         Permissions.MANAGE_AUDITS,
         Permissions.VIEW_ASSIGNED_DELIVERIES,
+    },
+    "collector": {
+        Permissions.MANAGE_KHATA,
     },
     "worker": {
         Permissions.VIEW_ALL,

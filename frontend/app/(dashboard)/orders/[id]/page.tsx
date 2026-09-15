@@ -13,12 +13,15 @@ import {
   Package,
   Copy,
   Truck,
+  ArrowsClockwise,
+  FilePdf,
 } from '@phosphor-icons/react';
 import { useOrder, itemCount, useOrderStatusUpdate, useAssignDelivery, useUpdateDeliveryStatus, useDeliveryForOrder } from '@/features/orders/api';
+import { useReorder, ReorderBadge } from '@/features/orders/components/Reorder';
 import { useCustomers } from '@/features/customers/api';
 import { useUsers } from '@/features/staff/api';
 import { LoadingState, ErrorState, StatusBadge } from '@/components/shared';
-import { formatMoney, formatDateTime } from '@/lib/format';
+import { formatMoney, formatDateTime, formatPriceUnit } from '@/lib/format';
 
 // The order timeline up to "ready" is all the staff control manually; from
 // "assigned" onward the linked delivery drives the order status.
@@ -46,6 +49,7 @@ export default function OrderDetailPage() {
   const statusMutation = useOrderStatusUpdate();
   const assignMutation = useAssignDelivery();
   const deliveryStatusMutation = useUpdateDeliveryStatus();
+  const reorder = useReorder();
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState retry={() => refetch()} />;
@@ -174,12 +178,24 @@ export default function OrderDetailPage() {
               </Text>
               <StatusBadge status={data.status} />
               <StatusBadge status={data.payment_status} />
+              {data.reorder_of_id && <ReorderBadge order={data} />}
             </div>
             <Text size="sm" c="dimmed" className="mt-1">
               Created {formatDateTime(data.created_at)}
             </Text>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {['failed', 'cancelled'].includes(data.status) && (
+              <Button
+                color="brand"
+                variant="filled"
+                loading={reorder.isPending}
+                leftSection={<ArrowsClockwise size={16} />}
+                onClick={() => reorder.reorderOrder(data)}
+              >
+                Re-order order
+              </Button>
+            )}
             {nextStatus && (
               <Button
                 color="brand"
@@ -200,6 +216,16 @@ export default function OrderDetailPage() {
                 Edit order
               </Button>
             )}
+            {!['draft', 'cancelled'].includes(data.status) && (
+              <Button
+                variant="default"
+                color="green"
+                leftSection={<FilePdf size={16} />}
+                onClick={() => router.push(`/orders/${data.id}/invoice`)}
+              >
+                View Invoice
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -217,7 +243,7 @@ export default function OrderDetailPage() {
         </div>
 
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <Package size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>Items</Text>
@@ -226,18 +252,20 @@ export default function OrderDetailPage() {
         </div>
 
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-success-50 text-success-700">
             <CurrencyDollar size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>Total amount</Text>
           <Text fw={700} size="lg" className="mt-0.5">{formatMoney(data.total_amount)}</Text>
           <Text size="xs" c="dimmed" className="mt-0.5">
-            {data.payment_status === 'paid' ? 'Paid in full' : 'Pending payment'}
+            {data.payment_status === 'paid'
+              ? `Paid in full (${formatMoney(data.amount_paid)})`
+              : `${formatMoney(data.amount_paid)} paid · ${formatMoney(Math.max(0, Number(data.total_amount) - Number(data.amount_paid)))} due`}
           </Text>
         </div>
 
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600">
             <MapPin size={20} weight="bold" />
           </div>
           <Text size="xs" c="dimmed" fw={500}>Delivery</Text>
@@ -266,7 +294,7 @@ export default function OrderDetailPage() {
                       isActive
                         ? isCurrent
                           ? 'border-brand-600 bg-brand-600 text-white shadow-md shadow-brand-200'
-                          : 'border-emerald-500 bg-emerald-500 text-white'
+                          : 'border-success-500 bg-success-500 text-white'
                         : 'border-zinc-200 bg-white text-zinc-300'
                     }`}
                   >
@@ -281,26 +309,33 @@ export default function OrderDetailPage() {
                   </span>
                 </div>
                 {i < STATUS_TIMELINE.length - 1 && (
-                  <div className={`mx-2 h-0.5 flex-1 rounded-full ${isActive && i < currentStepIndex ? 'bg-emerald-500' : 'bg-zinc-100'}`} />
+                  <div className={`mx-2 h-0.5 flex-1 rounded-full ${isActive && i < currentStepIndex ? 'bg-success-500' : 'bg-zinc-100'}`} />
                 )}
               </div>
             );
           })}
         </div>
         {data.status === 'cancelled' && (
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5">
-            <span className="text-xs font-semibold text-red-600">This order has been cancelled</span>
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-danger-50 px-4 py-2.5">
+            <span className="text-xs font-semibold text-danger-600">
+              This order has been cancelled
+              {data.reorder_of_id ? ` — it is reorder #${data.reorder_attempt}` : ''}. Use “Re-order order”
+              to place it again; this record stays for history.
+            </span>
           </div>
         )}
         {data.status === 'failed' && (
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5">
-            <span className="text-xs font-semibold text-red-600">This delivery failed and was not completed</span>
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-danger-50 px-4 py-2.5">
+            <span className="text-xs font-semibold text-danger-600">
+              This delivery failed and was not completed. Use “Re-order order” to try again;
+              the failed attempt stays for history.
+            </span>
           </div>
         )}
         {DELIVERY_MANAGED_STATUSES.includes(data.status) && data.status !== 'failed' && (
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2.5">
-            <Truck size={14} className="text-blue-600" />
-            <span className="text-xs font-medium text-blue-700">
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-2.5">
+            <Truck size={14} className="text-brand-600" />
+            <span className="text-xs font-medium text-brand-700">
               This order is in the delivery pipeline — the delivery agent drives its status from here on.
             </span>
           </div>
@@ -410,7 +445,7 @@ export default function OrderDetailPage() {
                   </span>
                 </Table.Td>
                 <Table.Td ta="right" className="text-zinc-600">
-                  {formatMoney(it.unit_price)}
+                  {formatPriceUnit(it.unit_price, it.unit)}
                 </Table.Td>
                 <Table.Td ta="right" fw={600} className="text-zinc-800">
                   {formatMoney(it.amount)}

@@ -33,8 +33,10 @@ from app.modules.predictions.schemas import (
     OrderHistoryRead,
     PredictionProductRead,
     ProductAggregateRead,
+    ProductCustomerRead,
+    ProductDetailRead,
 )
-from app.modules.products.models import Product, ProductVariant
+from app.modules.products.models import Product, ProductVariant, VariantPrice
 
 EXCLUDED_ORDER_STATUSES = {"draft", "failed", "cancelled"}
 
@@ -377,6 +379,43 @@ class PredictionService:
         ).scalars().all()
         return {str(c.id): c for c in customers}
 
+    async def _price_lookup(self) -> tuple[dict[str, Decimal], dict[str, Decimal]]:
+        """Current unit price per variant, plus a product-level fallback.
+
+        Uses the active price entry whose effective window covers today (or has
+        no window), favouring the most recent ``effective_from``. The product
+        map is the first priced variant, so product-level pairs still get an
+        estimate when the order didn't record a variant.
+        """
+        now = datetime.now(UTC)
+        rows = (
+            await self.session.execute(
+                select(VariantPrice, ProductVariant.product_id)
+                .join(ProductVariant, ProductVariant.id == VariantPrice.variant_id)
+                .where(ProductVariant.tenant_id == self.tenant_id)
+                .where(VariantPrice.is_active.is_(True))
+                .where(
+                    (VariantPrice.effective_from.is_(None))
+                    | (VariantPrice.effective_from <= now)
+                )
+                .where(
+                    (VariantPrice.effective_to.is_(None))
+                    | (VariantPrice.effective_to >= now)
+                )
+                .order_by(
+                    VariantPrice.effective_from.desc().nullslast(),
+                    VariantPrice.created_at.desc(),
+                )
+            )
+        ).all()
+
+        price_by_variant: dict[str, Decimal] = {}
+        price_by_product: dict[str, Decimal] = {}
+        for price, product_id in rows:
+            price_by_variant.setdefault(str(price.variant_id), price.price)
+            price_by_product.setdefault(str(product_id), price.price)
+        return price_by_variant, price_by_product
+
     async def _compute_products(
         self, events_by_pair: dict[tuple[str, str], list[OrderEvent]], today: date
     ) -> dict[tuple[str, str], ProductPrediction]:
@@ -470,12 +509,30 @@ class PredictionService:
         )
 
     def _aggregate_products(
-        self, predictions: dict[tuple[str, str], ProductPrediction]
+        self,
+        predictions: dict[tuple[str, str], ProductPrediction],
+        price_by_variant: dict[str, Decimal] | None = None,
+        price_by_product: dict[str, Decimal] | None = None,
     ) -> list[ProductAggregateRead]:
         """Group per-(customer, product) predictions into per-product rows."""
         by_product: dict[str, list[tuple[str, ProductPrediction]]] = {}
         for (customer_id, product_id), pred in predictions.items():
             by_product.setdefault(product_id, []).append((customer_id, pred))
+
+        def pair_price(pred: ProductPrediction) -> Decimal | None:
+            if pred.variant_id and price_by_variant:
+                price = price_by_variant.get(pred.variant_id)
+                if price is not None:
+                    return price
+            if pred.product_id and price_by_product:
+                return price_by_product.get(pred.product_id)
+            return None
+
+        def pair_revenue(pred: ProductPrediction) -> float:
+            price = pair_price(pred)
+            if price is None or price <= 0:
+                return 0.0
+            return pred.avg_quantity * pred.order_count * float(price)
 
         rows: list[ProductAggregateRead] = []
         for product_id, entries in by_product.items():
@@ -540,6 +597,7 @@ class PredictionService:
                     insufficient_count=sum(
                         1 for p in preds if p.stock_status == "insufficient_data"
                     ),
+                    estimated_revenue=round(sum(pair_revenue(p) for p in preds)),
                 )
             )
 
@@ -561,6 +619,7 @@ class PredictionService:
         events_by_pair = await self._collect_events()
         predictions = await self._compute_products(events_by_pair, today)
         customers = await self._customer_map()
+        price_by_variant, price_by_product = await self._price_lookup()
 
         grouped: dict[str, list[ProductPrediction]] = {}
         for (customer_id, _product_id), pred in predictions.items():
@@ -621,7 +680,99 @@ class PredictionService:
             tenant_avg_gap_days=round(tenant_gap, 2) if tenant_gap else None,
             summary=summary,
             customers=customer_list,
-            products=self._aggregate_products(predictions),
+            products=self._aggregate_products(
+                predictions, price_by_variant, price_by_product
+            ),
+        )
+
+    async def product_detail(self, product_id: UUID) -> ProductDetailRead:
+        today = date.today()
+        events_by_pair = await self._collect_events()
+        predictions = await self._compute_products(events_by_pair, today)
+
+        product = (
+            await self.session.execute(
+                select(Product).where(
+                    Product.tenant_id == self.tenant_id,
+                    Product.id == product_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if product is None:
+            from app.shared.exceptions import NotFoundError
+
+            raise NotFoundError("Product not found")
+
+        pairs = {
+            pair: pred
+            for pair, pred in predictions.items()
+            if pair[1] == str(product_id)
+        }
+
+        price_by_variant, price_by_product = await self._price_lookup()
+        rows = self._aggregate_products(pairs, price_by_variant, price_by_product)
+        row = rows[0] if rows else None
+
+        customers = await self._customer_map()
+        entries: list[ProductCustomerRead] = []
+        for (customer_id, _pid), pred in pairs.items():
+            customer = customers.get(customer_id)
+            entries.append(
+                ProductCustomerRead(
+                    customer_id=UUID(customer_id),
+                    customer_name=customer.name if customer else customer_id,
+                    customer_email=customer.email if customer else None,
+                    customer_phone=customer.phone if customer else None,
+                    product_id=UUID(pred.product_id),
+                    product_name=pred.product_name,
+                    sku=pred.sku,
+                    variant_id=UUID(pred.variant_id) if pred.variant_id else None,
+                    variant_name=pred.variant_name,
+                    order_count=pred.order_count,
+                    last_order_date=pred.last_order_date,
+                    avg_gap_days=round(pred.avg_gap_days, 2) if pred.avg_gap_days else None,
+                    median_gap_days=(
+                        round(pred.median_gap_days, 2) if pred.median_gap_days else None
+                    ),
+                    next_order_date=pred.next_order_date,
+                    days_until_next=pred.days_until_next,
+                    interest_score=pred.interest_score,
+                    avg_quantity=pred.avg_quantity,
+                    quantity_trend=pred.quantity_trend,
+                    stock_status=pred.stock_status,
+                    days_of_stock=pred.days_of_stock,
+                    confidence=pred.confidence,
+                    recommendation=pred.recommendation,
+                )
+            )
+        entries.sort(
+            key=lambda e: (
+                STATUS_RANK.get(e.stock_status, -1),
+                e.days_until_next if e.days_until_next is not None else 10**9,
+            ),
+            reverse=True,
+        )
+
+        return ProductDetailRead(
+            generated_at=datetime.now(UTC),
+            product_id=product.id,
+            product_name=row.product_name if row else product.name,
+            sku=row.sku if row else product.sku,
+            customer_count=row.customer_count if row else 0,
+            order_count=row.order_count if row else 0,
+            last_order_date=row.last_order_date if row else None,
+            next_order_date=row.next_order_date if row else None,
+            days_until_next=row.days_until_next if row else None,
+            avg_quantity=row.avg_quantity if row else 0.0,
+            interest_score=row.interest_score if row else 0,
+            stock_status=row.stock_status if row else "insufficient_data",
+            recommendation=row.recommendation if row else "wait",
+            overdue_count=row.overdue_count if row else 0,
+            due_soon_count=row.due_soon_count if row else 0,
+            on_track_count=row.on_track_count if row else 0,
+            insufficient_count=row.insufficient_count if row else 0,
+            estimated_revenue=row.estimated_revenue if row else 0,
+            customers=entries,
         )
 
     async def customer_detail(self, customer_id: UUID) -> CustomerDetailRead:

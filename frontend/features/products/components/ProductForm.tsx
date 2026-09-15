@@ -22,11 +22,13 @@ import { apiClient } from '@/lib/api-client';
 import { useCategories, productsKeys } from '../api';
 import type { Product, Variant, VariantInput, VariantPrice } from '../api';
 import { productFormSchema } from '../schema';
+import UnitField from './UnitField';
 
 type FormValues = {
   name: string;
   sku: string;
   category_id: string;
+  unit: string;
   price: number | undefined;
   wholesale_price: number | undefined;
   cost_price: number | undefined;
@@ -42,6 +44,7 @@ type EditableVariant = {
   sku: string;
   size: string;
   size_type: string;
+  unit: string;
   priceId: string | undefined;
   price: number | undefined;
   wholesale_price: number | undefined;
@@ -57,6 +60,7 @@ type DraftVariant = {
   sku: string;
   size: string;
   size_type: string;
+  unit: string;
   price: number | undefined;
   wholesale_price: number | undefined;
   cost_price: number | undefined;
@@ -90,6 +94,7 @@ export default function ProductForm({ product }: { product?: Product }) {
         sku: v.sku ?? '',
         size: v.size ?? '',
         size_type: v.size_type ?? '',
+        unit: v.unit ?? '',
         priceId: activePrice?.id,
         price: toNumber(activePrice?.price),
         wholesale_price: toNumber(activePrice?.wholesale_price),
@@ -108,6 +113,7 @@ export default function ProductForm({ product }: { product?: Product }) {
       name: product?.name ?? '',
       sku: product?.sku ?? '',
       category_id: product?.category_id ?? '',
+      unit: product?.variants[0]?.unit ?? '',
       price: undefined,
       wholesale_price: undefined,
       cost_price: undefined,
@@ -138,6 +144,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             if ((ev.sku || null) !== original.sku) variantPatch.sku = ev.sku || null;
             if ((ev.size || null) !== original.size) variantPatch.size = ev.size || null;
             if ((ev.size_type || null) !== original.size_type) variantPatch.size_type = ev.size_type || null;
+            if ((ev.unit || null) !== original.unit) variantPatch.unit = ev.unit || null;
             if (ev.stock_quantity !== toStock(original.stock_quantity)) variantPatch.stock_quantity = ev.stock_quantity;
             if (ev.low_stock_threshold !== toStock(original.low_stock_threshold)) variantPatch.low_stock_threshold = ev.low_stock_threshold;
           }
@@ -164,6 +171,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             sku: dv.sku || null,
             size: dv.size || null,
             size_type: dv.size_type || null,
+            unit: dv.unit || null,
             stock_quantity: dv.stock_quantity,
             low_stock_threshold: dv.low_stock_threshold,
             sort_order: 0,
@@ -190,6 +198,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             sku: values.sku ? `${values.sku}-DEFAULT` : null,
             size: null,
             size_type: null,
+            unit: (values.unit ?? '').trim() || null,
             stock_quantity: values.stock_quantity,
             low_stock_threshold: values.low_stock_threshold,
             sort_order: 0,
@@ -245,6 +254,7 @@ export default function ProductForm({ product }: { product?: Product }) {
         sku: '',
         size: '',
         size_type: '',
+        unit: '',
         price: undefined,
         wholesale_price: undefined,
         cost_price: undefined,
@@ -361,6 +371,14 @@ export default function ProductForm({ product }: { product?: Product }) {
                 {...form.getInputProps('mrp_price')}
               />
             </div>
+            <div className="sm:max-w-xs">
+              <UnitField
+                label="Price unit"
+                value={form.values.unit}
+                onChange={(u) => form.setFieldValue('unit', u)}
+                placeholder="e.g. per carton"
+              />
+            </div>
             <Text size="xs" c="dimmed" mt="xs">
               Wholesale price, cost of making and MRP feed the finance / profit &amp; loss reports.
             </Text>
@@ -451,9 +469,16 @@ export default function ProductForm({ product }: { product?: Product }) {
                       onChange={(e) => updateEditableVariant(ev.id, 'size', e.currentTarget.value)}
                     />
                     <TextInput
-                      label="Unit"
+                      label="Size unit"
+                      placeholder="e.g. ml"
                       value={ev.size_type}
                       onChange={(e) => updateEditableVariant(ev.id, 'size_type', e.currentTarget.value)}
+                    />
+                    <UnitField
+                      label="Price unit"
+                      value={ev.unit}
+                      onChange={(u) => updateEditableVariant(ev.id, 'unit', u)}
+                      placeholder="e.g. per carton"
                     />
                     <NumberInput
                       label="Price"
@@ -549,10 +574,16 @@ export default function ProductForm({ product }: { product?: Product }) {
                           onChange={(e) => updateDraftVariant(dv.key, 'size', e.currentTarget.value)}
                         />
                         <TextInput
-                          label="Unit"
+                          label="Size unit"
                           placeholder="e.g. ml"
                           value={dv.size_type}
                           onChange={(e) => updateDraftVariant(dv.key, 'size_type', e.currentTarget.value)}
+                        />
+                        <UnitField
+                          label="Price unit"
+                          value={dv.unit}
+                          onChange={(u) => updateDraftVariant(dv.key, 'unit', u)}
+                          placeholder="e.g. per carton"
                         />
                         <NumberInput
                           label="Price"

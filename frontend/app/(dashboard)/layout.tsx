@@ -54,7 +54,7 @@ export default function DashboardLayout({
 
   return (
     <SessionProvider value={session}>
-      <div className="flex min-h-screen bg-[#f6f7fb]">
+      <div className="flex min-h-screen bg-[var(--background)]">
         <Sidebar tenantName={tenant.data?.name ?? 'Workspace'} />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar fullName={session?.full_name ?? ''} email={session?.email ?? ''} />

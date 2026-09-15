@@ -277,7 +277,7 @@ export default function LocationPicker({
           </ul>
         )}
       </div>
-      {searchError && <p className="text-xs text-red-600">{searchError}</p>}
+      {searchError && <p className="text-xs text-danger-600">{searchError}</p>}
       <div className="relative">
         <div
           ref={mapRef}

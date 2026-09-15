@@ -40,4 +40,6 @@ export const PERMISSIONS: { value: string; label: string }[] = [
   { value: 'manage_audits', label: 'Manage audits' },
   { value: 'view_assigned_deliveries', label: 'View assigned deliveries' },
   { value: 'update_delivery_status', label: 'Update delivery status' },
+  { value: 'manage_khata', label: 'Record & view customer khata' },
+  { value: 'manage_bill_template', label: 'Configure bill format (receipts/invoices)' },
 ];

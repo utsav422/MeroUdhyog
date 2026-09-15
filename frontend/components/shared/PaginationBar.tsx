@@ -22,32 +22,26 @@ export default function PaginationBar({
   const end = Math.min(page * pageSize, total);
 
   return (
-    <Group justify="space-between" align="center" wrap="wrap" mt="md">
-      <Text size="sm" c="dimmed">
-        Showing {start}–{end} of {total}
+    <Group justify="space-between" align="center" wrap="wrap" className="mt-4 px-1">
+      <Text size="sm" className="text-[var(--muted)]">
+        Showing <span className="font-medium text-[var(--foreground)]">{start}–{end}</span> of{' '}
+        <span className="font-medium text-[var(--foreground)]">{total}</span>
       </Text>
-      <Group gap="sm" align="center">
+      <Group gap="md" align="center">
         <Group gap="xs" align="center">
-          <Text size="sm" c="dimmed">
+          <Text size="sm" className="text-[var(--muted)]">
             Rows per page
           </Text>
           <Select
             size="xs"
-            w={80}
+            w={72}
             value={String(pageSize)}
             onChange={(value) => onPageSizeChange(Number(value))}
             data={PAGE_SIZES}
             allowDeselect={false}
           />
         </Group>
-        <Pagination
-          value={page}
-          onChange={onPageChange}
-          total={totalPages}
-          siblings={1}
-          withEdges
-          size="sm"
-        />
+        <Pagination value={page} onChange={onPageChange} total={totalPages} siblings={1} withEdges size="sm" />
       </Group>
     </Group>
   );

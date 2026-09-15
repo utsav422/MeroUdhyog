@@ -19,7 +19,7 @@ export default function ProductPredictionCard({
       radius="md"
       withBorder
       style={{
-        borderLeft: `4px solid ${STATUS_COLORS[product.stock_status] ?? '#6f4bff'}`,
+        borderLeft: `4px solid ${STATUS_COLORS[product.stock_status] ?? '#f59e0b'}`,
       }}
     >
       <Stack gap="xs">

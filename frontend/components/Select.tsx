@@ -35,7 +35,7 @@ export default function Select({
         required={required}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+        className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-200 disabled:opacity-60"
       >
         {!required && (
           <option value="">{placeholder}</option>

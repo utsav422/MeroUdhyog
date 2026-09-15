@@ -257,7 +257,7 @@ export default function CustomersImportModal({
                       setFile(null);
                       setResult(null);
                     }}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-zinc-400 shadow-sm transition-colors hover:text-red-500"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-zinc-400 shadow-sm transition-colors hover:text-danger-500"
                     aria-label="Remove file"
                   >
                     <X size={15} weight="bold" />
@@ -316,8 +316,8 @@ export default function CustomersImportModal({
               {result && createdAt > 0 && (
                 <div className="mt-5">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-                      <div className="flex items-center gap-2 text-emerald-600">
+                    <div className="rounded-2xl border border-success-100 bg-success-50/70 p-4">
+                      <div className="flex items-center gap-2 text-success-600">
                         <CheckCircle size={18} weight="duotone" />
                         <Text fw={700} size="xl" className="leading-none">
                           {result.created}
@@ -327,8 +327,8 @@ export default function CustomersImportModal({
                         Customers created
                       </Text>
                     </div>
-                    <div className="rounded-2xl border border-red-100 bg-red-50/60 p-4">
-                      <div className="flex items-center gap-2 text-red-500">
+                    <div className="rounded-2xl border border-danger-100 bg-danger-50/60 p-4">
+                      <div className="flex items-center gap-2 text-danger-500">
                         <WarningCircle size={18} weight="duotone" />
                         <Text fw={700} size="xl" className="leading-none">
                           {result.failed}
@@ -352,7 +352,7 @@ export default function CustomersImportModal({
                               key={`${rowError.row}-${index}`}
                               className="rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-2"
                             >
-                              <Text size="xs" fw={700} className="text-red-500">
+                              <Text size="xs" fw={700} className="text-danger-500">
                                 Row {rowError.row}
                               </Text>
                               <Text size="sm" className="text-zinc-600">
@@ -366,7 +366,7 @@ export default function CustomersImportModal({
                   )}
 
                   {result.failed === 0 && (
-                    <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    <div className="mt-4 flex items-center gap-2 rounded-xl bg-success-50 px-4 py-3 text-sm text-success-700">
                       <HandsClapping size={18} weight="duotone" />
                       All {result.created} customers were imported successfully.
                     </div>

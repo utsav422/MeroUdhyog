@@ -10,7 +10,7 @@ export default function StatusLegend() {
         <div key={key} className="flex items-center gap-2">
           <span
             className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: STATUS_COLORS[key] ?? '#6f4bff' }}
+            style={{ backgroundColor: STATUS_COLORS[key] ?? '#f59e0b' }}
           />
           <Text size="xs" c="dimmed">
             <span className="font-medium text-zinc-700">{label}</span>

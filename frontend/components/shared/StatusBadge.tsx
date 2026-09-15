@@ -1,27 +1,26 @@
 'use client';
 
-import { Badge } from '@mantine/core';
-
-type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+type Tone = 'success' | 'warning' | 'danger' | 'brand' | 'neutral';
 
 const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   // delivery statuses
   pending_assignment: { label: 'Pending assignment', tone: 'neutral' },
-  assigned: { label: 'Assigned', tone: 'info' },
-  picked_up: { label: 'Picked up', tone: 'info' },
+  assigned: { label: 'Assigned', tone: 'brand' },
+  picked_up: { label: 'Picked up', tone: 'brand' },
   in_transit: { label: 'In transit', tone: 'warning' },
   delivered: { label: 'Delivered', tone: 'success' },
   failed: { label: 'Failed', tone: 'danger' },
   // order statuses
   draft: { label: 'Draft', tone: 'neutral' },
-  confirmed: { label: 'Confirmed', tone: 'info' },
-  ready: { label: 'Ready', tone: 'info' },
+  confirmed: { label: 'Confirmed', tone: 'brand' },
+  ready: { label: 'Ready', tone: 'brand' },
   in_delivery: { label: 'In delivery', tone: 'warning' },
   cancelled: { label: 'Cancelled', tone: 'danger' },
   // payment statuses
   unpaid: { label: 'Unpaid', tone: 'warning' },
   partial: { label: 'Partial', tone: 'warning' },
   paid: { label: 'Paid', tone: 'success' },
+  voided: { label: 'Voided', tone: 'danger' },
   // generic
   active: { label: 'Active', tone: 'success' },
   inactive: { label: 'Inactive', tone: 'neutral' },
@@ -37,12 +36,12 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   insufficient_data: { label: 'Needs data', tone: 'neutral' },
 };
 
-const TONE_COLOR: Record<Tone, string> = {
-  success: 'success',
-  warning: 'warning',
-  danger: 'danger',
-  info: 'brand',
-  neutral: 'gray',
+const TONE_CLASSES: Record<Tone, string> = {
+  success: 'bg-success-50 text-success-700',
+  warning: 'bg-warning-50 text-warning-700',
+  danger: 'bg-danger-50 text-danger-700',
+  brand: 'bg-brand-50 text-brand-700',
+  neutral: 'bg-black/5 text-[var(--muted)]',
 };
 
 export default function StatusBadge({
@@ -54,18 +53,15 @@ export default function StatusBadge({
   label?: string;
   unknown?: string;
 }) {
-  const config = STATUS_MAP[status.toLowerCase?.() ?? status];
+  const config = STATUS_MAP[status?.toLowerCase?.() ?? status];
   const tone: Tone = config?.tone ?? 'neutral';
   const text = label ?? config?.label ?? (status ? status.replace(/_/g, ' ') : unknown);
 
   return (
-    <Badge
-      variant="light"
-      color={TONE_COLOR[tone]}
-      radius="sm"
-      styles={{ label: { textTransform: 'none', fontWeight: 600 } }}
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold leading-none ${TONE_CLASSES[tone]}`}
     >
       {text}
-    </Badge>
+    </span>
   );
 }
