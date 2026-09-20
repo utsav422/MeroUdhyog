@@ -51,3 +51,6 @@ lint.ignore = ["B008"]
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.poetry]
+package-mode = false
