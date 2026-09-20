@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     resolveAlias: {
-      canvas: "./lib/vendor/canvas-stub.js",
+      canvas: "./lib/vendor/canvas-stub.js", 
     },
   },
   async rewrites() {
