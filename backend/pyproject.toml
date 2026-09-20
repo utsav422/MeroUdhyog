@@ -2,24 +2,24 @@
 name = "factory-os-backend"
 version = "0.1.0"
 description = "Factory OS Backend API"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
-    "fastapi==0.111.0",
-    "uvicorn[standard]==0.30.1",
-    "sqlalchemy[asyncio]==2.0.30",
-    "alembic==1.13.0",
-    "psycopg[binary]==3.1.18",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.1",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "alembic>=1.13.0",
+    "psycopg[binary]>=3.2.9",
     "greenlet>=3.5.0",
-    "pydantic==2.7.4",
-    "pydantic-settings==2.3.3",
-    "python-jose[cryptography]==3.3.0",
-    "passlib[argon2]==1.7.4",
-    "argon2-cffi==25.1.0",
-    "python-multipart==0.0.9",
-    "python-dotenv==1.0.1",
-    "openpyxl==3.1.2",
-    "httpx==0.27.0",
-    "email-validator==2.1.0.post1",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[argon2]>=1.7.4",
+    "argon2-cffi>=25.1.0",
+    "python-multipart>=0.0.9",
+    "python-dotenv>=1.0.1",
+    "openpyxl>=3.1.2",
+    "httpx>=0.27.0",
+    "email-validator>=2.1.0",
     "fastadmin[fastapi,sqlalchemy]==0.10.0",
 ]
 
@@ -44,7 +44,7 @@ python_files = "test_*.py"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 lint.select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
 lint.ignore = ["B008"]
 
