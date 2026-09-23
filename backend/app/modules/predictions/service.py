@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
@@ -614,6 +615,34 @@ class PredictionService:
     # Analysis endpoints
     # ------------------------------------------------------------------
 
+    async def _sync_prediction_alerts(self, customers: list[CustomerPredictionRead]) -> None:
+        """Generate "call/follow up this customer" alerts from the analysis.
+
+        Best-effort and deduped: rerunning the analysis (e.g. on every page
+        view) never floods the bell with the same alert while it is unread.
+        """
+        from app.modules.notifications.service import NotificationService
+
+        service = NotificationService(self.session, self.tenant_id)
+        for customer in customers:
+            if customer.stock_status not in ("overdue", "due_soon"):
+                continue
+            if customer.recommendation not in ("message", "call"):
+                continue
+            try:
+                await service.prediction_alert(
+                    customer_id=customer.customer_id,
+                    customer_name=customer.customer_name,
+                    next_order_date=customer.next_order_date,
+                    stock_status=customer.stock_status,
+                    recommendation=customer.recommendation,
+                    days_until_next=customer.days_until_next,
+                )
+            except Exception:  # noqa: BLE001 - per-customer isolation
+                logging.getLogger("factory.notifications").exception(
+                    "Failed to create prediction alert for %s", customer.customer_id
+                )
+
     async def analysis(self) -> AnalysisRead:
         today = date.today()
         events_by_pair = await self._collect_events()
@@ -639,6 +668,8 @@ class PredictionService:
             ),
             reverse=True,
         )
+
+        await self._sync_prediction_alerts(customer_list)
 
         overdue = sum(1 for c in customer_list if c.stock_status == "overdue")
         due_soon = sum(1 for c in customer_list if c.stock_status == "due_soon")

@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
 import { SessionProvider } from '@/lib/providers';
 import { useMe, useTenant } from '@/features/auth/hooks';
+import { PushNotificationsProvider } from '@/features/notifications/components/PushNotificationsProvider';
 import { LoadingState } from '@/components/shared';
 
 export default function DashboardLayout({
@@ -61,6 +62,7 @@ export default function DashboardLayout({
           <main className="flex-1 px-6 py-6 lg:px-8">{children}</main>
         </div>
       </div>
+      <PushNotificationsProvider enabled={!!session} />
     </SessionProvider>
   );
 }

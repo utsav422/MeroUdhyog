@@ -147,31 +147,33 @@ async def test_switch_customer_route_updates_linked_order_route(client):
     order = await _create_order(client, product, customer)
     assert order["route_id"] is None
 
-    # Assign the customer to a route, then reconnect the order to the customer
-    # (frontend sends customer_id on edit) — the order picks up the route.
+    # Assigning the customer to a route immediately updates their existing
+    # orders (no separate order edit needed).
     r = await client.patch(
         f"/api/v1/customers/{customer['id']}", json={"route_id": route_a["id"]}
     )
     assert r.status_code == 200
     assert r.json()["route_id"] == route_a["id"]
 
-    r = await client.patch(
-        f"/api/v1/orders/{order['id']}",
-        json={"customer_id": customer["id"]},
-    )
-    assert r.status_code == 200, r.text
+    r = await client.get(f"/api/v1/orders/{order['id']}")
     assert r.json()["route_id"] == route_a["id"]
     assert r.json()["route_name"] == "East"
 
+    # Switching the customer to another route propagates again.
     r = await client.patch(
         f"/api/v1/customers/{customer['id']}", json={"route_id": route_b["id"]}
     )
     assert r.status_code == 200
-    r = await client.patch(
-        f"/api/v1/orders/{order['id']}", json={"customer_id": customer["id"]}
-    )
-    assert r.status_code == 200
+    r = await client.get(f"/api/v1/orders/{order['id']}")
     assert r.json()["route_id"] == route_b["id"]
+    assert r.json()["route_name"] == "West"
+
+    # Removing the route from the customer clears it on their orders too.
+    r = await client.patch(f"/api/v1/customers/{customer['id']}", json={"route_id": None})
+    assert r.status_code == 200
+    r = await client.get(f"/api/v1/orders/{order['id']}")
+    assert r.json()["route_id"] is None
+    assert r.json()["route_name"] is None
 
 
 @pytest.mark.asyncio

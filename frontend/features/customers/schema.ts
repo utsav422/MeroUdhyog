@@ -6,6 +6,7 @@ export const customerFormSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   email: z.string().email('Enter a valid email').optional().or(z.literal('')),
   phone: z.string().optional(),
+  pan_no: z.string().max(50, 'PAN number must be 50 characters or fewer').optional(),
   company: z.string().optional(),
   city: z.string().optional(),
   address: z.string().optional(),

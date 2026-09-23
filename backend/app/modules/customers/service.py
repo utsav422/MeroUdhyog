@@ -4,13 +4,14 @@ import re
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.customers.csv_import import parse_customer_csv
 from app.modules.customers.models import Customer
 from app.modules.customers.repository import CustomerRepository
 from app.modules.customers.schemas import CustomerCreate, CustomerRead, CustomerUpdate
+from app.modules.orders.models import Order
 from app.modules.routes.models import Route
 from app.shared.exceptions import ConflictError, ValidationError
 
@@ -35,8 +36,10 @@ class CustomerService:
         self.tenant_id = tenant_id
         self.repo = CustomerRepository(session, tenant_id)
 
-    async def list(self, limit: int, offset: int) -> list[CustomerRead]:
-        customers = await self.repo.list(limit, offset)
+    async def list(
+        self, limit: int, offset: int, route_id: UUID | None = None
+    ) -> list[CustomerRead]:
+        customers = await self.repo.list(limit, offset, route_id)
         return [CustomerRead.model_validate(c) for c in customers]
 
     async def get(self, customer_id: UUID) -> CustomerRead:
@@ -51,7 +54,7 @@ class CustomerService:
             email=data.email,
             phone=data.phone,
             contact_number=data.contact_number,
-            tax_id=data.tax_id,
+            pan_no=data.pan_no,
             company=data.company,
             address=data.address,
             city=data.city,
@@ -70,6 +73,13 @@ class CustomerService:
         updates = data.model_dump(exclude_unset=True)
         if "route_id" in updates:
             updates["route_id"] = await self._resolve_route(updates["route_id"])
+            # Keep existing orders in sync: a customer's route change should
+            # propagate to every order they already have.
+            await self.session.execute(
+                update(Order)
+                .where(Order.customer_id == customer.id)
+                .values(route_id=updates["route_id"])
+            )
         for field, value in updates.items():
             setattr(customer, field, value)
         updated = await self.repo.update(customer)
@@ -151,7 +161,7 @@ class CustomerService:
                         email=email or None,
                         phone=data.get("phone"),
                         contact_number=data.get("contact_number"),
-                        tax_id=data.get("tax_id"),
+                        pan_no=data.get("pan_no"),
                         company=data.get("company"),
                         address=data.get("address"),
                         city=data.get("city"),

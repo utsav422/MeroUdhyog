@@ -10,7 +10,7 @@ statuses can never drift out of sync. Voiding reverses the same way.
 from __future__ import annotations
 
 import base64
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from uuid import UUID
 
@@ -32,6 +32,7 @@ from app.modules.khata.schemas import (
     KhataOrderRead,
     ManualAllocation,
     PaymentAllocationRead,
+    PaymentListRead,
     PaymentRead,
     ReceiptRead,
     RecordPaymentInput,
@@ -90,7 +91,7 @@ class KhataService:
         customer = await self.repo.get_customer(customer_id)
         orders = await self.repo.list_billable_orders(customer_id)
         payments = await self.repo.list_payments(customer_id)
-        total_billed = sum((o.total_amount or ZERO) for o in orders)
+        total_billed = sum(((o.total_amount or ZERO) for o in orders), ZERO)
         total_paid = sum((p.amount for p in payments if p.status == "active"), ZERO)
 
         order_reads = [
@@ -149,6 +150,66 @@ class KhataService:
 
     # ---- payment flow ----------------------------------------------------------------
 
+    async def list_payments(
+        self,
+        limit: int,
+        offset: int,
+        *,
+        customer_id: UUID | None = None,
+        method: str | None = None,
+        status: str | None = None,
+        route_id: UUID | None = None,
+        search: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaymentListRead:
+        """Global, filterable, paginated payment history across all customers."""
+        filters = {
+            "customer_id": customer_id,
+            "method": method,
+            "status": status,
+            "route_id": route_id,
+            "search": search,
+            # collected_at is tz-aware; date-only filters become full-day ranges.
+            "date_from": (
+                datetime.combine(date_from, time.min, tzinfo=UTC) if date_from else None
+            ),
+            "date_to": (
+                datetime.combine(date_to, time.max, tzinfo=UTC) if date_to else None
+            ),
+        }
+        entries = await self.repo.list_payments_filtered(limit, offset, **filters)
+        total, total_amount = await self.repo.payment_totals(**filters)
+        return PaymentListRead(
+            items=[self._payment_read(e) for e in entries],
+            total=total,
+            total_amount=_q2(total_amount),
+            limit=limit,
+            offset=offset,
+        )
+
+    def _notify_service(self):
+        from app.modules.notifications.service import NotificationService
+
+        return NotificationService(self.session, self.tenant_id)
+
+    async def _notify_payment(
+        self, customer_id: UUID, amount: Decimal, allocations: list[tuple[Order, Decimal]]
+    ) -> None:
+        try:
+            order_refs = [str(order.order_ref) for order, _amt in allocations if order.order_ref]
+            await self._notify_service().payment_received(
+                customer_id,
+                f"₹{_q2(amount):.2f}",
+                order_refs,
+            )
+        except Exception:  # noqa: BLE001 - never break a payment on notifications
+            import logging
+
+            logging.getLogger("factory.notifications").exception(
+                "Failed to create payment notification"
+            )
+
     async def record_payment(self, data: RecordPaymentInput) -> PaymentRead:
         await self.repo.get_customer(data.customer_id)  # tenant check + existence
         if data.amount <= 0:
@@ -164,7 +225,8 @@ class KhataService:
         orders = await self.repo.list_billable_orders(data.customer_id)
         if not orders:
             raise ValidationError(
-                "Customer has no orders to settle. Place an order first, then collect the payment."
+                "This customer has no delivered orders to settle. "
+                "Only delivered orders can receive payments."
             )
 
         allocations = self._allocate(orders, data)
@@ -195,6 +257,8 @@ class KhataService:
             self._recompute_payment_status(order)
             await self.repo.add_allocation(entry.id, order.id, amt)
         await self.session.flush()
+
+        await self._notify_payment(data.customer_id, data.amount, allocations)
 
         # Rebuild with fully-loaded relationships for the response.
         fresh = await self.repo.get_entry(entry.id)

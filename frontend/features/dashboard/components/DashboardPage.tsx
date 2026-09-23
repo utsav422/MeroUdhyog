@@ -41,6 +41,7 @@ import {
 import { useCustomers } from '@/features/customers/api';
 import { useDeliveries } from '@/features/deliveries/api';
 import { formatMoney, formatCompact, timeAgo, formatNumber, formatDate } from '@/lib/format';
+import { downloadCsv } from '@/lib/exportCsv';
 
 const PIE_COLORS = ['#1b4332', '#f59e0b', '#a8c5b8', '#528a72', '#7ba695'];
 const PERIOD_OPTIONS = [
@@ -106,7 +107,6 @@ function DispatchCalendar({ eventDates }: { eventDates: Set<string> }) {
   const eventCount = [...eventDates].filter(
     (d) => new Date(d).getMonth() === month && new Date(d).getFullYear() === year,
   ).length;
-  const isSelectedToday = selected === today.toDateString();
 
   return (
     <Panel
@@ -169,11 +169,13 @@ function DispatchCalendar({ eventDates }: { eventDates: Set<string> }) {
           <span className="h-1.5 w-1.5 rounded-full bg-accent-500" />
           {eventCount} dispatch{eventCount === 1 ? '' : 'es'} queued
         </span>
-        <span>
-          {isSelectedToday
-            ? 'Selected: Today'
-            : `Selected: ${new Date(selected).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
-        </span>
+        <Link
+          href="/orders/calendar"
+          className="inline-flex items-center gap-1 font-semibold text-brand-600 transition-colors hover:text-brand-700"
+        >
+          Activity calendar
+          <ArrowUpRight size={12} weight="bold" />
+        </Link>
       </div>
     </Panel>
   );
@@ -319,6 +321,9 @@ export default function DashboardPage() {
   }, [moneyOrders]);
 
   const maxProductQty = Math.max(...topProducts.map((p) => p.qty), 1);
+  const maxProductRevenue = Math.max(...topProducts.map((p) => money(p.revenue)), 1);
+  const totalUnitsSold = topProducts.reduce((s, p) => s + p.qty, 0);
+  const totalSalesRevenue = topProducts.reduce((s, p) => s + money(p.revenue), 0);
 
   const recentOrders = useMemo(
     () => [...orders].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5),
@@ -386,6 +391,49 @@ export default function DashboardPage() {
 
   const firstName = session?.full_name?.split(' ')[0] ?? 'there';
 
+  const handleExport = () => {
+    const rows: Array<Array<string | number | null | undefined>> = [];
+    const push = (cells: Array<string | number | null | undefined>) => rows.push(cells);
+
+    push(['DASHBOARD REPORT']);
+    push(['Generated', new Date().toLocaleString()]);
+    push([]);
+    push(['KPI', 'Value']);
+    push(['Revenue (paid)', formatMoney(kpis.revenue)]);
+    push(['Revenue pending', formatMoney(kpis.revenuePending)]);
+    push(['Total orders', kpis.orders]);
+    push(['Pending orders', kpis.pendingOrders]);
+    push(['Completed orders', kpis.completedOrders]);
+    push(['Active deliveries', kpis.activeDeliveries]);
+    push(['Delivered rate', `${deliveryStats.rate}%`]);
+    push(['Customers', kpis.customers]);
+    push(['Products', kpis.products]);
+    push(['Paid conversion', `${kpis.conversionRate}%`]);
+    push([]);
+    push(['REVENUE TREND', 'Revenue']);
+    for (const d of revenueByDay) push([d.date, Math.round(d.total)]);
+    push([]);
+    push(['TOP PRODUCTS', 'Units sold', 'Revenue']);
+    for (const p of topProducts) push([p.name, p.qty, money(p.revenue)]);
+    push([]);
+    push(['SALES BY CATEGORY', 'Inventory value']);
+    for (const c of topCategories) push([c.name, c.value]);
+    push([]);
+    push(['ORDER STATUS', 'Count', 'Share']);
+    for (const s of orderStatusBreakdown) push([s.label, s.count, `${s.pct}%`]);
+    push([]);
+    push(['LOW STOCK', 'Stock left']);
+    for (const v of lowStock) {
+      push([`${v.product_name}${v.variant_name ? ` (${v.variant_name})` : ''}`, v.stock_quantity]);
+    }
+
+    downloadCsv(
+      `dashboard-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Section', 'Metric 1', 'Metric 2', 'Metric 3'],
+      rows,
+    );
+  };
+
   if (
     ordersQuery.isLoading ||
     productsQuery.isLoading ||
@@ -420,6 +468,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={handleExport}
             className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-black/[0.02]"
           >
             <Download size={15} />
@@ -679,36 +728,74 @@ export default function DashboardPage() {
               </Link>
             }
           >
-            <div className="max-h-[420px] space-y-3 overflow-y-auto overscroll-contain pr-2">
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">
+                  Units sold
+                </p>
+                <p className="mt-0.5 text-lg font-semibold leading-tight text-[var(--foreground)]">
+                  {formatNumber(totalUnitsSold)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">
+                  Revenue generated
+                </p>
+                <p className="mt-0.5 text-lg font-semibold leading-tight text-[var(--foreground)]">
+                  {formatMoney(totalSalesRevenue)}
+                </p>
+              </div>
+            </div>
+            <div className="max-h-[340px] space-y-3 overflow-y-auto overscroll-contain pr-2">
               {topProducts.map((p, i) => {
-                const pct = Math.round((p.qty / maxProductQty) * 100);
+                const unitPct = Math.round((p.qty / maxProductQty) * 100);
+                const revenuePct = Math.round((money(p.revenue) / maxProductRevenue) * 100);
+                const unitShare = totalUnitsSold > 0 ? Math.round((p.qty / totalUnitsSold) * 100) : 0;
+                const revenueShare =
+                  totalSalesRevenue > 0 ? Math.round((money(p.revenue) / totalSalesRevenue) * 100) : 0;
                 return (
-                  <div
-                    key={p.id || p.name}
-                    className="flex items-center gap-4 rounded-xl bg-[var(--surface-1)] px-4 py-3"
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-sm font-bold text-brand-600">
-                      {i + 1}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium text-[var(--foreground)]">
-                          {p.name}
-                        </span>
-                        <span className="shrink-0 text-sm font-semibold text-[var(--foreground)]">
-                          {formatMoney(p.revenue)}
-                        </span>
+                  <div key={p.id || p.name} className="rounded-xl bg-[var(--surface-1)] px-4 py-3">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-sm font-bold text-brand-600">
+                        {i + 1}
                       </div>
-                      <div className="mt-1.5 flex items-center gap-3">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/5">
-                          <div
-                            className="h-full rounded-full bg-brand-500"
-                            style={{ width: `${pct}%` }}
-                          />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-medium text-[var(--foreground)]">
+                            {p.name}
+                          </span>
+                          <span className="shrink-0 text-sm font-semibold text-[var(--foreground)]">
+                            {formatMoney(p.revenue)}
+                          </span>
                         </div>
-                        <span className="shrink-0 text-xs text-[var(--muted)]">
-                          {formatNumber(p.qty)} units
-                        </span>
+                        <div className="mt-2">
+                          <div className="mb-1 flex items-center justify-between text-[11px]">
+                            <span className="text-[var(--muted)]">Units sold</span>
+                            <span className="font-medium text-[var(--foreground)]">
+                              {formatNumber(p.qty)} · {unitShare}% of sales
+                            </span>
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-black/5">
+                            <div
+                              className="h-full rounded-full bg-brand-500"
+                              style={{ width: `${unitPct}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <div className="mb-1 flex items-center justify-between text-[11px]">
+                            <span className="text-[var(--muted)]">Revenue generated</span>
+                            <span className="font-medium text-[var(--foreground)]">
+                              {revenueShare}% of revenue
+                            </span>
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-black/5">
+                            <div
+                              className="h-full rounded-full bg-accent-500"
+                              style={{ width: `${revenuePct}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

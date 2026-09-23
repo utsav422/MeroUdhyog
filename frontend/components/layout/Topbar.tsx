@@ -6,6 +6,8 @@ import { Avatar, Group, Indicator, Menu, Text } from '@mantine/core';
 import { Bell, MagnifyingGlass, SignOut, UserCircle } from '@phosphor-icons/react';
 import { apiClient } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
+import { useUnreadCount } from '@/features/notifications/api';
+import { NotificationsDrawer } from '@/features/notifications/components/NotificationsDrawer';
 
 const TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -29,6 +31,9 @@ export default function Topbar({
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const { data: unread } = useUnreadCount();
+  const unreadCount = unread?.count ?? 0;
 
   let title = 'Dashboard';
   for (const [prefix, label] of Object.entries(TITLES)) {
@@ -88,15 +93,36 @@ export default function Topbar({
           </kbd>
         </div>
 
-        <Indicator size={10} color="danger" offset={5}>
+        <Indicator
+          inline
+          label={unreadCount > 99 ? '99+' : unreadCount}
+          size={18}
+          color="danger"
+          offset={4}
+          disabled={unreadCount === 0}
+          styles={{
+            indicator: {
+              fontSize: 10,
+              fontWeight: 700,
+              paddingInline: 4,
+              border: '2px solid var(--background)',
+            },
+          }}
+        >
           <button
             type="button"
             aria-label="Notifications"
+            onClick={() => setNotificationsOpen(true)}
             className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 transition-colors hover:text-zinc-800"
           >
             <Bell size={18} />
           </button>
         </Indicator>
+
+        <NotificationsDrawer
+          opened={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+        />
 
         <Menu shadow="md" width={220} position="bottom-end">
           <Menu.Target>

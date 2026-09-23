@@ -25,12 +25,13 @@ async def _service(db, tenant_id) -> CustomerService:
 @router.get("", response_model=list[CustomerRead])
 async def list_customers(
     pagination: tuple[int, int] = Depends(pagination_params),
+    route_id: UUID | None = None,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
 ):
     limit, offset = pagination
     service = await _service(db, tenant_id)
-    return await service.list(limit, offset)
+    return await service.list(limit, offset, route_id)
 
 
 @router.post("", response_model=CustomerRead, status_code=status.HTTP_201_CREATED)

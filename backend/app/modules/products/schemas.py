@@ -7,9 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class VariantPriceCreate(BaseModel):
     price: Decimal = Field(ge=0, decimal_places=2)
-    wholesale_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     cost_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
-    mrp_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     currency: str = Field(default="USD", min_length=3, max_length=3)
     effective_from: datetime | None = None
     effective_to: datetime | None = None
@@ -17,9 +15,7 @@ class VariantPriceCreate(BaseModel):
 
 class VariantPriceUpdate(BaseModel):
     price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
-    wholesale_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     cost_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
-    mrp_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     effective_from: datetime | None = None
     effective_to: datetime | None = None
@@ -74,9 +70,7 @@ class VariantPriceRead(BaseModel):
     id: UUID
     variant_id: UUID
     price: Decimal
-    wholesale_price: Decimal | None
     cost_price: Decimal | None
-    mrp_price: Decimal | None
     currency: str
     effective_from: datetime | None
     effective_to: datetime | None

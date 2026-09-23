@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
@@ -134,8 +135,10 @@ class ProductService:
         )
         created = await self.repo.add(product)
 
+        created_variants = []
         for variant_data in data.variants:
-            await self._create_variant(created, variant_data)
+            created_variants.append(await self._create_variant(created, variant_data))
+        await self._sync_low_stock(created_variants)
 
         return await self.get(created.id)
 
@@ -166,6 +169,7 @@ class ProductService:
     ) -> VariantRead:
         product = await self.repo.get(product_id)
         variant = await self._create_variant(product, data)
+        await self._sync_low_stock([variant])
         return VariantRead.model_validate(variant)
 
     async def update_variant(
@@ -175,6 +179,7 @@ class ProductService:
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(variant, field, value)
         updated = await self.repo.update_variant(variant)
+        await self._sync_low_stock([updated])
         return VariantRead.model_validate(updated)
 
     async def delete_variant(self, product_id: UUID, variant_id: UUID) -> None:
@@ -205,15 +210,29 @@ class ProductService:
             tenant_id=self.tenant_id,
             variant_id=variant.id,
             price=data.price,
-            wholesale_price=data.wholesale_price,
             cost_price=data.cost_price,
-            mrp_price=data.mrp_price,
             currency=data.currency,
             effective_from=data.effective_from,
             effective_to=data.effective_to,
         )
         created = await self.repo.add_price(price)
         return VariantPriceRead.model_validate(created)
+
+    async def _sync_low_stock(self, variants) -> None:
+        """Surface low-stock alerts to the back office after a variant's
+        stock was edited directly (product form), mirroring the hook that
+        runs for order-driven stock changes. Best-effort: a notification
+        failure must never fail the stock edit."""
+        try:
+            from app.modules.notifications.service import NotificationService
+
+            await NotificationService(self.session, self.tenant_id).sync_low_stock(
+                list(variants)
+            )
+        except Exception:  # noqa: BLE001
+            logging.getLogger("factory.notifications").exception(
+                "Failed to create low-stock notifications"
+            )
 
     async def _create_variant(
         self,
@@ -241,9 +260,7 @@ class ProductService:
                     tenant_id=self.tenant_id,
                     variant_id=created.id,
                     price=price_data.price,
-                    wholesale_price=price_data.wholesale_price,
                     cost_price=price_data.cost_price,
-                    mrp_price=price_data.mrp_price,
                     currency=price_data.currency,
                     effective_from=price_data.effective_from,
                     effective_to=price_data.effective_to,
@@ -309,11 +326,7 @@ class ProductService:
                     prices=[
                         VariantPriceCreate(
                             price=price.quantize(Decimal("0.01")),
-                            wholesale_price=_decimal_or_none(
-                                data.get("wholesale_price")
-                            ),
                             cost_price=_decimal_or_none(data.get("cost_price")),
-                            mrp_price=_decimal_or_none(data.get("mrp_price")),
                             currency=currency,
                         )
                     ],

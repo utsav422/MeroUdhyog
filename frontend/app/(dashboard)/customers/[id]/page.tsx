@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Button, Table, Text, ActionIcon, Input } from '@mantine/core';
+import { Button, Table, Text, Input } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, PencilSimple, MapPin, Phone, Envelope, BuildingOffice, Check, X, ArrowsClockwise, Notebook } from '@phosphor-icons/react';
+import { ArrowLeft, PencilSimple, MapPin, Phone, Envelope, BuildingOffice, ArrowsClockwise, Notebook, Check } from '@phosphor-icons/react';
 import { useCustomer, useCustomerPrices, useCustomerOrders, customersKeys } from '@/features/customers/api';
 import { useProducts, defaultVariantPrice } from '@/features/products/api';
 import { useReorder, ReorderBadge, canReorder } from '@/features/orders/components/Reorder';
@@ -68,21 +68,46 @@ export default function CustomerDetailPage() {
   );
 
   const qc = useQueryClient();
-  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
 
-  const priceMutation = useMutation({
-    mutationFn: async ({ variantId, price }: { variantId: string; price: string }) => {
+  const [editingPricing, setEditingPricing] = useState(false);
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+
+  const startEditPricing = () => {
+    const drafts: Record<string, string> = {};
+    for (const cp of pricesQuery.data ?? []) {
+      drafts[cp.variant_id] = String(Number(cp.price));
+    }
+    setPriceDrafts(drafts);
+    setEditingPricing(true);
+  };
+
+  const cancelEditPricing = () => {
+    setEditingPricing(false);
+    setPriceDrafts({});
+  };
+
+  const setPriceDraft = (variantId: string, value: string) => {
+    setPriceDrafts((prev) => ({ ...prev, [variantId]: value }));
+  };
+
+  const pricingSaveMutation = useMutation({
+    mutationFn: async () => {
       if (!customer) return;
-      const trimmed = price.trim();
-      if (!trimmed) {
-        await apiClient.delete(`/customers/${customer.id}/prices/${variantId}`);
-      } else {
-        await apiClient.post(`/customers/${customer.id}/prices`, {
-          variant_id: variantId,
-          price: trimmed,
-          currency: 'INR',
-        });
+      for (const row of allVariantRows) {
+        const newValue = (priceDrafts[row.variantId] ?? '').trim();
+        const current = priceMap.get(row.variantId)?.price;
+        const currentExists = priceMap.has(row.variantId);
+        if (newValue === '') {
+          if (currentExists) {
+            await apiClient.delete(`/customers/${customer.id}/prices/${row.variantId}`);
+          }
+        } else if (!currentExists || Number(current) !== Number(newValue)) {
+          await apiClient.post(`/customers/${customer.id}/prices`, {
+            variant_id: row.variantId,
+            price: newValue,
+            currency: 'INR',
+          });
+        }
       }
       qc.invalidateQueries({ queryKey: customersKeys.prices(customer.id) });
     },
@@ -92,7 +117,8 @@ export default function CustomerDetailPage() {
         title: 'Price updated',
         message: 'Customer pricing saved',
       });
-      setEditingVariantId(null);
+      setEditingPricing(false);
+      setPriceDrafts({});
     },
     onError: (error) => {
       notifications.show({
@@ -102,11 +128,6 @@ export default function CustomerDetailPage() {
       });
     },
   });
-
-  const startEdit = (variantId: string, current: string) => {
-    setEditingVariantId(variantId);
-    setEditValue(current);
-  };
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState retry={() => refetch()} />;
@@ -187,22 +208,24 @@ export default function CustomerDetailPage() {
           <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600">
             <MapPin size={20} weight="bold" />
           </div>
-          <Text size="xs" c="dimmed" fw={500}>City</Text>
+          <Text size="xs" c="dimmed" fw={500}>City / Address</Text>
           <Text fw={600} size="sm" className="mt-0.5">{customer.city || '—'}</Text>
-          {customer.latitude && customer.longitude && (
-            <div className="mt-1.5 space-y-0.5">
-              <Text fw={600} size="sm" className="text-zinc-800">
-                {Number(customer.latitude).toFixed(6)}, {Number(customer.longitude).toFixed(6)}
+          {customer.address ? (
+            <div className="mt-1.5">
+              <Text fw={600} size="sm" className="leading-snug text-zinc-800">
+                {customer.address}
               </Text>
-              <a
-                href={`https://www.google.com/maps?q=${customer.latitude},${customer.longitude}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-medium text-brand-600 hover:underline"
-              >
-                Open in Google Maps
-              </a>
             </div>
+          ) : null}
+          {customer.latitude && customer.longitude && (
+            <a
+              href={`https://www.google.com/maps?q=${customer.latitude},${customer.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block text-xs font-medium text-brand-600 hover:underline"
+            >
+              Open in Google Maps
+            </a>
           )}
         </div>
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
@@ -217,13 +240,6 @@ export default function CustomerDetailPage() {
         </div>
       </div>
 
-      {customer.address && (
-        <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
-          <Text fw={600} size="sm" mb="xs" className="text-zinc-700">Address</Text>
-          <Text size="sm" className="text-zinc-600">{customer.address}</Text>
-        </div>
-      )}
-
       {customer.notes && (
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
           <Text fw={600} size="sm" mb="xs" className="text-zinc-700">Notes</Text>
@@ -232,121 +248,104 @@ export default function CustomerDetailPage() {
       )}
 
       <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm">
-        <div className="border-b border-zinc-100 px-6 py-4">
-          <Text fw={600} size="md" className="text-zinc-800">Product pricing</Text>
-          <Text size="xs" c="dimmed" className="mt-0.5">
-            {overrideCount} custom price overrides
-          </Text>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-6 py-4">
+          <div>
+            <Text fw={600} size="md" className="text-zinc-800">Product pricing</Text>
+            <Text size="xs" c="dimmed" className="mt-0.5">
+              {editingPricing
+                ? 'Edit custom prices below, then press Save changes. Clearing a price removes the override.'
+                : `${overrideCount} custom price overrides`}
+            </Text>
+          </div>
+          {editingPricing ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={cancelEditPricing}
+                disabled={pricingSaveMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                leftSection={<Check size={14} weight="bold" />}
+                loading={pricingSaveMutation.isPending}
+                onClick={() => pricingSaveMutation.mutate()}
+              >
+                Save changes
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="light"
+              size="sm"
+              leftSection={<PencilSimple size={14} weight="bold" />}
+              onClick={startEditPricing}
+              disabled={allVariantRows.length === 0}
+            >
+              Edit pricing
+            </Button>
+          )}
         </div>
-        <Table verticalSpacing="sm" horizontalSpacing="md">
-          <Table.Thead>
-            <Table.Tr className="text-zinc-400">
-              <Table.Th className="text-xs font-semibold uppercase tracking-wider">Product</Table.Th>
-              <Table.Th className="text-xs font-semibold uppercase tracking-wider">Variant</Table.Th>
-              <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Default price</Table.Th>
-              <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Override price</Table.Th>
-              <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Actions</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {allVariantRows.map((row) => {
-              const isEditing = editingVariantId === row.variantId;
-              return (
-                <Table.Tr key={row.variantId}>
-                  <Table.Td>
-                    <span className="font-medium text-zinc-800">{row.productName}</span>
-                  </Table.Td>
-                  <Table.Td>
-                    <span className="text-zinc-500">{row.variantName}</span>
-                  </Table.Td>
-                  <Table.Td ta="right">
-                    <span className="text-zinc-500">{formatPriceUnit(row.defaultPrice, row.defaultUnit)}</span>
-                  </Table.Td>
-                  <Table.Td ta="right">
-                    {isEditing ? (
-                      <Input
-                        size="xs"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.currentTarget.value)}
-                        rightSection={
-                          <span className="flex items-center gap-0.5">
-                            <ActionIcon
-                              size="sm"
-                              variant="subtle"
-                              color="green"
-                              loading={priceMutation.isPending}
-                              onClick={() =>
-                                priceMutation.mutate({
-                                  variantId: row.variantId,
-                                  price: editValue,
-                                })
-                              }
-                            >
-                              <Check size={14} />
-                            </ActionIcon>
-                            <ActionIcon
-                              size="sm"
-                              variant="subtle"
-                              color="gray"
-                              onClick={() => setEditingVariantId(null)}
-                            >
-                              <X size={14} />
-                            </ActionIcon>
-                          </span>
-                        }
-                      />
-                    ) : row.override ? (
-                      <span className="inline-flex items-center gap-2">
-                        <span className="font-semibold text-zinc-800">{formatPriceUnit(row.override, row.defaultUnit)}</span>
-                        <ActionIcon
-                          size="sm"
-                          variant="subtle"
-                          color="gray"
-                          onClick={() => startEdit(row.variantId, String(Number(row.override)))}
-                        >
-                          <PencilSimple size={14} />
-                        </ActionIcon>
-                      </span>
-                    ) : (
-                      <ActionIcon
-                        size="sm"
-                        variant="subtle"
-                        color="brand"
-                        onClick={() => startEdit(row.variantId, '')}
-                        title="Add override"
-                      >
-                        <PencilSimple size={14} />
-                      </ActionIcon>
-                    )}
-                  </Table.Td>
-                  <Table.Td ta="right">
-                    {!isEditing && row.override && (
-                      <ActionIcon
-                        size="sm"
-                        variant="subtle"
-                        color="red"
-                        disabled={priceMutation.isPending}
-                        onClick={() =>
-                          priceMutation.mutate({ variantId: row.variantId, price: '' })
-                        }
-                        title="Remove override"
-                      >
-                        <X size={14} />
-                      </ActionIcon>
-                    )}
+        <div className="overflow-x-auto">
+          <Table verticalSpacing="sm" horizontalSpacing="md">
+            <Table.Thead>
+              <Table.Tr className="text-zinc-400">
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Product</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Variant</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Default price</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Override price</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {allVariantRows.map((row) => {
+                const draftValue = priceDrafts[row.variantId] ?? '';
+                return (
+                  <Table.Tr key={row.variantId}>
+                    <Table.Td>
+                      <span className="font-medium whitespace-nowrap text-zinc-800">{row.productName}</span>
+                    </Table.Td>
+                    <Table.Td>
+                      <span className="whitespace-nowrap text-zinc-500">{row.variantName}</span>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <span className="whitespace-nowrap text-zinc-500">{formatPriceUnit(row.defaultPrice, row.defaultUnit)}</span>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      {editingPricing ? (
+                        <Input
+                          size="xs"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder="Default"
+                          w={150}
+                          value={draftValue}
+                          onChange={(e) => setPriceDraft(row.variantId, e.currentTarget.value)}
+                          aria-label={`Override price for ${row.productName} ${row.variantName}`}
+                        />
+                      ) : row.override ? (
+                        <span className="font-semibold whitespace-nowrap text-zinc-800">
+                          {formatPriceUnit(row.override, row.defaultUnit)}
+                        </span>
+                      ) : (
+                        <span className="whitespace-nowrap text-zinc-400">Follows default</span>
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+              {allVariantRows.length === 0 && (
+                <Table.Tr>
+                  <Table.Td colSpan={4} c="dimmed" ta="center" py="lg">
+                    No products available to price.
                   </Table.Td>
                 </Table.Tr>
-              );
-            })}
-            {allVariantRows.length === 0 && (
-              <Table.Tr>
-                <Table.Td colSpan={5} c="dimmed" ta="center" py="lg">
-                  No products available to price.
-                </Table.Td>
-              </Table.Tr>
-            )}
-          </Table.Tbody>
-        </Table>
+              )}
+            </Table.Tbody>
+          </Table>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm">

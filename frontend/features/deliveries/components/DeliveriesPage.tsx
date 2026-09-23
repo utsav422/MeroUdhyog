@@ -14,13 +14,15 @@ import {
   PageHeader,
   StatusBadge,
 } from '@/components/shared';
-import type { Column, SortState } from '@/components/shared';
+import type { Column, SortState, Filters, DateRangeValue } from '@/components/shared';
+import { EMPTY_DATE_RANGE, dateInRange } from '@/components/shared';
 import { formatDateTime } from '@/lib/format';
 import { useDeliveries, deliveriesKeys, useBulkAssignDelivery, DELIVERY_STATUSES } from '../api';
 import type { Delivery } from '../api';
 import { ordersKeys } from '../../orders/api';
 import { useUsers } from '../../staff/api';
 import { useRoutes } from '../../routes/api';
+import { useCustomers } from '../../customers/api';
 
 const ASSIGN_ACTION_STATUSES = ['pending_assignment'];
 const NEXT_ACTIONS: Record<string, { label: string; status: string }> = {
@@ -32,6 +34,7 @@ export default function DeliveriesPage() {
   const qc = useQueryClient();
   const routesQuery = useRoutes();
   const usersQuery = useUsers();
+  const customersQuery = useCustomers();
 
   const [activeRoute, setActiveRoute] = useState<string | null>(null);
   const deliveriesQuery = useDeliveries(activeRoute);
@@ -39,6 +42,8 @@ export default function DeliveriesPage() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [customerFilter, setCustomerFilter] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
   const [sort, setSort] = useState<SortState>({ field: 'created_at', direction: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -61,6 +66,19 @@ export default function DeliveriesPage() {
     for (const u of usersQuery.data ?? []) map.set(u.id, u.full_name);
     return map;
   }, [usersQuery.data]);
+
+  const customerOptions = useMemo(
+    () =>
+      (customersQuery.data ?? [])
+        .map((c) => ({ value: c.id, label: c.name }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [customersQuery.data],
+  );
+
+  const customerNameById = useMemo(
+    () => new Map(customerOptions.map((c) => [c.value, c.label])),
+    [customerOptions],
+  );
 
   const routesById = useMemo(() => {
     const map = new Map<string, string>();
@@ -91,10 +109,15 @@ export default function DeliveriesPage() {
       );
     }
     if (statusFilter) rows = rows.filter((d) => d.status === statusFilter);
+    if (customerFilter) {
+      const name = customerNameById.get(customerFilter) ?? '';
+      rows = name ? rows.filter((d) => d.customer_name === name) : rows;
+    }
+    rows = rows.filter((d) => dateInRange(d.created_at, dateFilter));
     const dir = sort.direction === 'asc' ? 1 : -1;
     rows.sort((a, b) => String(a[sort.field as keyof Delivery] ?? '').localeCompare(String(b[sort.field as keyof Delivery] ?? '')) * dir);
     return rows;
-  }, [deliveriesQuery.data, search, statusFilter, sort]);
+  }, [deliveriesQuery.data, search, statusFilter, customerFilter, customerNameById, dateFilter, sort]);
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -335,15 +358,42 @@ export default function DeliveriesPage() {
             placeholder: 'All statuses',
             options: DELIVERY_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') })),
           },
+          {
+            type: 'select',
+            key: 'customerId',
+            label: 'Customer',
+            placeholder: 'Any customer',
+            options: customerOptions,
+          },
+          {
+            type: 'rangedate',
+            key: 'createdRange',
+            label: 'Delivery date',
+          },
         ]}
-        filterValues={{ status: statusFilter }}
-        onFiltersChange={(f) => setStatusFilter((f.status as string | null) ?? null)}
+        filterValues={
+          {
+            status: statusFilter,
+            customerId: customerFilter,
+            createdRange: dateFilter,
+          } as Filters
+        }
+        onFiltersChange={(f) => {
+          setStatusFilter((f.status as string | null) ?? null);
+          setCustomerFilter((f.customerId as string | null) ?? null);
+          setDateFilter((f.createdRange as DateRangeValue) ?? EMPTY_DATE_RANGE);
+          setPage(1);
+        }}
         onClear={() => {
           setSearch('');
           setStatusFilter(null);
+          setCustomerFilter(null);
+          setDateFilter(EMPTY_DATE_RANGE);
           setPage(1);
         }}
-        hasActiveFilters={!!statusFilter}
+        hasActiveFilters={
+          !!statusFilter || !!customerFilter || dateFilter.mode !== 'all'
+        }
       />
 
       <DataTable

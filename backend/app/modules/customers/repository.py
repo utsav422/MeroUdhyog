@@ -14,20 +14,19 @@ class CustomerRepository:
         self.session = session
         self.tenant_id = tenant_id
 
-    async def list(self, limit: int, offset: int) -> list[Customer]:
-        customers = (
-            (
-                await self.session.execute(
-                    select(Customer)
-                    .where(Customer.tenant_id == self.tenant_id)
-                    .order_by(Customer.created_at.desc())
-                    .limit(limit)
-                    .offset(offset)
-                )
-            )
-            .scalars()
-            .all()
+    async def list(
+        self, limit: int, offset: int, route_id: UUID | None = None
+    ) -> list[Customer]:
+        stmt = (
+            select(Customer)
+            .where(Customer.tenant_id == self.tenant_id)
+            .order_by(Customer.created_at.desc())
+            .limit(limit)
+            .offset(offset)
         )
+        if route_id is not None:
+            stmt = stmt.where(Customer.route_id == route_id)
+        customers = (await self.session.execute(stmt)).scalars().all()
         return list(customers)
 
     async def get(self, customer_id: UUID) -> Customer:

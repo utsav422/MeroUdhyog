@@ -23,8 +23,7 @@ import { useProducts, defaultVariantPrice } from '../../products/api';
 import type { Variant } from '../../products/api';
 import { useCustomers } from '../../customers/api';
 import type { CustomerPrice } from '../../customers/api';
-
-const PAYMENT_STATUSES = ['unpaid', 'partial', 'paid'];
+import CustomerSelect from './CustomerSelect';
 
 type LineItem = {
   product_id: string;
@@ -64,7 +63,6 @@ export default function OrderForm({
     initialValues: {
       customer_id: (order?.customer_id ?? undefined) as string | undefined,
       notes: order?.notes ?? '',
-      payment_status: order?.payment_status ?? 'unpaid',
     },
   });
 
@@ -185,7 +183,6 @@ export default function OrderForm({
           ? customersQuery.data?.find((c) => c.id === values.customer_id)?.address || null
           : null,
         notes: values.notes || null,
-        payment_status: values.payment_status,
         items: validItems,
       };
       if (order) {
@@ -221,19 +218,10 @@ export default function OrderForm({
           </Text>
           <Stack gap="md">
             <Group grow>
-              <Select
+              <CustomerSelect
                 label="Customer"
-                placeholder="Select customer"
-                clearable
-                searchable
-                data={(customersQuery.data ?? []).map((c) => ({ value: c.id, label: c.name }))}
-                value={form.values.customer_id}
+                value={form.values.customer_id ?? null}
                 onChange={(v) => setCustomer(v ?? undefined)}
-              />
-              <Select
-                label="Payment status"
-                data={PAYMENT_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
-                {...form.getInputProps('payment_status')}
               />
             </Group>
             <Textarea

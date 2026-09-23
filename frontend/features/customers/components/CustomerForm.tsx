@@ -31,6 +31,7 @@ type FormValues = {
   email: string;
   phone: string;
   company: string;
+  pan_no: string;
   city: string;
   route_id: string;
   address: string;
@@ -64,6 +65,7 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
       email: customer?.email ?? '',
       phone: customer?.phone ?? '',
       company: customer?.company ?? '',
+      pan_no: customer?.pan_no ?? '',
       city: customer?.city ?? '',
       route_id: customer?.route_id ?? '',
       address: customer?.address ?? '',
@@ -142,6 +144,7 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
         name: values.name,
         email: values.email || null,
         phone: values.phone || null,
+        pan_no: values.pan_no?.trim() || null,
         company: values.company || null,
         city: values.city || null,
         route_id: values.route_id || null,
@@ -241,11 +244,18 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
                 {...form.getInputProps('phone')}
               />
             </div>
-            <TextInput
-              label="Company"
-              placeholder="Company name"
-              {...form.getInputProps('company')}
-            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextInput
+                label="Company"
+                placeholder="Company name"
+                {...form.getInputProps('company')}
+              />
+              <TextInput
+                label="PAN number"
+                placeholder="e.g. ABCDE1234F"
+                {...form.getInputProps('pan_no')}
+              />
+            </div>
             <Select
               label="Route"
               placeholder="Assign a delivery route"
@@ -282,64 +292,64 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
           </Stack>
         </Paper>
 
-        {isEdit && (
-          <Paper withBorder className="p-5">
-            <Text fw={600} size="sm" mb="xs" className="text-zinc-700">
-              Per-customer pricing
-            </Text>
-            <Text size="xs" c="dimmed" mb="md">
-              Set custom prices for this customer. Leave blank to fall back to
-              the product&apos;s default price.
-            </Text>
-            <div className="max-h-96 overflow-y-auto rounded-xl border border-zinc-200">
-              <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="sm">
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Product</Table.Th>
-                    <Table.Th>Variant</Table.Th>
-                    <Table.Th ta="right">Default</Table.Th>
-                    <Table.Th ta="right">Override</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {priceRows.map((row) => (
-                    <Table.Tr key={row.variant_id}>
-                      <Table.Td>
-                        <span className="font-medium text-zinc-800">
-                          {row.product_name}
-                        </span>
-                      </Table.Td>
-                      <Table.Td>
-                        <span className="text-zinc-500">{row.variant_name}</span>
-                      </Table.Td>
-                      <Table.Td ta="right">
+        <Paper withBorder className="p-5">
+          <Text fw={600} size="sm" mb="xs" className="text-zinc-700">
+            Per-customer pricing
+          </Text>
+          <Text size="xs" c="dimmed" mb="md">
+            Set custom prices for this customer. Leave blank to fall back to
+            the product&apos;s default price.
+          </Text>
+          <div className="max-h-96 overflow-x-auto overflow-y-auto rounded-xl border border-zinc-200">
+            <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="sm" miw={560}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Product</Table.Th>
+                  <Table.Th>Variant</Table.Th>
+                  <Table.Th ta="right">Default</Table.Th>
+                  <Table.Th ta="right">Override</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {priceRows.map((row) => (
+                  <Table.Tr key={row.variant_id}>
+                    <Table.Td>
+                      <span className="font-medium whitespace-nowrap text-zinc-800">
+                        {row.product_name}
+                      </span>
+                    </Table.Td>
+                    <Table.Td>
+                      <span className="whitespace-nowrap text-zinc-500">{row.variant_name}</span>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <span className="whitespace-nowrap">
                         {formatPriceUnit(row.default_price, row.default_unit)}
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Default"
-                          value={row.override}
-                          onChange={(e) => updateOverride(row.variant_id, e.currentTarget.value)}
-                          className="h-8 w-28 rounded-lg border border-zinc-300 px-2 text-right text-sm text-zinc-800 outline-none focus:border-brand-400"
-                        />
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                  {priceRows.length === 0 && (
-                    <Table.Tr>
-                      <Table.Td colSpan={4} c="dimmed" ta="center" py="lg">
-                        No products available to price
-                      </Table.Td>
-                    </Table.Tr>
-                  )}
-                </Table.Tbody>
-              </Table>
-            </div>
-          </Paper>
-        )}
+                      </span>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="Default"
+                        value={row.override}
+                        onChange={(e) => updateOverride(row.variant_id, e.currentTarget.value)}
+                        className="h-8 w-full min-w-28 rounded-lg border border-zinc-300 px-2 text-right text-sm text-zinc-800 outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-50 sm:w-28"
+                      />
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+                {priceRows.length === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={4} c="dimmed" ta="center" py="lg">
+                      No products available to price
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
+        </Paper>
 
         <Group justify="flex-end" gap="sm">
           <Button

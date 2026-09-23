@@ -4,7 +4,7 @@ Column layout (headers are case-insensitive, spaces are ignored, and a
 trailing ``*`` marks a required column):
 
 required:  name
-optional:  email, phone, contact_number, tax_id, company, address, city,
+optional:  email, phone, contact_number, pan_no, company, address, city,
            latitude, longitude, notes
 """
 
@@ -17,7 +17,7 @@ OPTIONAL_COLUMNS = (
     "email",
     "phone",
     "contact_number",
-    "tax_id",
+    "pan_no",
     "company",
     "address",
     "city",
@@ -28,7 +28,7 @@ OPTIONAL_COLUMNS = (
 ALL_COLUMNS = MANDATORY_COLUMNS + OPTIONAL_COLUMNS
 
 SAMPLE_HEADER = (
-    "name*,email,phone,contact_number,tax_id,company,address,"
+    "name*,email,phone,contact_number,pan_no,company,address,"
     "city,latitude,longitude,notes"
 )
 
@@ -41,7 +41,7 @@ def build_sample_csv() -> str:
     """A ready-to-upload sample file with header and two example rows."""
     lines = [
         SAMPLE_HEADER,
-        "Alice Cooper,alice@acme.com,555-0100,,TAX-1001,Acme Corp,"
+        "Alice Cooper,alice@acme.com,555-0100,,PAN-1001,Acme Corp,"
         "1 Factory Way,Springfield,42.123456,-71.654321,Corporate account",
         "Bob Ross,bob@paints.com,555-0111,,,Happy Trees LLC,2 Oak Lane,Boston,,,",
     ]

@@ -199,9 +199,11 @@ export function useRecordPayment() {
   return useMutation({
     mutationFn: (input: RecordPaymentInput) => apiClient.post<Payment>('/khata/payments', input),
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: khataKeys.customers() });
-      qc.invalidateQueries({ queryKey: khataKeys.customer(variables.customer_id) });
+      // Refresh every khata-scoped query (customers, customer detail, the
+      // global payments list) plus any order balances it touched.
+      qc.invalidateQueries({ queryKey: khataKeys.all });
       qc.invalidateQueries({ queryKey: ordersKeys.all });
+      void variables;
     },
   });
 }

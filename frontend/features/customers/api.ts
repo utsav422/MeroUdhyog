@@ -12,7 +12,7 @@ export type Customer = {
   email: string | null;
   phone: string | null;
   contact_number: string | null;
-  tax_id: string | null;
+  pan_no: string | null;
   company: string | null;
   address: string | null;
   city: string | null;
@@ -41,7 +41,7 @@ export type CustomerInput = {
   email?: string | null;
   phone?: string | null;
   contact_number?: string | null;
-  tax_id?: string | null;
+  pan_no?: string | null;
   company?: string | null;
   address?: string | null;
   city?: string | null;
@@ -59,10 +59,15 @@ export const customersKeys = {
   orders: (id: string) => [...customersKeys.all, 'orders', id] as const,
 };
 
-export function useCustomers() {
+export function useCustomers(routeId?: string | null) {
   return useQuery({
-    queryKey: customersKeys.list(),
-    queryFn: () => apiClient.get<Customer[]>(`/customers?limit=${MAX_FETCH}`),
+    queryKey: [...customersKeys.list(), routeId ?? null],
+    queryFn: () =>
+      apiClient.get<Customer[]>(
+        routeId
+          ? `/customers?limit=${MAX_FETCH}&route_id=${routeId}`
+          : `/customers?limit=${MAX_FETCH}`,
+      ),
   });
 }
 

@@ -17,6 +17,7 @@ import {
   Barbell,
   Info,
   Check,
+  X,
 } from '@phosphor-icons/react';
 import {
   useProduct,
@@ -33,8 +34,6 @@ import { formatMoney, formatPriceUnit } from '@/lib/format';
 
 type EditableRow = {
   id: string | null;
-  priceId: string | null;
-  key: string;
   name: string;
   sku: string;
   size: string;
@@ -43,36 +42,48 @@ type EditableRow = {
   stock_quantity: number;
   low_stock_threshold: number;
   price: number;
-  wholesale_price: number;
   cost_price: number;
-  mrp_price: number;
 };
 
-function seedRows(variants: Variant[]): EditableRow[] {
-  return variants.map((v) => {
-    const active = v.prices.find((p) => p.is_active) ?? v.prices[0];
-    return {
-      id: v.id,
-      priceId: active?.id ?? null,
-      key: v.id,
-      name: v.name,
-      sku: v.sku ?? '',
-      size: v.size ?? '',
-      size_type: v.size_type ?? '',
-      unit: v.unit ?? '',
-      stock_quantity: v.stock_quantity ?? 0,
-      low_stock_threshold: v.low_stock_threshold ?? 5,
-      price: Number(active?.price ?? 0),
-      wholesale_price: Number(active?.wholesale_price ?? 0),
-      cost_price: Number(active?.cost_price ?? 0),
-      mrp_price: Number(active?.mrp_price ?? 0),
-    };
-  });
-}
-
-function toUnit(v: number | string | undefined): number {
+function toUnit(v: number | string | null | undefined): number {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+function toNumber(v: number | string | null | undefined): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+function seedRow(v: Variant): EditableRow {
+  const active = v.prices.find((p) => p.is_active) ?? v.prices[0];
+  return {
+    id: v.id,
+    name: v.name,
+    sku: v.sku ?? '',
+    size: v.size ?? '',
+    size_type: v.size_type ?? '',
+    unit: v.unit ?? '',
+    stock_quantity: toUnit(v.stock_quantity),
+    low_stock_threshold: toUnit(v.low_stock_threshold),
+    price: toNumber(active?.price),
+    cost_price: toNumber(active?.cost_price),
+  };
+}
+
+function newRow(): EditableRow {
+  return {
+    id: null,
+    name: '',
+    sku: '',
+    size: '',
+    size_type: '',
+    unit: '',
+    stock_quantity: 0,
+    low_stock_threshold: 5,
+    price: 0,
+    cost_price: 0,
+  };
 }
 
 export default function ProductDetailPage() {
@@ -82,135 +93,108 @@ export default function ProductDetailPage() {
   const { data, isLoading, isError, refetch } = useProduct(params.id);
   const categoriesQuery = useCategories();
 
-  const [editing, setEditing] = useState(false);
-  const [rows, setRows] = useState<EditableRow[] | null>(null);
-  const [original, setOriginal] = useState<Map<string, EditableRow>>(new Map());
+  const [editing, setEditing] = useState<{ id: string | null; row: EditableRow } | null>(null);
 
-  const startEditing = () => {
-    if (!data) return;
-    const seeded = seedRows(data.variants);
-    setRows(seeded);
-    setOriginal(new Map(seeded.filter((r) => r.id).map((r) => [r.id as string, r])));
-    setEditing(true);
-  };
+  const openEditVariant = (v: Variant) => setEditing({ id: v.id, row: seedRow(v) });
+  const openNewVariant = () => setEditing({ id: null, row: newRow() });
+  const closeEdit = () => setEditing(null);
 
-  const cancelEditing = () => {
-    setEditing(false);
-    setRows(null);
-    setOriginal(new Map());
-  };
-
-  const updateRow = (key: string, patch: Partial<EditableRow>) => {
-    setRows((prev) => (prev ?? []).map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  };
-
-  const addRow = () => {
-    setRows((prev) => [
-      ...(prev ?? []),
-      {
-        id: null,
-        priceId: null,
-        key: `new-${Math.random().toString(36).slice(2)}`,
-        name: '',
-        sku: '',
-        size: '',
-        size_type: '',
-        unit: '',
-        stock_quantity: 0,
-        low_stock_threshold: 5,
-        price: 0,
-        wholesale_price: 0,
-        cost_price: 0,
-        mrp_price: 0,
-      },
-    ]);
+  const updateEditRow = (patch: Partial<EditableRow>) => {
+    setEditing((prev) => (prev ? { ...prev, row: { ...prev.row, ...patch } } : prev));
   };
 
   const invalidateInventory = () => {
     qc.invalidateQueries({ queryKey: inventoryKeys.all });
   };
 
-  const saveMutation = useMutation({
+  const saveVariantMutation = useMutation({
     mutationFn: async () => {
-      if (!data || !rows) return;
-      for (const row of rows) {
-        if (!row.id) {
-          if (!row.name.trim()) {
-            throw new Error('Every new variant needs a name.');
-          }
-          await apiClient.post(`/products/${data.id}/variants`, {
-            name: row.name.trim(),
-            sku: row.sku.trim() || null,
-            size: row.size.trim() || null,
-            size_type: row.size_type.trim() || null,
-            unit: row.unit.trim() || null,
-            stock_quantity: toUnit(row.stock_quantity),
-            low_stock_threshold: toUnit(row.low_stock_threshold),
-            sort_order: 0,
-            prices: [
-              {
-                price: row.price,
-                wholesale_price: row.wholesale_price || null,
-                cost_price: row.cost_price || null,
-                mrp_price: row.mrp_price || null,
-              },
-            ],
-          });
-          continue;
-        }
-        const orig = original.get(row.id);
-        if (!orig) continue;
+      if (!data || !editing) return;
+      const row = editing.row;
+      if (!row.name.trim()) {
+        throw new Error('Variant name is required.');
+      }
 
-        const variantPatch: Record<string, unknown> = {};
-        if (row.name !== orig.name) variantPatch.name = row.name;
-        if ((row.sku.trim() || null) !== orig.sku) variantPatch.sku = row.sku.trim() || null;
-        if ((row.size.trim() || null) !== orig.size) variantPatch.size = row.size.trim() || null;
-        if ((row.size_type.trim() || null) !== orig.size_type) {
-          variantPatch.size_type = row.size_type.trim() || null;
-        }
-        if ((row.unit.trim() || null) !== orig.unit) {
-          variantPatch.unit = row.unit.trim() || null;
-        }
-        if (toUnit(row.stock_quantity) !== toUnit(orig.stock_quantity)) {
-          variantPatch.stock_quantity = toUnit(row.stock_quantity);
-        }
-        if (toUnit(row.low_stock_threshold) !== toUnit(orig.low_stock_threshold)) {
-          variantPatch.low_stock_threshold = toUnit(row.low_stock_threshold);
-        }
-        if (Object.keys(variantPatch).length > 0) {
-          await apiClient.patch(`/products/${data.id}/variants/${row.id}`, variantPatch);
-        }
+      if (!row.id) {
+        await apiClient.post(`/products/${data.id}/variants`, {
+          name: row.name.trim(),
+          sku: row.sku.trim() || null,
+          size: row.size.trim() || null,
+          size_type: row.size_type.trim() || null,
+          unit: row.unit.trim() || null,
+          stock_quantity: toUnit(row.stock_quantity),
+          low_stock_threshold: toUnit(row.low_stock_threshold),
+          sort_order: 0,
+          prices: [
+            {
+              price: row.price || 0,
+              cost_price: row.cost_price || null,
+              currency: 'INR',
+            },
+          ],
+        });
+        return;
+      }
 
-        if (row.priceId) {
-          const pricePatch: Record<string, unknown> = {};
-          if (row.price !== orig.price) pricePatch.price = row.price;
-          if (row.wholesale_price !== orig.wholesale_price) pricePatch.wholesale_price = row.wholesale_price || null;
-          if (row.cost_price !== orig.cost_price) pricePatch.cost_price = row.cost_price || null;
-          if (row.mrp_price !== orig.mrp_price) pricePatch.mrp_price = row.mrp_price || null;
-          if (Object.keys(pricePatch).length > 0) {
-            await apiClient.patch(
-              `/products/${data.id}/variants/${row.id}/prices/${row.priceId}`,
-              pricePatch,
-            );
-          }
+      const original = data.variants.find((v) => v.id === row.id);
+      if (!original) throw new Error('Variant not found.');
+
+      const variantPatch: Record<string, unknown> = {};
+      if (row.name !== original.name) variantPatch.name = row.name;
+      if ((row.sku.trim() || null) !== original.sku) variantPatch.sku = row.sku.trim() || null;
+      if ((row.size.trim() || null) !== original.size) variantPatch.size = row.size.trim() || null;
+      if ((row.size_type.trim() || null) !== original.size_type) {
+        variantPatch.size_type = row.size_type.trim() || null;
+      }
+      if ((row.unit.trim() || null) !== original.unit) {
+        variantPatch.unit = row.unit.trim() || null;
+      }
+      if (toUnit(row.stock_quantity) !== toUnit(original.stock_quantity)) {
+        variantPatch.stock_quantity = toUnit(row.stock_quantity);
+      }
+      if (toUnit(row.low_stock_threshold) !== toUnit(original.low_stock_threshold)) {
+        variantPatch.low_stock_threshold = toUnit(row.low_stock_threshold);
+      }
+      if (Object.keys(variantPatch).length > 0) {
+        await apiClient.patch(`/products/${data.id}/variants/${row.id}`, variantPatch);
+      }
+
+      const active = original.prices.find((p) => p.is_active) ?? original.prices[0];
+      if (active) {
+        const pricePatch: Record<string, unknown> = {};
+        if (row.price !== toNumber(active.price)) pricePatch.price = row.price || 0;
+        if (row.cost_price !== toNumber(active.cost_price)) {
+          pricePatch.cost_price = row.cost_price || null;
         }
+        if (Object.keys(pricePatch).length > 0) {
+          await apiClient.patch(
+            `/products/${data.id}/variants/${row.id}/prices/${active.id}`,
+            pricePatch,
+          );
+        }
+      } else {
+        await apiClient.post(`/products/${data.id}/variants/${row.id}/prices`, {
+          price: row.price || 0,
+          cost_price: row.cost_price || null,
+          currency: 'INR',
+        });
       }
     },
     onSuccess: async () => {
       notifications.show({
         color: 'success',
-        title: 'Product updated',
-        message: 'Variants, stock and prices saved',
+        title: editing?.id ? 'Variant updated' : 'Variant created',
+        message: 'Changes saved successfully',
       });
       qc.invalidateQueries({ queryKey: productsKeys.all });
       invalidateInventory();
-      cancelEditing();
+      closeEdit();
       await refetch();
     },
     onError: (error) => {
       notifications.show({
         color: 'red',
-        title: 'Update failed',
+        title: 'Save failed',
         message: error instanceof Error ? error.message : 'Something went wrong',
       });
     },
@@ -227,6 +211,7 @@ export default function ProductDetailPage() {
         title: 'Variant deleted',
         message: 'Removed from the product',
       });
+      if (editing?.id) closeEdit();
       qc.invalidateQueries({ queryKey: productsKeys.all });
       invalidateInventory();
       await refetch();
@@ -289,11 +274,12 @@ export default function ProductDetailPage() {
           </div>
           <Group gap="sm">
             <Button
-              variant={editing ? 'light' : 'default'}
-              leftSection={<PencilSimple size={16} />}
-              onClick={editing ? cancelEditing : startEditing}
+              variant="light"
+              leftSection={<Plus size={16} weight="bold" />}
+              onClick={openNewVariant}
+              disabled={!!editing}
             >
-              {editing ? 'Cancel editing' : 'Edit variants'}
+              Add variant
             </Button>
             <Button
               variant="default"
@@ -361,22 +347,127 @@ export default function ProductDetailPage() {
               <Text fw={600} size="md" className="text-[var(--foreground)]">Variants & pricing</Text>
               <Text size="xs" c="dimmed" className="mt-0.5">
                 {editing
-                  ? 'Edit stock and prices inline, then press Update'
+                  ? `Editing ${editing.id ? 'a variant' : 'a new variant'} — only this variant is affected`
                   : `${data.variants.length} variants configured`}
               </Text>
             </div>
-            {editing && (
+            {!editing && (
               <Button
                 variant="light"
                 size="xs"
                 leftSection={<Plus size={14} />}
-                onClick={addRow}
+                onClick={openNewVariant}
               >
                 Add variant
               </Button>
             )}
           </div>
         </div>
+
+        {editing && (
+          <div className="border-b border-[var(--border)] p-5">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Package size={16} weight="duotone" className="text-brand-600" />
+                <Text fw={600} size="sm" className="text-[var(--foreground)]">
+                  {editing.id ? `Edit variant · ${editing.row.name || 'Untitled'}` : 'New variant'}
+                </Text>
+              </div>
+              <button
+                type="button"
+                onClick={closeEdit}
+                aria-label="Close editor"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] transition-colors hover:bg-black/5"
+                disabled={saveVariantMutation.isPending}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <TextInput
+                label="Variant name"
+                required
+                placeholder="e.g. 500ml"
+                value={editing.row.name}
+                onChange={(e) => updateEditRow({ name: e.currentTarget.value })}
+              />
+              <TextInput
+                label="SKU"
+                placeholder="e.g. SKU-KETCHUP-500"
+                value={editing.row.sku}
+                onChange={(e) => updateEditRow({ sku: e.currentTarget.value })}
+              />
+              <TextInput
+                label="Size"
+                placeholder="e.g. 500"
+                value={editing.row.size}
+                onChange={(e) => updateEditRow({ size: e.currentTarget.value })}
+              />
+              <TextInput
+                label="Size unit"
+                placeholder="e.g. ml"
+                value={editing.row.size_type}
+                onChange={(e) => updateEditRow({ size_type: e.currentTarget.value })}
+              />
+              <UnitField
+                label="Price unit"
+                value={editing.row.unit}
+                onChange={(u) => updateEditRow({ unit: u })}
+                placeholder="e.g. per carton"
+              />
+              <NumberInput
+                label="Wholesale price"
+                min={0}
+                prefix="₹ "
+                decimalScale={2}
+                placeholder="0.00"
+                value={editing.row.price}
+                onChange={(val) => updateEditRow({ price: toNumber(val ?? undefined) })}
+              />
+              <NumberInput
+                label="Cost of making"
+                min={0}
+                prefix="₹ "
+                decimalScale={2}
+                placeholder="0.00"
+                value={editing.row.cost_price}
+                onChange={(val) => updateEditRow({ cost_price: toNumber(val ?? undefined) })}
+              />
+              <NumberInput
+                label="Quantity on hand"
+                min={0}
+                allowDecimal={false}
+                value={editing.row.stock_quantity}
+                onChange={(val) => updateEditRow({ stock_quantity: toUnit(val ?? undefined) })}
+              />
+              <NumberInput
+                label="Low-stock alert at"
+                min={0}
+                allowDecimal={false}
+                value={editing.row.low_stock_threshold}
+                onChange={(val) => updateEditRow({ low_stock_threshold: toUnit(val ?? undefined) })}
+              />
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={closeEdit}
+                disabled={saveVariantMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                leftSection={<Check size={14} weight="bold" />}
+                loading={saveVariantMutation.isPending}
+                onClick={() => saveVariantMutation.mutate()}
+              >
+                {editing.id ? 'Save variant' : 'Create variant'}
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <Table verticalSpacing="sm" horizontalSpacing="md">
@@ -386,283 +477,112 @@ export default function ProductDetailPage() {
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Variant</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">SKU</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Size</Table.Th>
-                {editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider">Unit</Table.Th>}
-                {editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Stock</Table.Th>}
-                {editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Threshold</Table.Th>}
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Price</Table.Th>
-                {editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Wholesale</Table.Th>}
-                {editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Cost</Table.Th>}
-                {editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">MRP</Table.Th>}
-                {!editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Cost</Table.Th>}
-                {!editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Margin</Table.Th>}
-                {!editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Stock</Table.Th>}
-                {!editing && <Table.Th className="text-xs font-semibold uppercase tracking-wider">Status</Table.Th>}
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Cost</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Margin</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Stock</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Status</Table.Th>
                 <Table.Th w={100} />
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {!editing &&
-                data.variants.map((v, idx) => {
-                  const price = Number(defaultVariantPrice(v) || 0);
-                  const cost = Number(v.prices[0]?.cost_price || 0);
-                  const margin = price > 0 ? Math.round(((price - cost) / price) * 100) : 0;
-                  const stock = v.stock_quantity ?? 0;
-                  const low = stock <= (v.low_stock_threshold ?? 5);
-                  return (
-                    <Table.Tr key={v.id}>
-                      <Table.Td>
-                        <span className="text-xs text-[var(--muted)]">{idx + 1}</span>
-                      </Table.Td>
-                      <Table.Td>
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-                            <Package size={14} weight="duotone" />
-                          </div>
-                          <span className="font-medium text-[var(--foreground)]">{v.name}</span>
-                        </div>
-                      </Table.Td>
-                      <Table.Td>
-                        <span className="rounded-lg bg-black/5 px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
-                          {v.sku ?? '—'}
-                        </span>
-                      </Table.Td>
-                      <Table.Td>
-                        <span className="text-[var(--muted)]">
-                          {v.size ? `${v.size}${v.size_type ? ` ${v.size_type}` : ''}` : '—'}
-                        </span>
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <span className="font-semibold text-[var(--foreground)]">
-                          {formatPriceUnit(defaultVariantPrice(v), v.unit)}
-                        </span>
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <span className="text-[var(--muted)]">
-                          {v.prices[0]?.cost_price ? formatMoney(v.prices[0].cost_price) : '—'}
-                        </span>
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            margin > 0 ? 'bg-success-50 text-success-700' : margin < 0 ? 'bg-danger-50 text-danger-600' : 'bg-black/5 text-[var(--muted)]'
-                          }`}
-                        >
-                          {price > 0 ? `${margin}%` : '—'}
-                        </span>
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <StockBar
-                          stock={stock}
-                          threshold={
-                            Number(v.low_stock_threshold) > 0 ? Number(v.low_stock_threshold) : 5
-                          }
-                        />
-                      </Table.Td>
-                      <Table.Td>
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            v.is_active ? 'bg-success-50 text-success-700' : 'bg-black/5 text-[var(--muted)]'
-                          }`}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full ${v.is_active ? 'bg-success-500' : 'bg-[var(--muted)]'}`} />
-                          {v.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </Table.Td>
-                      <Table.Td>
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            aria-label="Edit variant"
-                            onClick={startEditing}
-                            className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-brand-50 hover:text-brand-600"
-                          >
-                            <PencilSimple size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Delete variant"
-                            onClick={() => {
-                              if (window.confirm(`Delete variant "${v.name}"? This cannot be undone.`)) {
-                                deleteMutation.mutate(v.id);
-                              }
-                            }}
-                            className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-danger-50 hover:text-danger-500"
-                          >
-                            <TrashSimple size={15} />
-                          </button>
-                        </div>
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-
-              {editing &&
-                (rows ?? []).map((row, idx) => (
-                  <Table.Tr
-                    key={row.key}
-                    className={row.id ? undefined : 'bg-brand-50/30'}
-                  >
+              {data.variants.map((v, idx) => {
+                const price = Number(defaultVariantPrice(v) || 0);
+                const cost = Number(v.prices[0]?.cost_price || 0);
+                const margin = price > 0 ? Math.round(((price - cost) / price) * 100) : 0;
+                const stock = v.stock_quantity ?? 0;
+                return (
+                  <Table.Tr key={v.id}>
                     <Table.Td>
                       <span className="text-xs text-[var(--muted)]">{idx + 1}</span>
                     </Table.Td>
                     <Table.Td>
-                      <TextInput
-                        size="xs"
-                        required
-                        placeholder="Variant name"
-                        value={row.name}
-                        onChange={(e) => updateRow(row.key, { name: e.currentTarget.value })}
-                      />
-                    </Table.Td>
-                    <Table.Td>
-                      <TextInput
-                        size="xs"
-                        placeholder="SKU"
-                        value={row.sku}
-                        onChange={(e) => updateRow(row.key, { sku: e.currentTarget.value })}
-                      />
-                    </Table.Td>
-                    <Table.Td>
-                      <div className="flex items-center gap-1">
-                        <TextInput
-                          size="xs"
-                          w={70}
-                          placeholder="Size"
-                          value={row.size}
-                          onChange={(e) => updateRow(row.key, { size: e.currentTarget.value })}
-                        />
-                        <TextInput
-                          size="xs"
-                          w={60}
-                          placeholder="Unit"
-                          value={row.size_type}
-                          onChange={(e) => updateRow(row.key, { size_type: e.currentTarget.value })}
-                        />
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                          <Package size={14} weight="duotone" />
+                        </div>
+                        <span className="font-medium text-[var(--foreground)]">{v.name}</span>
                       </div>
                     </Table.Td>
                     <Table.Td>
-                      <UnitField
-                        compact
-                        value={row.unit}
-                        onChange={(u) => updateRow(row.key, { unit: u })}
-                        placeholder="e.g. carton"
-                        className="w-28"
-                      />
+                      <span className="rounded-lg bg-black/5 px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
+                        {v.sku ?? '—'}
+                      </span>
+                    </Table.Td>
+                    <Table.Td>
+                      <span className="text-[var(--muted)]">
+                        {v.size ? `${v.size}${v.size_type ? ` ${v.size_type}` : ''}` : '—'}
+                      </span>
                     </Table.Td>
                     <Table.Td ta="right">
-                      <NumberInput
-                        size="xs"
-                        w={80}
-                        min={0}
-                        allowDecimal={false}
-                        value={row.stock_quantity}
-                        onChange={(v) => updateRow(row.key, { stock_quantity: toUnit(v) })}
-                      />
+                      <span className="font-semibold text-[var(--foreground)]">
+                        {formatPriceUnit(defaultVariantPrice(v), v.unit)}
+                      </span>
                     </Table.Td>
                     <Table.Td ta="right">
-                      <NumberInput
-                        size="xs"
-                        w={80}
-                        min={0}
-                        allowDecimal={false}
-                        value={row.low_stock_threshold}
-                        onChange={(v) => updateRow(row.key, { low_stock_threshold: toUnit(v) })}
-                      />
+                      <span className="text-[var(--muted)]">
+                        {v.prices[0]?.cost_price ? formatMoney(v.prices[0].cost_price) : '—'}
+                      </span>
                     </Table.Td>
                     <Table.Td ta="right">
-                      <NumberInput
-                        size="xs"
-                        w={110}
-                        min={0}
-                        prefix="₹ "
-                        decimalScale={2}
-                        value={row.price}
-                        onChange={(v) => updateRow(row.key, { price: Number(v) || 0 })}
-                      />
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          margin > 0 ? 'bg-success-50 text-success-700' : margin < 0 ? 'bg-danger-50 text-danger-600' : 'bg-black/5 text-[var(--muted)]'
+                        }`}
+                      >
+                        {price > 0 ? `${margin}%` : '—'}
+                      </span>
                     </Table.Td>
                     <Table.Td ta="right">
-                      <NumberInput
-                        size="xs"
-                        w={110}
-                        min={0}
-                        prefix="₹ "
-                        decimalScale={2}
-                        value={row.wholesale_price}
-                        onChange={(v) => updateRow(row.key, { wholesale_price: Number(v) || 0 })}
-                      />
-                    </Table.Td>
-                    <Table.Td ta="right">
-                      <NumberInput
-                        size="xs"
-                        w={110}
-                        min={0}
-                        prefix="₹ "
-                        decimalScale={2}
-                        value={row.cost_price}
-                        onChange={(v) => updateRow(row.key, { cost_price: Number(v) || 0 })}
-                      />
-                    </Table.Td>
-                    <Table.Td ta="right">
-                      <NumberInput
-                        size="xs"
-                        w={110}
-                        min={0}
-                        prefix="₹ "
-                        decimalScale={2}
-                        value={row.mrp_price}
-                        onChange={(v) => updateRow(row.key, { mrp_price: Number(v) || 0 })}
+                      <StockBar
+                        stock={stock}
+                        threshold={
+                          Number(v.low_stock_threshold) > 0 ? Number(v.low_stock_threshold) : 5
+                        }
                       />
                     </Table.Td>
                     <Table.Td>
-                      <div className="flex justify-end">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          v.is_active ? 'bg-success-50 text-success-700' : 'bg-black/5 text-[var(--muted)]'
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${v.is_active ? 'bg-success-500' : 'bg-[var(--muted)]'}`} />
+                        {v.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </Table.Td>
+                    <Table.Td>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          aria-label="Edit variant"
+                          onClick={() => openEditVariant(v)}
+                          disabled={!!editing}
+                          className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-brand-50 hover:text-brand-600 disabled:opacity-40"
+                        >
+                          <PencilSimple size={15} />
+                        </button>
                         <button
                           type="button"
                           aria-label="Delete variant"
                           onClick={() => {
-                            if (row.id) {
-                              if (window.confirm(`Delete variant "${row.name}"? This cannot be undone.`)) {
-                                deleteMutation.mutate(row.id);
-                              }
-                            } else {
-                              setRows((prev) => (prev ?? []).filter((r) => r.key !== row.key));
+                            if (window.confirm(`Delete variant "${v.name}"? This cannot be undone.`)) {
+                              deleteMutation.mutate(v.id);
                             }
                           }}
-                          className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-danger-50 hover:text-danger-500"
+                          disabled={!!editing || deleteMutation.isPending}
+                          className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-danger-50 hover:text-danger-500 disabled:opacity-40"
                         >
                           <TrashSimple size={15} />
                         </button>
                       </div>
                     </Table.Td>
                   </Table.Tr>
-                ))}
+                );
+              })}
             </Table.Tbody>
           </Table>
         </div>
-
-        {editing && (
-          <div className="flex items-center justify-end gap-2 border-t border-[var(--border)] px-6 py-4">
-            <Button variant="default" size="sm" onClick={cancelEditing}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              variant="light"
-              leftSection={<Plus size={14} />}
-              onClick={addRow}
-            >
-              Add variant
-            </Button>
-            <Button
-              size="sm"
-              leftSection={<Check size={14} weight="bold" />}
-              loading={saveMutation.isPending}
-              className=""
-              onClick={() => saveMutation.mutate()}
-            >
-              Update product
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );

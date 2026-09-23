@@ -253,3 +253,31 @@ async def test_route_tenant_isolation(client):
     r = await client.get("/api/v1/routes")
     assert r.status_code == 200
     assert first_id not in [x["id"] for x in r.json()]
+
+
+@pytest.mark.asyncio
+async def test_customers_list_filtered_by_route(client):
+    await _register(client, "custroutefilter")
+    r = await client.post(
+        "/api/v1/routes",
+        json={"name": "North", "cities": [], "agent_ids": []},
+    )
+    assert r.status_code == 201
+    route_id = r.json()["id"]
+
+    on_route = await _create_customer(client, name="Alpha")
+    r = await client.patch(
+        f"/api/v1/customers/{on_route['id']}", json={"route_id": route_id}
+    )
+    assert r.status_code == 200
+
+    await _create_customer(client, name="Beta")
+
+    r = await client.get(f"/api/v1/customers?limit=10&offset=0&route_id={route_id}")
+    assert r.status_code == 200
+    ids = [c["id"] for c in r.json()]
+    assert on_route["id"] in ids
+    assert all(c["route_id"] == route_id for c in r.json())
+
+    r = await client.get("/api/v1/customers?limit=10&offset=0")
+    assert len(r.json()) == 2

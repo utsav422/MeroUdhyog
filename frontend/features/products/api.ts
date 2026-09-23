@@ -7,9 +7,7 @@ export type VariantPrice = {
   id: string;
   variant_id: string;
   price: string;
-  wholesale_price: string | null;
   cost_price: string | null;
-  mrp_price: string | null;
   currency: string;
   effective_from: string | null;
   effective_to: string | null;
@@ -79,10 +77,8 @@ export type Category = {
 };
 
 export type VariantPriceInput = {
-  price: string | number;
-  wholesale_price?: string | number | null;
+  price?: string | number;
   cost_price?: string | number | null;
-  mrp_price?: string | number | null;
   currency?: string;
 };
 

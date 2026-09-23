@@ -27,7 +27,7 @@ type ImportResult = { created: number; failed: number; errors: ImportRowError[] 
 const REQUIRED_COLUMNS: [string, string][] = [
   ['name*', 'Product name'],
   ['variant*', 'Variant name'],
-  ['price*', 'Selling price'],
+  ['price*', 'Wholesale price'],
 ];
 
 const OPTIONAL_COLUMNS: [string, string][] = [
@@ -36,9 +36,7 @@ const OPTIONAL_COLUMNS: [string, string][] = [
   ['category', 'Category name (matched by name)'],
   ['size', 'Size / weight'],
   ['size_type', 'Size unit (e.g. g, kg, ml)'],
-  ['wholesale_price', 'Wholesale price (to resellers)'],
   ['cost_price', 'Cost of making'],
-  ['mrp_price', 'Maximum retail price'],
   ['stock_quantity', 'Units in stock (default 0)'],
   ['low_stock_threshold', 'Low-stock alert level (default 5)'],
   ['currency', 'Currency code (default USD)'],

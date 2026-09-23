@@ -33,7 +33,7 @@ const OPTIONAL_COLUMNS: [string, string][] = [
   ['email', 'Email address (must be unique)'],
   ['phone', 'Primary phone'],
   ['contact_number', 'Alternate contact'],
-  ['tax_id', 'Tax / GST number'],
+  ['pan_no', 'PAN number'],
   ['company', 'Company or business'],
   ['address', 'Street address'],
   ['city', 'City'],

@@ -205,7 +205,7 @@ class CustomerAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
     )
     list_display_links = ("name",)
     list_filter = ("is_active", "city", "tenant")
-    search_fields = ("name", "email", "company", "tax_id", "city")
+    search_fields = ("name", "email", "company", "pan_no", "city")
 
 
 class CustomerPriceAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):

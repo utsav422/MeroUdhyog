@@ -76,6 +76,16 @@ class PaymentRead(BaseModel):
     allocations: list[PaymentAllocationRead] = Field(default_factory=list)
 
 
+class PaymentListRead(BaseModel):
+    items: list[PaymentRead] = Field(default_factory=list)
+    total: int = 0
+    # Sum of payment amounts over the filtered set (voided included unless
+    # the status filter excludes them).
+    total_amount: Decimal = Decimal("0")
+    limit: int
+    offset: int
+
+
 class CustomerKhataDetail(BaseModel):
     customer_id: UUID
     customer_name: str

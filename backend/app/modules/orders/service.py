@@ -59,6 +59,11 @@ class OrderService:
         self.user_id = user_id
         self.repo = OrderRepository(session, tenant_id)
 
+    def _notify_service(self):
+        from app.modules.notifications.service import NotificationService
+
+        return NotificationService(self.session, self.tenant_id)
+
     async def list(
         self,
         limit: int,
@@ -305,6 +310,11 @@ class OrderService:
         updated = await self.repo.update(order)
         read = OrderRead.model_validate(updated)
         read.delivery_created = delivery_created
+        if new_status in ("confirmed", "ready", "cancelled"):
+            await self._notify_service().order_status(
+                order.id, order.order_ref, new_status,
+                extra="A delivery has been created for it." if new_status == "ready" and delivery_created else None,
+            )
         return read
 
     async def _held_stock(self, order: Order) -> tuple[dict[UUID, int], dict[UUID, StockChange]]:
@@ -492,6 +502,10 @@ class OrderService:
             order.status = new_status
             if new_status == "ready":
                 await self._auto_create_delivery(order.id)
+            if new_status in ("confirmed", "ready", "cancelled"):
+                await self._notify_service().order_status(
+                    order.id, order.order_ref, new_status
+                )
             updated += 1
         await self.session.flush()
         return OrderBulkStatusResult(updated=updated, skipped=skipped)

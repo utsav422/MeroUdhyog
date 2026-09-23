@@ -11,10 +11,8 @@ export const productFormSchema = z.object({
     .or(z.literal('')),
   category_id: z.string().optional().or(z.literal('')),
   unit: z.string().optional(),
-  price: z.number().min(0, 'Selling price must be 0 or more').optional(),
-  wholesale_price: z.number().min(0, 'Wholesale price must be 0 or more').optional(),
+  price: z.number().min(0, 'Wholesale price must be 0 or more').optional(),
   cost_price: z.number().min(0, 'Cost of making must be 0 or more').optional(),
-  mrp_price: z.number().min(0, 'MRP must be 0 or more').optional(),
   description: z.string().optional(),
 });
 

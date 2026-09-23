@@ -54,9 +54,7 @@ async def _create_product(client, name):
                     "prices": [
                         {
                             "price": "10.00",
-                            "wholesale_price": "8.00",
                             "cost_price": "6.00",
-                            "mrp_price": "12.00",
                         }
                     ],
                 }
@@ -136,9 +134,7 @@ async def test_product_links_to_category_and_variant_enrichment(client):
                     "prices": [
                         {
                             "price": "9.99",
-                            "wholesale_price": "7.00",
                             "cost_price": "5.00",
-                            "mrp_price": "11.99",
                         }
                     ],
                 }
@@ -154,9 +150,8 @@ async def test_product_links_to_category_and_variant_enrichment(client):
     assert variant["size_type"] == "volume"
     assert variant["images"] == ["https://example.com/a.jpg"]
     price = variant["prices"][0]
-    assert price["wholesale_price"] == "7.00"
+    assert price["price"] == "9.99"
     assert price["cost_price"] == "5.00"
-    assert price["mrp_price"] == "11.99"
 
 
 @pytest.mark.asyncio

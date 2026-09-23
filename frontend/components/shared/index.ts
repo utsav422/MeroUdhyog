@@ -2,6 +2,8 @@ export { default as DataTable } from './DataTable';
 export type { Column, SortState, RowAction } from './DataTable';
 export { default as FilterBar } from './FilterBar';
 export type { FilterDef, Filters } from './FilterBar';
+export type { DateRangeValue } from './FilterBar';
+export { EMPTY_DATE_RANGE, dateInRange } from './FilterBar';
 export { default as PaginationBar } from './PaginationBar';
 export { default as StockBar } from './StockBar';
 export { default as StatusBadge } from './StatusBadge';

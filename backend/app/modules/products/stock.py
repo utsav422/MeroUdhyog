@@ -12,6 +12,7 @@ cancelled, edited, or deleted).
 
 from __future__ import annotations
 
+import logging
 from typing import NamedTuple
 from uuid import UUID
 
@@ -84,4 +85,19 @@ async def apply_stock_changes(
         )
         session.add(movement)
         movements.append(movement)
+
+    # Surface low-stock alerts to the back office right after a change pushed
+    # any variant to (or below) its threshold. Best-effort: never let a stock
+    # operation fail because notifications broke.
+    try:
+        from app.modules.notifications.service import NotificationService
+
+        notification_service = NotificationService(session, tenant_id)
+        await notification_service.sync_low_stock(
+            [variants[change.variant_id] for change in changes]
+        )
+    except Exception:  # noqa: BLE001
+        logging.getLogger("factory.notifications").exception(
+            "Failed to create low-stock notifications"
+        )
     return movements

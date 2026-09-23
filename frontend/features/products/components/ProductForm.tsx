@@ -20,7 +20,8 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Trash, Package } from '@phosphor-icons/react';
 import { apiClient } from '@/lib/api-client';
 import { useCategories, productsKeys } from '../api';
-import type { Product, Variant, VariantInput, VariantPrice } from '../api';
+import { notificationsKeys } from '@/features/notifications/api';
+import type { Product, VariantInput } from '../api';
 import { productFormSchema } from '../schema';
 import UnitField from './UnitField';
 
@@ -30,9 +31,7 @@ type FormValues = {
   category_id: string;
   unit: string;
   price: number | undefined;
-  wholesale_price: number | undefined;
   cost_price: number | undefined;
-  mrp_price: number | undefined;
   stock_quantity: number;
   low_stock_threshold: number;
   description: string;
@@ -47,9 +46,7 @@ type EditableVariant = {
   unit: string;
   priceId: string | undefined;
   price: number | undefined;
-  wholesale_price: number | undefined;
   cost_price: number | undefined;
-  mrp_price: number | undefined;
   stock_quantity: number;
   low_stock_threshold: number;
 };
@@ -62,9 +59,7 @@ type DraftVariant = {
   size_type: string;
   unit: string;
   price: number | undefined;
-  wholesale_price: number | undefined;
   cost_price: number | undefined;
-  mrp_price: number | undefined;
   stock_quantity: number;
   low_stock_threshold: number;
 };
@@ -97,9 +92,7 @@ export default function ProductForm({ product }: { product?: Product }) {
         unit: v.unit ?? '',
         priceId: activePrice?.id,
         price: toNumber(activePrice?.price),
-        wholesale_price: toNumber(activePrice?.wholesale_price),
         cost_price: toNumber(activePrice?.cost_price),
-        mrp_price: toNumber(activePrice?.mrp_price),
         stock_quantity: toStock(v.stock_quantity),
         low_stock_threshold: toStock(v.low_stock_threshold),
       };
@@ -115,9 +108,7 @@ export default function ProductForm({ product }: { product?: Product }) {
       category_id: product?.category_id ?? '',
       unit: product?.variants[0]?.unit ?? '',
       price: undefined,
-      wholesale_price: undefined,
       cost_price: undefined,
-      mrp_price: undefined,
       stock_quantity: 0,
       low_stock_threshold: 5,
       description: product?.description ?? '',
@@ -157,9 +148,7 @@ export default function ProductForm({ product }: { product?: Product }) {
               `/products/${product.id}/variants/${ev.id}/prices/${ev.priceId}`,
               {
                 price: ev.price ?? 0,
-                wholesale_price: ev.wholesale_price ?? null,
                 cost_price: ev.cost_price ?? null,
-                mrp_price: ev.mrp_price ?? null,
               },
             );
           }
@@ -178,9 +167,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             prices: [
               {
                 price: dv.price ?? 0,
-                wholesale_price: dv.wholesale_price ?? null,
                 cost_price: dv.cost_price ?? null,
-                mrp_price: dv.mrp_price ?? null,
                 currency: 'INR',
               },
             ],
@@ -205,9 +192,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             prices: [
               {
                 price: values.price ?? 0,
-                wholesale_price: values.wholesale_price ?? null,
                 cost_price: values.cost_price ?? null,
-                mrp_price: values.mrp_price ?? null,
                 currency: 'INR',
               },
             ],
@@ -222,6 +207,7 @@ export default function ProductForm({ product }: { product?: Product }) {
         message: isEdit ? 'Changes saved successfully' : 'Product added to catalogue',
       });
       qc.invalidateQueries({ queryKey: productsKeys.all });
+      qc.invalidateQueries({ queryKey: notificationsKeys.all });
       if (isEdit && product) {
         router.push(`/products/${product.id}`);
       } else {
@@ -256,9 +242,7 @@ export default function ProductForm({ product }: { product?: Product }) {
         size_type: '',
         unit: '',
         price: undefined,
-        wholesale_price: undefined,
         cost_price: undefined,
-        mrp_price: undefined,
         stock_quantity: 0,
         low_stock_threshold: 5,
       },
@@ -339,20 +323,12 @@ export default function ProductForm({ product }: { product?: Product }) {
             </Text>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <NumberInput
-                label="Selling price"
-                min={0}
-                prefix="₹ "
-                decimalScale={2}
-                placeholder="0.00"
-                {...form.getInputProps('price')}
-              />
-              <NumberInput
                 label="Wholesale price"
                 min={0}
                 prefix="₹ "
                 decimalScale={2}
                 placeholder="0.00"
-                {...form.getInputProps('wholesale_price')}
+                {...form.getInputProps('price')}
               />
               <NumberInput
                 label="Cost of making"
@@ -361,14 +337,6 @@ export default function ProductForm({ product }: { product?: Product }) {
                 decimalScale={2}
                 placeholder="0.00"
                 {...form.getInputProps('cost_price')}
-              />
-              <NumberInput
-                label="MRP"
-                min={0}
-                prefix="₹ "
-                decimalScale={2}
-                placeholder="0.00"
-                {...form.getInputProps('mrp_price')}
               />
             </div>
             <div className="sm:max-w-xs">
@@ -380,7 +348,7 @@ export default function ProductForm({ product }: { product?: Product }) {
               />
             </div>
             <Text size="xs" c="dimmed" mt="xs">
-              Wholesale price, cost of making and MRP feed the finance / profit &amp; loss reports.
+              Wholesale price and cost of making feed the finance / profit &amp; loss reports.
             </Text>
           </Paper>
         )}
@@ -481,7 +449,7 @@ export default function ProductForm({ product }: { product?: Product }) {
                       placeholder="e.g. per carton"
                     />
                     <NumberInput
-                      label="Price"
+                      label="Wholesale price"
                       min={0}
                       prefix="₹ "
                       decimalScale={2}
@@ -489,28 +457,12 @@ export default function ProductForm({ product }: { product?: Product }) {
                       onChange={(val) => updateEditableVariant(ev.id, 'price', typeof val === 'number' ? val : undefined)}
                     />
                     <NumberInput
-                      label="Cost price"
+                      label="Cost of making"
                       min={0}
                       prefix="₹ "
                       decimalScale={2}
                       value={ev.cost_price}
                       onChange={(val) => updateEditableVariant(ev.id, 'cost_price', typeof val === 'number' ? val : undefined)}
-                    />
-                    <NumberInput
-                      label="Wholesale price"
-                      min={0}
-                      prefix="₹ "
-                      decimalScale={2}
-                      value={ev.wholesale_price}
-                      onChange={(val) => updateEditableVariant(ev.id, 'wholesale_price', typeof val === 'number' ? val : undefined)}
-                    />
-                    <NumberInput
-                      label="MRP"
-                      min={0}
-                      prefix="₹ "
-                      decimalScale={2}
-                      value={ev.mrp_price}
-                      onChange={(val) => updateEditableVariant(ev.id, 'mrp_price', typeof val === 'number' ? val : undefined)}
                     />
                     <NumberInput
                       label="Quantity on hand"
@@ -586,7 +538,7 @@ export default function ProductForm({ product }: { product?: Product }) {
                           placeholder="e.g. per carton"
                         />
                         <NumberInput
-                          label="Price"
+                          label="Wholesale price"
                           min={0}
                           prefix="₹ "
                           decimalScale={2}
@@ -594,28 +546,12 @@ export default function ProductForm({ product }: { product?: Product }) {
                           onChange={(val) => updateDraftVariant(dv.key, 'price', typeof val === 'number' ? val : undefined)}
                         />
                         <NumberInput
-                          label="Cost price"
+                          label="Cost of making"
                           min={0}
                           prefix="₹ "
                           decimalScale={2}
                           value={dv.cost_price}
                           onChange={(val) => updateDraftVariant(dv.key, 'cost_price', typeof val === 'number' ? val : undefined)}
-                        />
-                        <NumberInput
-                          label="Wholesale price"
-                          min={0}
-                          prefix="₹ "
-                          decimalScale={2}
-                          value={dv.wholesale_price}
-                          onChange={(val) => updateDraftVariant(dv.key, 'wholesale_price', typeof val === 'number' ? val : undefined)}
-                        />
-                        <NumberInput
-                          label="MRP"
-                          min={0}
-                          prefix="₹ "
-                          decimalScale={2}
-                          value={dv.mrp_price}
-                          onChange={(val) => updateDraftVariant(dv.key, 'mrp_price', typeof val === 'number' ? val : undefined)}
                         />
                         <NumberInput
                           label="Quantity on hand"

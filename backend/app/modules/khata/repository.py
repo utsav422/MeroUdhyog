@@ -3,18 +3,20 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.customers.models import Customer
 from app.modules.khata.models import BillTemplate, LedgerAllocation, LedgerEntry, OrderInvoice
 from app.modules.orders.models import Order
+from app.modules.users.models import User
 from app.shared.exceptions import NotFoundError
 
-# Orders the khata settles. Draft orders haven't been placed yet and cancelled
-# orders are void — neither carries an amount a customer can be billed for.
-BILLABLE_EXCLUDED_STATUSES = {"draft", "cancelled"}
+# Orders the khata settles. A customer only owes for what was actually
+# delivered — everything still open (draft/confirmed/ready/assigned/…),
+# delivered-then-reversed (cancelled) or failed is not billable.
+BILLABLE_STATUSES = {"delivered"}
 
 
 class KhataRepository:
@@ -52,7 +54,7 @@ class KhataRepository:
             .where(
                 Order.tenant_id == self.tenant_id,
                 Order.customer_id.is_not(None),
-                Order.status.not_in(list(BILLABLE_EXCLUDED_STATUSES)),
+                Order.status.in_(list(BILLABLE_STATUSES)),
             )
             .group_by(Order.customer_id)
         )
@@ -99,7 +101,7 @@ class KhataRepository:
             .where(
                 Order.tenant_id == self.tenant_id,
                 Order.customer_id == customer_id,
-                Order.status.not_in(list(BILLABLE_EXCLUDED_STATUSES)),
+                Order.status.in_(list(BILLABLE_STATUSES)),
             )
             .order_by(Order.created_at.asc())
         )
@@ -150,6 +152,80 @@ class KhataRepository:
         if not entry:
             raise NotFoundError("Receipt not found")
         return entry
+
+    def _payment_conditions(
+        self,
+        customer_id: UUID | None = None,
+        method: str | None = None,
+        status: str | None = None,
+        route_id: UUID | None = None,
+        search: str | None = None,
+        date_from=None,
+        date_to=None,
+        order_id: UUID | None = None,
+    ) -> list:
+        """Shared WHERE clauses for the global payments list + its totals.
+
+        The route filter matches payments *applied to orders* on that route
+        (``route_id`` lives on the order), so a payment covering orders on
+        several routes is listed under each of them.
+        """
+        conds = [LedgerEntry.tenant_id == self.tenant_id]
+        if customer_id is not None:
+            conds.append(LedgerEntry.customer_id == customer_id)
+        if method is not None:
+            conds.append(LedgerEntry.method == method)
+        if status is not None:
+            conds.append(LedgerEntry.status == status)
+        if date_from is not None:
+            conds.append(LedgerEntry.collected_at >= date_from)
+        if date_to is not None:
+            conds.append(LedgerEntry.collected_at <= date_to)
+        if order_id is not None:
+            conds.append(LedgerEntry.allocations.any(LedgerAllocation.order_id == order_id))
+        if route_id is not None:
+            conds.append(
+                LedgerEntry.allocations.any(
+                    LedgerAllocation.order.has(Order.route_id == route_id)
+                )
+            )
+        if search:
+            like = f"%{search.strip().lower()}%"
+            conds.append(
+                or_(
+                    LedgerEntry.customer.has(Customer.name.ilike(like)),
+                    LedgerEntry.collector.has(User.full_name.ilike(like)),
+                    LedgerEntry.receipt_number.ilike(like),
+                )
+            )
+        return conds
+
+    async def list_payments_filtered(
+        self, limit: int, offset: int, **filters
+    ) -> list[LedgerEntry]:
+        result = await self.session.execute(
+            select(LedgerEntry)
+            .options(
+                selectinload(LedgerEntry.allocations).selectinload(LedgerAllocation.order),
+                selectinload(LedgerEntry.customer),
+                selectinload(LedgerEntry.collector),
+            )
+            .where(*self._payment_conditions(**filters))
+            .order_by(LedgerEntry.collected_at.desc(), LedgerEntry.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().unique().all())
+
+    async def payment_totals(self, **filters) -> tuple[int, Decimal]:
+        result = await self.session.execute(
+            select(
+                func.count(LedgerEntry.id),
+                func.coalesce(func.sum(LedgerEntry.amount), 0),
+            ).where(*self._payment_conditions(**filters))
+        )
+        count, total = result.one()
+        return int(count), Decimal(str(total))
 
     async def add_allocation(self, entry_id: UUID, order_id: UUID, amount) -> LedgerAllocation:
         alloc = LedgerAllocation(

@@ -1,8 +1,10 @@
 from uuid import UUID
+from datetime import date
 
 from fastapi import APIRouter, Depends, Response, UploadFile, status
 
 from app.core.dependencies import get_current_tenant_id, get_current_user_id, get_db
+from app.core.paginator import pagination_params
 from app.core.permissions import Permissions, require_any_permission, require_permission
 from app.modules.khata.schemas import (
     BillTemplateRead,
@@ -10,6 +12,7 @@ from app.modules.khata.schemas import (
     CustomerKhataDetail,
     InvoiceRead,
     KhataCustomerSummary,
+    PaymentListRead,
     PaymentRead,
     ReceiptRead,
     RecordPaymentInput,
@@ -43,6 +46,35 @@ async def customer_khata(
 ):
     service = await _service(db, tenant_id)
     return await service.customer_detail(customer_id)
+
+
+@router.get("/payments", response_model=PaymentListRead)
+async def list_payments(
+    pagination: tuple[int, int] = Depends(pagination_params),
+    customer_id: UUID | None = None,
+    route_id: UUID | None = None,
+    method: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    _=Depends(require_any_permission(Permissions.VIEW_ALL, Permissions.MANAGE_KHATA)),
+):
+    limit, offset = pagination
+    service = await _service(db, tenant_id)
+    return await service.list_payments(
+        limit,
+        offset,
+        customer_id=customer_id,
+        route_id=route_id,
+        method=method,
+        status=status,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @router.post("/payments", response_model=PaymentRead, status_code=status.HTTP_201_CREATED)

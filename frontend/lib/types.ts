@@ -44,7 +44,7 @@ export interface CustomerRead {
   email: string | null;
   phone: string | null;
   contact_number: string | null;
-  tax_id: string | null;
+  pan_no: string | null;
   company: string | null;
   address: string | null;
   city: string | null;
@@ -61,7 +61,7 @@ export interface CustomerCreate {
   email?: string | null;
   phone?: string | null;
   contact_number?: string | null;
-  tax_id?: string | null;
+  pan_no?: string | null;
   company?: string | null;
   address?: string | null;
   city?: string | null;
@@ -139,9 +139,7 @@ export interface VariantPriceRead {
   id: string;
   variant_id: string;
   price: string;
-  wholesale_price: string | null;
   cost_price: string | null;
-  mrp_price: string | null;
   currency: string;
   effective_from: string | null;
   effective_to: string | null;
@@ -177,9 +175,7 @@ export interface ProductRead {
 
 export interface VariantPriceCreate {
   price: string;
-  wholesale_price?: string | null;
   cost_price?: string | null;
-  mrp_price?: string | null;
   currency?: string;
   effective_from?: string | null;
   effective_to?: string | null;

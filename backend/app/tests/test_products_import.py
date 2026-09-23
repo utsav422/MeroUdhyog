@@ -7,17 +7,17 @@ from app.tests.test_products import _create_user, _register
 
 VALID_CSV = (
     "name*,variant*,price*,sku,description,category,size,size_type,"
-    "wholesale_price,cost_price,mrp_price,currency\n"
-    "Mango Pickle,Classic,5.50,MANGO-500,Spicy and tangy pickle,Pickles,500,g,4.50,3.00,6.00,USD\n"
-    "Lemon Pickle,Classic,6.00,LEMON-500,Citrusy lemon pickle,Pickles,,,5.00,3.50,7.00,USD\n"
+    "cost_price,currency\n"
+    "Mango Pickle,Classic,5.50,MANGO-500,Spicy and tangy pickle,Pickles,500,g,3.00,USD\n"
+    "Lemon Pickle,Classic,6.00,LEMON-500,Citrusy lemon pickle,Pickles,,,3.50,USD\n"
 )
 
 PARTIAL_CSV = (
     "name*,variant*,price*,sku,description,category,size,size_type,"
-    "wholesale_price,cost_price,mrp_price,currency\n"
-    "Mango Pickle,Classic,5.50,MANGO-500,Spicy mango pickle,Pickles,500,g,4.50,3.00,6.00,USD\n"
-    "Mango Pickle,Classic,5.50,MANGO-500,Duplicate mango pickle,Pickles,500,g,4.50,3.00,6.00,USD\n"
-    "Bad Price,Classic,abc,,NaN price,Pickles,,,5.00,3.50,7.00,USD\n"
+    "cost_price,currency\n"
+    "Mango Pickle,Classic,5.50,MANGO-500,Spicy mango pickle,Pickles,500,g,3.00,USD\n"
+    "Mango Pickle,Classic,5.50,MANGO-500,Duplicate mango pickle,Pickles,500,g,3.00,USD\n"
+    "Bad Price,Classic,abc,,NaN price,Pickles,,,3.50,USD\n"
 )
 
 
@@ -60,9 +60,7 @@ async def test_upload_csv_creates_products_with_variants_and_prices(client):
     assert mango["variants"][0]["sku"] == "MANGO-500"
     assert mango["variants"][0]["size"] == "500"
     assert mango["variants"][0]["prices"][0]["price"] == "5.50"
-    assert mango["variants"][0]["prices"][0]["wholesale_price"] == "4.50"
     assert mango["variants"][0]["prices"][0]["cost_price"] == "3.00"
-    assert mango["variants"][0]["prices"][0]["mrp_price"] == "6.00"
     assert mango["variants"][0]["prices"][0]["currency"] == "USD"
 
 

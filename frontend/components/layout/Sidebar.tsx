@@ -19,6 +19,7 @@ import {
   UserGear,
   CalendarBlank,
   Notebook,
+  HandCoins,
   Stamp,
 } from '@phosphor-icons/react';
 import { useSession } from '@/lib/providers';
@@ -73,6 +74,11 @@ const NAV_GROUPS: NavGroup[] = [
         href: '/khata',
         label: 'Khata',
         icon: <Notebook size={18} weight="duotone" />,
+      },
+      {
+        href: '/payments',
+        label: 'Payments',
+        icon: <HandCoins size={18} weight="duotone" />,
       },
     ],
   },

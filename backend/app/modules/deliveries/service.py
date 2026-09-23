@@ -72,6 +72,51 @@ class DeliveryService:
         self.repo = DeliveryRepository(session, tenant_id)
         self.finance_service = FinanceService(session, tenant_id)
 
+    def _notify_service(self):
+        from app.modules.notifications.service import NotificationService
+
+        return NotificationService(self.session, self.tenant_id)
+
+    async def _order_ref(self, order_id: UUID | None) -> str | None:
+        if not order_id:
+            return None
+        row = (
+            await self.session.execute(
+                select(Order.order_ref).where(Order.id == order_id)
+            )
+        ).scalar_one_or_none()
+        return str(row) if row else None
+
+    async def _order_customer_name(self, order_id: UUID | None) -> str | None:
+        if not order_id:
+            return None
+        row = (
+            await self.session.execute(
+                select(Customer.name)
+                .select_from(Order)
+                .join(Customer, Customer.id == Order.customer_id)
+                .where(Order.id == order_id)
+            )
+        ).scalar_one_or_none()
+        return str(row) if row else None
+
+    async def _notify_agent_assigned(self, delivery: Delivery) -> None:
+        """Notify the delivery agent they have a new delivery."""
+        if delivery.delivery_agent_id is None:
+            return
+        order_ref = await self._order_ref(delivery.order_id)
+        customer_name = await self._order_customer_name(delivery.order_id)
+        who = f" for {customer_name}" if customer_name else ""
+        await self._notify_service().delivery_status(
+            order_id=delivery.order_id or delivery.id,
+            order_ref=order_ref or "",
+            status="assigned",
+            message=f"You have a new delivery{who} (Order {order_ref or ''}).",
+            recipient_user_id=delivery.delivery_agent_id,
+            urgency="high",
+            link="/deliveries/portal",
+        )
+
     async def list(
         self,
         limit: int,
@@ -192,6 +237,7 @@ class DeliveryService:
         updated = await self.repo.update(delivery)
         # A pending delivery entering the flow syncs the order to "assigned".
         await self._sync_order_status(delivery.order_id, "assigned")
+        await self._notify_agent_assigned(delivery)
         return await self._enrich(updated)
 
     async def bulk_assign(
@@ -233,6 +279,8 @@ class DeliveryService:
             await self._sync_order_status(delivery.order_id, "assigned")
             assigned += 1
         await self.session.flush()
+        if assigned and deliveries:
+            await self._notify_agent_assigned(deliveries[0])
         return DeliveryBulkAssignResult(assigned=assigned, skipped=skipped)
 
     async def update_status(
@@ -271,6 +319,23 @@ class DeliveryService:
         if data.proof_notes is not None:
             delivery.proof_notes = data.proof_notes
         updated = await self.repo.update(delivery)
+        # Keep the back office in the loop when a delivery completes or fails.
+        if data.status in ("delivered", "failed"):
+            order_ref = await self._order_ref(delivery.order_id)
+            customer_name = await self._order_customer_name(delivery.order_id)
+            who = f" of {customer_name}" if customer_name else ""
+            await self._notify_service().delivery_status(
+                order_id=delivery.order_id or delivery.id,
+                order_ref=order_ref or "",
+                status=data.status,
+                message=(
+                    f"Order {order_ref or ''}{who} was delivered successfully."
+                    if data.status == "delivered"
+                    else f"Order {order_ref or ''}{who} delivery was marked failed."
+                ),
+                recipient_roles=["owner", "admin", "manager"],
+                urgency="high",
+            )
         return await self._enrich(updated)
 
     async def _sync_order_status(self, order_id: UUID | None, delivery_status: str) -> None:

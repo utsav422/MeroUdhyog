@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Button, Text } from '@mantine/core';
+import { Button, Tabs } from '@mantine/core';
 import { useRouter } from 'next/navigation';
 import { Plus, PencilSimple, Package, FileCsv } from '@phosphor-icons/react';
 import {
@@ -11,14 +11,16 @@ import {
   PageHeader,
 } from '@/components/shared';
 import type { Column, SortState } from '@/components/shared';
-import { formatMoney } from '@/lib/format';
 import CustomersImportModal from './CustomersImportModal';
 import { useCustomers } from '../api';
 import type { Customer } from '../api';
+import { useRoutes } from '../../routes/api';
 
 export default function CustomersPage() {
   const router = useRouter();
-  const customersQuery = useCustomers();
+  const [routeFilter, setRouteFilter] = useState<string | null>(null);
+  const customersQuery = useCustomers(routeFilter);
+  const routesQuery = useRoutes();
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortState>({ field: 'name', direction: 'asc' });
@@ -34,7 +36,9 @@ export default function CustomersPage() {
         (c) =>
           c.name.toLowerCase().includes(needle) ||
           (c.company ?? '').toLowerCase().includes(needle) ||
-          (c.city ?? '').toLowerCase().includes(needle),
+          (c.city ?? '').toLowerCase().includes(needle) ||
+          (c.address ?? '').toLowerCase().includes(needle) ||
+          (c.pan_no ?? '').toLowerCase().includes(needle),
       );
     }
     const dir = sort.direction === 'asc' ? 1 : -1;
@@ -50,6 +54,12 @@ export default function CustomersPage() {
     const start = (page - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, page, pageSize]);
+
+  const routeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of routesQuery.data ?? []) map.set(r.id, r.name);
+    return map;
+  }, [routesQuery.data]);
 
   const columns: Column<Customer>[] = [
     {
@@ -83,6 +93,31 @@ export default function CustomersPage() {
       ),
     },
     { key: 'city', header: 'City', sortable: true, render: (c) => c.city || '—' },
+    {
+      key: 'address',
+      header: 'Address',
+      render: (c) =>
+        c.address ? (
+          <div className="max-w-64 truncate" title={c.address}>
+            <span className="text-zinc-600">{c.address}</span>
+            {c.pan_no && <span className="ml-2 rounded-md bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] text-zinc-500">PAN {c.pan_no}</span>}
+          </div>
+        ) : (
+          <span className="text-zinc-400">—</span>
+        ),
+    },
+    {
+      key: 'route',
+      header: 'Route',
+      render: (c) =>
+        c.route_id ? (
+          <span className="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+            {routeMap.get(c.route_id) ?? '—'}
+          </span>
+        ) : (
+          <span className="text-zinc-300">—</span>
+        ),
+    },
     {
       key: 'status',
       header: 'Status',
@@ -141,6 +176,23 @@ export default function CustomersPage() {
 
       <CustomersImportModal opened={importOpen} onClose={() => setImportOpen(false)} />
 
+      <Tabs
+        value={routeFilter ?? 'all'}
+        onChange={(v) => {
+          setRouteFilter(v === 'all' ? null : v);
+          setPage(1);
+        }}
+      >
+        <Tabs.List mb="md">
+          <Tabs.Tab value="all">All routes</Tabs.Tab>
+          {(routesQuery.data ?? []).map((r) => (
+            <Tabs.Tab key={r.id} value={r.id}>
+              {r.name}
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
+      </Tabs>
+
       <FilterBar
         searchValue={search}
         onSearchChange={setSearch}
@@ -165,7 +217,7 @@ export default function CustomersPage() {
         }}
         rowActions={rowActions}
         getRowId={(c) => c.id}
-        minWidth={700}
+        minWidth={880}
         emptyTitle="No customers found"
         emptyDescription="Create your first customer to get started."
       />

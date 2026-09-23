@@ -19,7 +19,7 @@ class Customer(Base):
     __tablename__ = "customers"
     __table_args__ = (
         UniqueConstraint("tenant_id", "email", name="uq_customers_tenant_email"),
-        UniqueConstraint("tenant_id", "tax_id", name="uq_customers_tenant_tax_id"),
+        UniqueConstraint("tenant_id", "pan_no", name="uq_customers_tenant_pan_no"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -35,7 +35,7 @@ class Customer(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    tax_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    pan_no: Mapped[str | None] = mapped_column(String(50), nullable=True)
     company: Mapped[str | None] = mapped_column(String(200), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)

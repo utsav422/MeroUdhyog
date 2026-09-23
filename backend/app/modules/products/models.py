@@ -151,9 +151,7 @@ class VariantPrice(Base):
         foreign_keys=[variant_id], viewonly=True
     )
     price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    wholesale_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     cost_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
-    mrp_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     currency: Mapped[str] = mapped_column(
         String(3), nullable=False, server_default=text("'USD'")
     )

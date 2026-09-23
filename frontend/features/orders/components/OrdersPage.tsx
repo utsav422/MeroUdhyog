@@ -14,6 +14,7 @@ import {
   Badge,
   Divider,
   Card,
+  Tabs,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useForm } from '@mantine/form';
@@ -41,7 +42,8 @@ import {
   PageHeader,
   StatusBadge,
 } from '@/components/shared';
-import type { Column, SortState } from '@/components/shared';
+import type { Column, SortState, Filters, DateRangeValue } from '@/components/shared';
+import { EMPTY_DATE_RANGE, dateInRange } from '@/components/shared';
 import { apiClient } from '@/lib/api-client';
 import { formatMoney, formatDate, formatDateTime } from '@/lib/format';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -55,6 +57,7 @@ import type { Variant } from '../../products/api';
 import { useCustomers } from '../../customers/api';
 import type { CustomerPrice } from '../../customers/api';
 import { useRoutes } from '../../routes/api';
+import CustomerSelect from './CustomerSelect';
 
 type LineItem = {
   product_id: string;
@@ -77,7 +80,6 @@ const ORDER_STATUSES = [
   'failed',
   'cancelled',
 ];
-const PAYMENT_STATUSES = ['unpaid', 'partial', 'paid'];
 
 function OrderStatCard({
   icon,
@@ -109,7 +111,8 @@ function OrderStatCard({
 export default function OrdersPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const ordersQuery = useOrders();
+  const [routeFilter, setRouteFilter] = useState<string | null>(null);
+  const ordersQuery = useOrders(routeFilter);
   const productsQuery = useProducts();
   const customersQuery = useCustomers();
   const deliveriesQuery = useDeliveries();
@@ -118,31 +121,6 @@ export default function OrdersPage() {
   const createDeliveryMutation = useCreateDeliveryForOrder();
   const bulkStatusMutation = useBulkOrderStatusUpdate();
   const reorder = useReorder();
-
-  const paymentMutation = useMutation({
-    mutationFn: async ({ orderId, paymentStatus }: { orderId: string; paymentStatus: string }) => {
-      await apiClient.patch(`/orders/${orderId}`, { payment_status: paymentStatus });
-    },
-    onSuccess: (_data, vars) => {
-      notifications.show({
-        color: 'success',
-        title: 'Payment updated',
-        message: `Marked ${vars.paymentStatus.replace(/_/g, ' ')}`,
-      });
-      qc.invalidateQueries({ queryKey: ordersKeys.all });
-    },
-    onError: (error) =>
-      notifications.show({
-        color: 'red',
-        title: 'Update failed',
-        message: error instanceof Error ? error.message : 'Something went wrong',
-      }),
-  });
-
-  const changePaymentStatus = (order: Order, paymentStatus: string) => {
-    if (paymentStatus === order.payment_status) return;
-    paymentMutation.mutate({ orderId: order.id, paymentStatus });
-  };
 
   // Set of order ids that already have a Delivery record
   const deliveryOrderIds = useMemo(
@@ -203,7 +181,8 @@ export default function OrdersPage() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [routeFilter, setRouteFilter] = useState<string | null>(null);
+  const [customerFilter, setCustomerFilter] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>({ field: 'created_at', direction: 'desc' });
@@ -219,7 +198,6 @@ export default function OrdersPage() {
     initialValues: {
       customer_id: undefined as string | undefined,
       notes: '',
-      payment_status: 'unpaid',
     },
   });
 
@@ -241,6 +219,14 @@ export default function OrdersPage() {
     for (const c of customersQuery.data ?? []) map.set(c.id, c.name);
     return map;
   }, [customersQuery.data]);
+
+  const customerOptions = useMemo(
+    () =>
+      (customersQuery.data ?? [])
+        .map((c) => ({ value: c.id, label: c.name }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [customersQuery.data],
+  );
 
   const routeMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -274,7 +260,8 @@ export default function OrdersPage() {
       );
     }
     if (statusFilter) rows = rows.filter((o) => o.status === statusFilter);
-    if (routeFilter) rows = rows.filter((o) => o.route_id === routeFilter);
+    if (customerFilter) rows = rows.filter((o) => o.customer_id === customerFilter);
+    rows = rows.filter((o) => dateInRange(o.created_at, dateFilter));
     const dir = sort.direction === 'asc' ? 1 : -1;
     rows.sort((a, b) => {
       const av = a[sort.field as keyof Order] ?? '';
@@ -282,7 +269,7 @@ export default function OrdersPage() {
       return String(av).localeCompare(String(bv)) * dir;
     });
     return rows;
-  }, [allOrders, search, statusFilter, routeFilter, sort, customerMap]);
+  }, [allOrders, search, statusFilter, customerFilter, dateFilter, sort, customerMap]);
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -404,7 +391,6 @@ export default function OrdersPage() {
     form.setValues({
       customer_id: order.customer_id ?? undefined,
       notes: order.notes ?? '',
-      payment_status: order.payment_status,
     });
     const rows = order.items.map((it) => ({
       product_id: it.product_id ?? '',
@@ -451,7 +437,6 @@ export default function OrdersPage() {
           ? customersQuery.data?.find((c) => c.id === values.customer_id)?.address || null
           : null,
         notes: values.notes || null,
-        payment_status: values.payment_status,
         items: validItems,
       };
       if (editing) {
@@ -550,16 +535,7 @@ export default function OrdersPage() {
     {
       key: 'payment_status',
       header: 'Payment',
-      render: (o) => (
-        <Select
-          size="xs"
-          w={130}
-          value={o.payment_status}
-          data={PAYMENT_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
-          onChange={(v) => v && changePaymentStatus(o, v)}
-          disabled={o.status === 'failed' || paymentMutation.isPending}
-        />
-      ),
+      render: (o) => <StatusBadge status={o.payment_status} />,
     },
     {
       key: 'invoice',
@@ -633,7 +609,8 @@ export default function OrdersPage() {
     },
   ];
 
-  const hasActiveFilters = !!statusFilter || !!routeFilter;
+  const hasActiveFilters =
+    !!statusFilter || !!customerFilter || dateFilter.mode !== 'all';
 
   const selectedOrders = useMemo(
     () => allOrders.filter((o) => selected.includes(o.id)),
@@ -743,6 +720,25 @@ export default function OrdersPage() {
       </div>
 
       <div>
+        <Tabs
+          value={routeFilter ?? 'all'}
+          onChange={(v) => {
+            setRouteFilter(v === 'all' ? null : v);
+            setPage(1);
+            setSelected([]);
+            setBulkStatus(null);
+          }}
+        >
+          <Tabs.List mb="md">
+            <Tabs.Tab value="all">All routes</Tabs.Tab>
+            {(routesQuery.data ?? []).map((r) => (
+              <Tabs.Tab key={r.id} value={r.id}>
+                {r.name}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs>
+
         <FilterBar
           searchValue={search}
           onSearchChange={setSearch}
@@ -757,21 +753,35 @@ export default function OrdersPage() {
             },
             {
               type: 'select',
-              key: 'route',
-              label: 'Route',
-              placeholder: 'All routes',
-              options: (routesQuery.data ?? []).map((r) => ({ value: r.id, label: r.name })),
+              key: 'customerId',
+              label: 'Customer',
+              placeholder: 'Any customer',
+              options: customerOptions,
+            },
+            {
+              type: 'rangedate',
+              key: 'createdRange',
+              label: 'Order date',
             },
           ]}
-          filterValues={{ status: statusFilter, route: routeFilter }}
+          filterValues={
+            {
+              status: statusFilter,
+              customerId: customerFilter,
+              createdRange: dateFilter,
+            } as Filters
+          }
           onFiltersChange={(f) => {
             setStatusFilter((f.status as string | null) ?? null);
-            setRouteFilter((f.route as string | null) ?? null);
+            setCustomerFilter((f.customerId as string | null) ?? null);
+            setDateFilter((f.createdRange as DateRangeValue) ?? EMPTY_DATE_RANGE);
             setPage(1);
           }}
           onClear={() => {
             setSearch('');
             setStatusFilter(null);
+            setCustomerFilter(null);
+            setDateFilter(EMPTY_DATE_RANGE);
             setRouteFilter(null);
             setSelected([]);
             setPage(1);
@@ -886,22 +896,13 @@ export default function OrdersPage() {
                 Order details
               </Text>
               <Stack gap="md">
-                <Group grow>
-                  <Select
-                    label="Customer"
-                    placeholder="Select customer"
-                    clearable
-                    searchable
-                    data={(customersQuery.data ?? []).map((c) => ({ value: c.id, label: c.name }))}
-                    value={form.values.customer_id}
-                    onChange={(v) => setCustomer(v ?? undefined)}
-                  />
-                  <Select
-                    label="Payment status"
-                    data={PAYMENT_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
-                    {...form.getInputProps('payment_status')}
-                  />
-                </Group>
+<Group grow>
+                <CustomerSelect
+                  label="Customer"
+                  value={form.values.customer_id ?? null}
+                  onChange={(v) => setCustomer(v ?? undefined)}
+                />
+              </Group>
                 <Textarea
                   label="Notes"
                   placeholder="Add any order notes here…"

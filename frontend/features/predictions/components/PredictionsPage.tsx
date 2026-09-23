@@ -139,7 +139,7 @@ export default function PredictionsPage() {
     id: string;
   } | null>(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
-  const [tab, setTab] = useState<'products' | 'customers'>('customers');
+  const [tab, setTab] = useState<'products' | 'customers' | 'trends'>('customers');
   const [productsSearch, setProductsSearch] = useState('');
   const [productsStatus, setProductsStatus] = useState('all');
   const [customersSearch, setCustomersSearch] = useState('');
@@ -303,6 +303,7 @@ export default function PredictionsPage() {
   };
 
   const handleExport = () => {
+    if (tab === 'trends') return;
     if (tab === 'customers') {
       downloadCsv(
         `predictions-customers-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -569,7 +570,9 @@ export default function PredictionsPage() {
   ];
 
   const exportDisabled =
-    !data || (tab === 'customers' ? filteredCustomers.length === 0 : filteredProducts.length === 0);
+    !data ||
+    tab === 'trends' ||
+    (tab === 'customers' ? filteredCustomers.length === 0 : filteredProducts.length === 0);
 
   return (
     <div>
@@ -700,7 +703,7 @@ export default function PredictionsPage() {
         <Tabs
           value={tab}
           onChange={(value) =>
-            setTab((value ?? 'customers') as 'products' | 'customers')
+            setTab((value ?? 'customers') as 'products' | 'customers' | 'trends')
           }
         >
           <Tabs.List mb="md">
@@ -709,6 +712,9 @@ export default function PredictionsPage() {
             </Tabs.Tab>
             <Tabs.Tab value="products" leftSection={<Package size={16} />}>
               By product
+            </Tabs.Tab>
+            <Tabs.Tab value="trends" leftSection={<Graph size={16} />}>
+              Trends
             </Tabs.Tab>
           </Tabs.List>
 
@@ -739,117 +745,47 @@ export default function PredictionsPage() {
                 </div>
               )
             ) : (
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                <div className="xl:col-span-2">
-                  <DataTable
-                    columns={productColumns}
-                    data={filteredProducts}
-                    getRowId={(p) => p.product_id}
-                    minWidth={1000}
-                    emptyTitle={
-                      productsSearch || productsStatus !== 'all'
-                        ? 'No matches'
-                        : 'No product predictions yet'
-                    }
-                    emptyDescription={
-                      productsSearch || productsStatus !== 'all'
-                        ? 'Try a different search or status filter.'
-                        : 'Add order history for a product and customer, or create confirmed orders.'
-                    }
-                    rowAccent={(p) => STATUS_COLORS[p.stock_status]}
-                    rowClassName={(p) =>
-                      highlight?.tab === 'products' && highlight.id === p.product_id
-                        ? 'bg-brand-50/70'
-                        : undefined
-                    }
-                    rowActions={[
-                      {
-                        label: 'Add order history',
-                        icon: <Plus size={16} />,
-                        onClick: (p) =>
-                          openAdd({
-                            product: {
-                              id: p.product_id,
-                              name: p.product_name,
-                            },
-                          }),
-                      },
-                      {
-                        label: 'View details',
-                        icon: <Eye size={16} />,
-                        onClick: (p) =>
-                          router.push(`/predictions/products/${p.product_id}`),
-                      },
-                    ]}
-                  />
-                </div>
-                <ChartCard
-                  title="Customer re-orders per product"
-                  subtitle={productChartCaption}
-                  legend={
-                    <ChartLegend
-                      items={[
-                        { label: 'On track', color: STATUS_COLORS.on_track },
-                        { label: 'Due soon', color: STATUS_COLORS.due_soon },
-                        { label: 'Overdue', color: STATUS_COLORS.overdue },
-                      ]}
-                    />
-                  }
-                >
-                  {productChartData.length ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={productChartData}
-                        margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                      >
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="#f1f3f9"
-                          vertical={false}
-                        />
-                        <XAxis
-                          dataKey="name"
-                          tick={{ fontSize: 11, fill: '#a1a1aa' }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          allowDecimals={false}
-                          tick={{ fontSize: 11, fill: '#a1a1aa' }}
-                          axisLine={false}
-                          tickLine={false}
-                          width={30}
-                        />
-                        <Tooltip
-                          cursor={{ fill: 'rgba(0,0,0,0.04)' }}
-                          contentStyle={{
-                            borderRadius: 12,
-                            border: '1px solid #e4e7ec',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                          }}
-                        />
-                        <Bar
-                          dataKey="On track"
-                          stackId="a"
-                          fill={STATUS_COLORS.on_track}
-                        />
-                        <Bar
-                          dataKey="Due soon"
-                          stackId="a"
-                          fill={STATUS_COLORS.due_soon}
-                        />
-                        <Bar
-                          dataKey="Overdue"
-                          stackId="a"
-                          fill={STATUS_COLORS.overdue}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <EmptyState description="No product predictions yet." />
-                  )}
-                </ChartCard>
-              </div>
+              <DataTable
+                columns={productColumns}
+                data={filteredProducts}
+                getRowId={(p) => p.product_id}
+                minWidth={1000}
+                emptyTitle={
+                  productsSearch || productsStatus !== 'all'
+                    ? 'No matches'
+                    : 'No product predictions yet'
+                }
+                emptyDescription={
+                  productsSearch || productsStatus !== 'all'
+                    ? 'Try a different search or status filter.'
+                    : 'Add order history for a product and customer, or create confirmed orders.'
+                }
+                rowAccent={(p) => STATUS_COLORS[p.stock_status]}
+                rowClassName={(p) =>
+                  highlight?.tab === 'products' && highlight.id === p.product_id
+                    ? 'bg-brand-50/70'
+                    : undefined
+                }
+                rowActions={[
+                  {
+                    label: 'Add order history',
+                    icon: <Plus size={16} />,
+                    onClick: (p) =>
+                      openAdd({
+                        product: {
+                          id: p.product_id,
+                          name: p.product_name,
+                        },
+                      }),
+                  },
+                  {
+                    label: 'View details',
+                    icon: <Eye size={16} />,
+                    onClick: (p) =>
+                      router.push(`/predictions/products/${p.product_id}`),
+                  },
+                ]}
+              />
             )}
           </Tabs.Panel>
 
@@ -890,120 +826,188 @@ export default function PredictionsPage() {
                 </div>
               )
             ) : (
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                <div className="xl:col-span-2">
-                  <DataTable
-                    columns={customerColumns}
-                    data={filteredCustomers}
-                    getRowId={(c) => c.customer_id}
-                    minWidth={1000}
-                    emptyTitle={
-                      customersSearch || customersStatus !== 'all'
-                        ? 'No matches'
-                        : 'No customer predictions yet'
-                    }
-                    emptyDescription={
-                      customersSearch || customersStatus !== 'all'
-                        ? 'Try a different search or status filter.'
-                        : 'Add order history for a product and customer, or create confirmed orders.'
-                    }
-                    rowAccent={(c) => STATUS_COLORS[c.stock_status]}
-                    rowClassName={(c) =>
-                      [
-                        contacted[c.customer_id] ? 'opacity-60' : undefined,
-                        highlight?.tab === 'customers' &&
-                        highlight.id === c.customer_id
-                          ? 'bg-brand-50/70'
-                          : undefined,
-                      ]
-                        .filter(Boolean)
-                        .join(' ') || undefined
-                    }
-                    rowActions={[
-                      {
-                        label: 'Add order history',
-                        icon: <Plus size={16} />,
-                        onClick: (c) =>
-                          openAdd({
-                            customer: {
-                              id: c.customer_id,
-                              name: c.customer_name,
-                            },
-                          }),
-                      },
-                      {
-                        label: 'View details',
-                        icon: <Eye size={16} />,
-                        onClick: (c) =>
-                          router.push(`/predictions/customers/${c.customer_id}`),
-                      },
-                      {
-                        label: (c) =>
-                          contacted[c.customer_id]
-                            ? 'Unmark contacted'
-                            : 'Mark as contacted',
-                        icon: (c) =>
-                          contacted[c.customer_id] ? (
-                            <X size={16} />
-                          ) : (
-                            <Check size={16} />
-                          ),
-                        onClick: (c) => toggleContacted(c.customer_id),
-                      },
+              <DataTable
+                columns={customerColumns}
+                data={filteredCustomers}
+                getRowId={(c) => c.customer_id}
+                minWidth={1000}
+                emptyTitle={
+                  customersSearch || customersStatus !== 'all'
+                    ? 'No matches'
+                    : 'No customer predictions yet'
+                }
+                emptyDescription={
+                  customersSearch || customersStatus !== 'all'
+                    ? 'Try a different search or status filter.'
+                    : 'Add order history for a product and customer, or create confirmed orders.'
+                }
+                rowAccent={(c) => STATUS_COLORS[c.stock_status]}
+                rowClassName={(c) =>
+                  [
+                    contacted[c.customer_id] ? 'opacity-60' : undefined,
+                    highlight?.tab === 'customers' &&
+                    highlight.id === c.customer_id
+                      ? 'bg-brand-50/70'
+                      : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
+                rowActions={[
+                  {
+                    label: 'Add order history',
+                    icon: <Plus size={16} />,
+                    onClick: (c) =>
+                      openAdd({
+                        customer: {
+                          id: c.customer_id,
+                          name: c.customer_name,
+                        },
+                      }),
+                  },
+                  {
+                    label: 'View details',
+                    icon: <Eye size={16} />,
+                    onClick: (c) =>
+                      router.push(`/predictions/customers/${c.customer_id}`),
+                  },
+                  {
+                    label: (c) =>
+                      contacted[c.customer_id]
+                        ? 'Unmark contacted'
+                        : 'Mark as contacted',
+                    icon: (c) =>
+                      contacted[c.customer_id] ? (
+                        <X size={16} />
+                      ) : (
+                        <Check size={16} />
+                      ),
+                    onClick: (c) => toggleContacted(c.customer_id),
+                  },
+                ]}
+              />
+            )}
+          </Tabs.Panel>
+
+          <Tabs.Panel value="trends">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <ChartCard
+                title="Customers by status"
+                subtitle={customerChartCaption}
+                legend={
+                  <ChartLegend
+                    items={customerStatusPie.map((s) => ({
+                      label: STATUS_LABELS[s.key] ?? s.key,
+                      color: STATUS_COLORS[s.key] ?? '#f59e0b',
+                    }))}
+                  />
+                }
+              >
+                {customerStatusPie.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={customerStatusPie.map((s) => ({
+                          name: STATUS_LABELS[s.key] ?? s.key,
+                          value: s.value,
+                        }))}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={90}
+                        paddingAngle={3}
+                        strokeWidth={0}
+                      >
+                        {customerStatusPie.map((entry) => (
+                          <Cell
+                            key={entry.key}
+                            fill={STATUS_COLORS[entry.key] ?? '#f59e0b'}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: '1px solid #e4e7ec',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <EmptyState description="No customers yet." />
+                )}
+              </ChartCard>
+
+              <ChartCard
+                title="Customer re-orders per product"
+                subtitle={productChartCaption}
+                legend={
+                  <ChartLegend
+                    items={[
+                      { label: 'On track', color: STATUS_COLORS.on_track },
+                      { label: 'Due soon', color: STATUS_COLORS.due_soon },
+                      { label: 'Overdue', color: STATUS_COLORS.overdue },
                     ]}
                   />
-                </div>
-                <ChartCard
-                  title="Customers by status"
-                  subtitle={customerChartCaption}
-                  legend={
-                    <ChartLegend
-                      items={customerStatusPie.map((s) => ({
-                        label: STATUS_LABELS[s.key] ?? s.key,
-                        color: STATUS_COLORS[s.key] ?? '#f59e0b',
-                      }))}
-                    />
-                  }
-                >
-                  {customerStatusPie.length ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={customerStatusPie.map((s) => ({
-                            name: STATUS_LABELS[s.key] ?? s.key,
-                            value: s.value,
-                          }))}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={90}
-                          paddingAngle={3}
-                          strokeWidth={0}
-                        >
-                          {customerStatusPie.map((entry) => (
-                            <Cell
-                              key={entry.key}
-                              fill={STATUS_COLORS[entry.key] ?? '#f59e0b'}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            borderRadius: 12,
-                            border: '1px solid #e4e7ec',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <EmptyState description="No customers yet." />
-                  )}
-                </ChartCard>
-              </div>
-            )}
+                }
+              >
+                {productChartData.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={productChartData}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#f1f3f9"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 11, fill: '#a1a1aa' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fontSize: 11, fill: '#a1a1aa' }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={30}
+                      />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: '1px solid #e4e7ec',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                        }}
+                      />
+                      <Bar
+                        dataKey="On track"
+                        stackId="a"
+                        fill={STATUS_COLORS.on_track}
+                      />
+                      <Bar
+                        dataKey="Due soon"
+                        stackId="a"
+                        fill={STATUS_COLORS.due_soon}
+                      />
+                      <Bar
+                        dataKey="Overdue"
+                        stackId="a"
+                        fill={STATUS_COLORS.overdue}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <EmptyState description="No product predictions yet." />
+                )}
+              </ChartCard>
+            </div>
           </Tabs.Panel>
         </Tabs>
       )}

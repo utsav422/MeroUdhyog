@@ -37,6 +37,15 @@ class Settings(BaseSettings):
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ]
 
+    # Web Push (lock-screen notifications). VAPID_PUBLIC_KEY is the base64url
+    # encoded uncompressed P-256 public key; VAPID_PRIVATE_KEY is the base64url
+    # encoded PKCS8 PEM of the matching private key (as emitted by `web-push
+    # generate-vapid-keys`). Leave empty to disable push while keeping the
+    # in-app notification center.
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_SUBJECT: str = "mailto:admin@example.com"
+
 
 @lru_cache
 def get_settings() -> Settings:

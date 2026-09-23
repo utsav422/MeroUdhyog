@@ -10,7 +10,7 @@ class CustomerCreate(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=50)
     contact_number: str | None = Field(default=None, max_length=50)
-    tax_id: str | None = Field(default=None, max_length=50)
+    pan_no: str | None = Field(default=None, max_length=50)
     company: str | None = Field(default=None, max_length=200)
     address: str | None = None
     city: str | None = Field(default=None, max_length=120)
@@ -25,7 +25,7 @@ class CustomerUpdate(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=50)
     contact_number: str | None = Field(default=None, max_length=50)
-    tax_id: str | None = Field(default=None, max_length=50)
+    pan_no: str | None = Field(default=None, max_length=50)
     company: str | None = Field(default=None, max_length=200)
     address: str | None = None
     city: str | None = Field(default=None, max_length=120)
@@ -45,7 +45,7 @@ class CustomerRead(BaseModel):
     email: str | None
     phone: str | None
     contact_number: str | None
-    tax_id: str | None
+    pan_no: str | None
     company: str | None
     address: str | None
     city: str | None

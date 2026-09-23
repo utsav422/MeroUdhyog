@@ -7,17 +7,17 @@ from app.tests.test_customers import _register
 from app.tests.test_products import _create_user
 
 VALID_CSV = (
-    "name*,email,phone,contact_number,tax_id,company,address,"
+    "name*,email,phone,contact_number,pan_no,company,address,"
     "city,latitude,longitude,notes\n"
-    "Alice Cooper,alice@acme.com,555-0100,,TAX-1001,Acme Corp,"
+    "Alice Cooper,alice@acme.com,555-0100,,PAN-1001,Acme Corp,"
     "1 Factory Way,Springfield,42.123456,-71.654321,Corporate account\n"
     "Bob Ross,bob@paints.com,555-0111,,,Happy Trees LLC,2 Oak Lane,Boston,,,\n"
 )
 
 PARTIAL_CSV = (
-    "name*,email,phone,contact_number,tax_id,company,address,"
+    "name*,email,phone,contact_number,pan_no,company,address,"
     "city,latitude,longitude,notes\n"
-    "Alice Cooper,alice@acme.com,555-0100,,TAX-1001,Acme Corp,"
+    "Alice Cooper,alice@acme.com,555-0100,,PAN-1001,Acme Corp,"
     "1 Factory Way,Springfield,42.123456,-71.654321,Corporate account\n"
     "Alice Cooper,alice@acme.com,555-0200,,,,,,,,,\n"
     "Bad Email,not-an-email,,,,,,,,,,\n"
@@ -43,7 +43,7 @@ async def test_download_import_sample_csv(client):
     assert r.headers["content-type"].startswith("text/csv")
     assert "attachment" in r.headers["content-disposition"]
     body = r.text
-    assert "name*,email,phone,contact_number,tax_id,company" in body
+    assert "name*,email,phone,contact_number,pan_no,company" in body
     assert "Alice Cooper,alice@acme.com" in body
 
 
