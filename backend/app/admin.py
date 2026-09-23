@@ -40,9 +40,20 @@ from app.modules.customers.models import Customer  # noqa: E402
 from app.modules.deliveries.models import Delivery, DeliveryLocation  # noqa: E402
 from app.modules.finance.models import MonthlyFinancialSummary  # noqa: E402
 from app.modules.imports.models import ImportBatch, ImportRowError  # noqa: E402
+from app.modules.khata.models import (  # noqa: E402
+    BillTemplate,
+    LedgerAllocation,
+    LedgerEntry,
+    OrderInvoice,
+)
+from app.modules.notifications.models import (  # noqa: E402
+    Notification,
+    PushSubscription,
+)
 from app.modules.orders.models import Order, OrderItem  # noqa: E402
 from app.modules.predictions.models import OrderHistory  # noqa: E402
 from app.modules.products.models import (  # noqa: E402
+    InventoryMovement,
     Product,
     ProductVariant,
     VariantPrice,
@@ -476,6 +487,146 @@ class DeliveryLocationAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
     list_display = ("delivery_id", "lat", "lng", "recorded_at", "tenant", "tenant_name")
 
 
+class LedgerEntryAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
+    """Khata payments — the customer ledger.
+
+    Entries are never hard-deleted; ``status`` moves active -> voided via the
+    khata API, keeping the order payment totals consistent.
+    """
+
+    menu_section = "Khata"
+    list_display = (
+        "receipt_number", "customer_name", "amount", "method", "status", "collected_at",
+        "tenant", "tenant_name",
+    )
+    list_display_links = ("receipt_number",)
+    list_filter = ("method", "status", "tenant")
+    search_fields = ("receipt_number", "note", "customer_name")
+    list_select_related = ("tenant", "customer", "collector")
+    formfield_overrides = {
+        "method": (
+            WidgetType.Select,
+            {
+                "options": _select_options(
+                    ["bank_transfer", "cash", "esewa", "khalti", "other"]
+                ),
+            },
+        ),
+        "status": (
+            WidgetType.Select,
+            {"options": _select_options(["active", "voided"])},
+        ),
+        "receipt_snapshot": (WidgetType.JsonTextArea, {}),
+    }
+
+
+class LedgerAllocationAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
+    menu_section = "Khata"
+    list_display = ("ledger_entry_id", "order_ref", "amount_applied", "tenant", "tenant_name")
+    list_filter = ("tenant",)
+    search_fields = ("order_ref",)
+    list_select_related = ("tenant", "order")
+
+    async def has_add_permission(self, user_id=None) -> bool:
+        # Allocations are created atomically when a payment is recorded (FIFO/manual).
+        return False
+
+    async def has_delete_permission(self, user_id=None) -> bool:
+        return False
+
+
+class OrderInvoiceAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
+    menu_section = "Khata"
+    list_display = ("invoice_number", "order_id", "created_at", "tenant", "tenant_name")
+    list_display_links = ("invoice_number",)
+    list_filter = ("tenant",)
+    search_fields = ("invoice_number", "order_id")
+    formfield_overrides = {
+        "template_snapshot": (WidgetType.JsonTextArea, {}),
+        "data": (WidgetType.JsonTextArea, {}),
+    }
+
+    async def has_add_permission(self, user_id=None) -> bool:
+        # Invoices are numbered documents issued by the khata service, not free-form rows.
+        return False
+
+
+class BillTemplateAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
+    menu_section = "Khata"
+    list_display = (
+        "business_name", "tax_id", "invoice_tax_rate", "invoice_number_prefix",
+        "receipt_number_prefix", "tenant", "tenant_name",
+    )
+    list_display_links = ("business_name",)
+    search_fields = ("business_name", "tax_id")
+    exclude = ("logo_data", "signature_data")
+    formfield_overrides = {
+        "layout": (WidgetType.JsonTextArea, {}),
+        "invoice_tax_rate": (WidgetType.InputNumber, {}),
+        "next_invoice_number": (WidgetType.InputNumber, {}),
+        "next_receipt_number": (WidgetType.InputNumber, {}),
+    }
+
+
+class NotificationAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
+    menu_section = "Notifications"
+    list_display = (
+        "title", "category", "recipient_user_id", "recipient_roles", "read_at",
+        "created_at", "tenant", "tenant_name",
+    )
+    list_display_links = ("title",)
+    list_filter = ("category", "tenant")
+    search_fields = ("title", "message")
+    formfield_overrides = {
+        "category": (
+            WidgetType.Select,
+            {
+                "options": _select_options(
+                    ["delivery", "order", "payment", "prediction", "stock", "system"]
+                ),
+            },
+        ),
+        "recipient_roles": (WidgetType.JsonTextArea, {}),
+        "data": (WidgetType.JsonTextArea, {}),
+    }
+
+
+class PushSubscriptionAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
+    menu_section = "Notifications"
+    list_display = ("id", "user_id", "is_active", "created_at", "tenant", "tenant_name")
+    list_display_links = ("id",)
+    list_filter = ("is_active", "tenant")
+    exclude = ("p256dh", "auth")
+
+
+class InventoryMovementAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
+    """Stock audit trail — auto-generated, never written from the admin UI."""
+
+    menu_section = "Products"
+    list_display = (
+        "product_name", "variant_name", "quantity", "reason", "created_at",
+        "tenant", "tenant_name",
+    )
+    list_filter = ("reason", "tenant")
+    search_fields = ("product_name", "variant_name")
+    formfield_overrides = {
+        "reason": (
+            WidgetType.Select,
+            {
+                "options": _select_options(
+                    ["cancelled", "manual", "order", "restock", "returned"]
+                ),
+            },
+        ),
+    }
+
+    async def has_add_permission(self, user_id=None) -> bool:
+        return False
+
+    async def has_delete_permission(self, user_id=None) -> bool:
+        return False
+
+
 _ADMIN_CLASSES = (
     (TenantAdmin, Tenant),
     (UserAdmin, User),
@@ -496,6 +647,13 @@ _ADMIN_CLASSES = (
     (OrderItemAdmin, OrderItem),
     (DeliveryAdmin, Delivery),
     (DeliveryLocationAdmin, DeliveryLocation),
+    (LedgerEntryAdmin, LedgerEntry),
+    (LedgerAllocationAdmin, LedgerAllocation),
+    (OrderInvoiceAdmin, OrderInvoice),
+    (BillTemplateAdmin, BillTemplate),
+    (NotificationAdmin, Notification),
+    (PushSubscriptionAdmin, PushSubscription),
+    (InventoryMovementAdmin, InventoryMovement),
     (RouteAdmin, Route),
     (RouteCityAdmin, RouteCity),
     (RouteAgentAdmin, RouteAgent),
