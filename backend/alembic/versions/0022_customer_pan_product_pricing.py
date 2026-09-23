@@ -1,6 +1,6 @@
 """Customers: tax_id -> pan_no; drop wholesale_price & mrp_price
 
-Revision ID: 0022_customer_pan_product_pricing
+Revision ID: 0022_customer_pricing
 Revises: 0021_khata_invoice_tax
 Create Date: 2026-09-26
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "0022_customer_pan_product_pricing"
+revision: str = "0022_customer_pricing"
 down_revision: str | None = "0021_khata_invoice_tax"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

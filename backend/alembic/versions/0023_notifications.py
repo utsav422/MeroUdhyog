@@ -1,7 +1,7 @@
 """Notifications: in-app + Web Push subscriptions
 
 Revision ID: 0023_notifications
-Revises: 0022_customer_pan_product_pricing
+Revises: 0022_customer_pricing
 Create Date: 2026-09-26
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "0023_notifications"
-down_revision: str | None = "0022_customer_pan_product_pricing"
+down_revision: str | None = "0022_customer_pricing"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
