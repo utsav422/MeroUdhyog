@@ -1,7 +1,7 @@
 from fastapi import Query
 
 DEFAULT_LIMIT = 50
-MAX_LIMIT = 100
+MAX_LIMIT = 500
 
 
 def pagination_params(

@@ -11,6 +11,7 @@ import { NotificationsDrawer } from '@/features/notifications/components/Notific
 
 const TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
+  '/products/ledger': 'Stock Ledger',
   '/products': 'Products',
   '/orders/calendar': 'Activity Calendar',
   '/orders': 'Orders',

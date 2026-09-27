@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
 export type VariantPrice = {
@@ -51,6 +51,7 @@ export type StockMovement = {
   reason: string;
   order_id: string | null;
   created_at: string;
+  running_balance: number;
 };
 
 export type Product = {
@@ -119,7 +120,43 @@ export const inventoryKeys = {
   all: ['inventory'] as const,
   low: () => [...inventoryKeys.all, 'low'] as const,
   movements: (limit: number) => [...inventoryKeys.all, 'movements', limit] as const,
+  ledger: (params: LedgerParams) =>
+    [
+      ...inventoryKeys.all,
+      'ledger',
+      params.limit ?? 100,
+      params.offset ?? 0,
+      params.product_id ?? '',
+      params.variant_id ?? '',
+      params.reason ?? '',
+      params.date_from ?? '',
+      params.date_to ?? '',
+    ] as const,
 };
+
+export type LedgerParams = {
+  limit?: number;
+  offset?: number;
+  product_id?: string | null;
+  variant_id?: string | null;
+  reason?: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
+};
+
+export type StockAdjustInput = {
+  variant_id: string;
+  quantity: number;
+  reason: 'stock_in' | 'production';
+};
+
+export function toDateParam(date: Date | null | undefined): string | null {
+  if (!date) return null;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export function useProducts(enabled = true) {
   return useQuery({
@@ -158,6 +195,38 @@ export function useStockMovements(limit = 10, enabled = true) {
     queryKey: inventoryKeys.movements(limit),
     queryFn: () => apiClient.get<StockMovement[]>(`/products/inventory/movements?limit=${limit}`),
     enabled,
+  });
+}
+
+export function useLedgerMovements(params: LedgerParams, enabled = true) {
+  const search = new URLSearchParams();
+  if (params.limit) search.set('limit', String(params.limit));
+  if (params.offset) search.set('offset', String(params.offset));
+  if (params.product_id) search.set('product_id', params.product_id);
+  if (params.variant_id) search.set('variant_id', params.variant_id);
+  if (params.reason) search.set('reason', params.reason);
+  if (params.date_from) search.set('date_from', params.date_from);
+  if (params.date_to) search.set('date_to', params.date_to);
+  const qs = search.toString();
+  return useQuery({
+    queryKey: inventoryKeys.ledger(params),
+    queryFn: () =>
+      apiClient.get<StockMovement[]>(
+        `/products/inventory/movements${qs ? `?${qs}` : ''}`,
+      ),
+    enabled,
+  });
+}
+
+export function useAdjustStock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: StockAdjustInput) =>
+      apiClient.post<StockMovement>('/products/inventory/adjust', input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: inventoryKeys.all });
+      qc.invalidateQueries({ queryKey: productsKeys.all });
+    },
   });
 }
 

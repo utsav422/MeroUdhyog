@@ -18,6 +18,7 @@ import {
   Info,
   Check,
   X,
+  BookBookmark,
 } from '@phosphor-icons/react';
 import {
   useProduct,
@@ -287,6 +288,13 @@ export default function ProductDetailPage() {
               onClick={() => router.push(`/products/${data.id}/edit`)}
             >
               Edit product
+            </Button>
+            <Button
+              variant="default"
+              leftSection={<BookBookmark size={16} />}
+              onClick={() => router.push(`/products/ledger?product=${data.id}`)}
+            >
+              Stock ledger
             </Button>
           </Group>
         </div>

@@ -19,6 +19,7 @@ import {
   CurrencyDollar,
   FileCsv,
   TrashSimple,
+  BookBookmark,
 } from '@phosphor-icons/react';
 import {
   DataTable,
@@ -275,6 +276,11 @@ export default function ProductsPage() {
       label: 'View details',
       icon: <Package size={16} />,
       onClick: (p: Product) => router.push(`/products/${p.id}`),
+    },
+    {
+      label: 'Stock ledger',
+      icon: <BookBookmark size={16} />,
+      onClick: (p: Product) => router.push(`/products/ledger?product=${p.id}`),
     },
     {
       label: 'Edit',

@@ -1,6 +1,7 @@
+from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, UploadFile, status
+from fastapi import APIRouter, Depends, Query, UploadFile, status
 from fastapi.responses import Response
 
 from app.core.dependencies import get_current_tenant_id, get_db
@@ -15,6 +16,7 @@ from app.modules.products.schemas import (
     ProductImportResult,
     ProductRead,
     ProductUpdate,
+    StockAdjustCreate,
     StockMovementRead,
     VariantCreate,
     VariantPriceCreate,
@@ -106,12 +108,40 @@ async def list_low_stock(
 @router.get("/inventory/movements", response_model=list[StockMovementRead])
 async def list_stock_movements(
     pagination: tuple[int, int] = Depends(pagination_params),
+    product_id: UUID | None = Query(default=None),
+    variant_id: UUID | None = Query(default=None),
+    reason: str | None = Query(default=None),
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
 ):
-    limit, _offset = pagination
+    limit, offset = pagination
     service = await _service(db, tenant_id)
-    return await service.stock_movements(limit)
+    return await service.stock_movements(
+        limit,
+        offset,
+        product_id=product_id,
+        variant_id=variant_id,
+        reason=reason,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.post(
+    "/inventory/adjust",
+    response_model=StockMovementRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def adjust_stock(
+    data: StockAdjustCreate,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    _=Depends(require_permission(Permissions.MANAGE_CATALOG)),
+):
+    service = await _service(db, tenant_id)
+    return await service.adjust_stock(data)
 
 
 @router.get("/{product_id}", response_model=ProductRead)

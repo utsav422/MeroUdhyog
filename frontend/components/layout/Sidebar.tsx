@@ -21,6 +21,7 @@ import {
   Notebook,
   HandCoins,
   Stamp,
+  BookBookmark,
 } from '@phosphor-icons/react';
 import { useSession } from '@/lib/providers';
 
@@ -49,6 +50,11 @@ const NAV_GROUPS: NavGroup[] = [
         href: '/products',
         label: 'Products',
         icon: <Package size={18} weight="duotone" />,
+      },
+      {
+        href: '/products/ledger',
+        label: 'Stock Ledger',
+        icon: <BookBookmark size={18} weight="duotone" />,
       },
       {
         href: '/orders',
@@ -216,7 +222,10 @@ export default function Sidebar({
               {group.items.map((item) => {
                 const active =
                   pathname === item.href ||
-                  (item.href !== '/dashboard' && pathname.startsWith(item.href) && !(item.href === '/orders' && pathname.startsWith('/orders/calendar')));
+                  (item.href !== '/dashboard' &&
+                    pathname.startsWith(item.href) &&
+                    !(item.href === '/orders' && pathname.startsWith('/orders/calendar')) &&
+                    !(item.href === '/products' && pathname.startsWith('/products/ledger')));
                 return (
                   <Link
                     key={item.href}

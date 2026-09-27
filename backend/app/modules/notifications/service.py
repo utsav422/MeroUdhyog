@@ -82,33 +82,51 @@ class NotificationService:
 
         When ``dedupe_key`` is set and an identical alert is still unread, the
         new record is skipped so repeated events (low-stock wiggles, recurring
-        dashboard opens) never spam the bell.
+        dashboard opens) never spam the bell. If the same alert was already
+        dismissed (read), it is reactivated in place — the table only allows
+        one row per ``(tenant_id, dedupe_key)`` — so a fresh condition
+        (e.g. low stock dipping again) surfaces without inserting a duplicate.
         """
+        notification: Notification | None = None
         if dedupe_key:
             existing = (
                 await self.session.execute(
-                    select(Notification.id).where(
+                    select(Notification)
+                    .where(
                         Notification.tenant_id == self.tenant_id,
                         Notification.dedupe_key == dedupe_key,
-                        Notification.read_at.is_(None),
                     )
+                    .order_by(Notification.created_at.desc())
                 )
-            ).scalar_one_or_none()
+            ).scalars().first()
             if existing is not None:
-                return None
+                if existing.read_at is None:
+                    return None
+                from datetime import UTC, datetime
 
-        notification = Notification(
-            tenant_id=self.tenant_id,
-            recipient_user_id=recipient_user_id,
-            recipient_roles=recipient_roles,
-            category=category,
-            title=title,
-            message=message,
-            link=link,
-            data=data,
-            dedupe_key=dedupe_key,
-        )
-        self.session.add(notification)
+                existing.read_at = None
+                existing.created_at = datetime.now(UTC)
+                existing.category = category
+                existing.title = title
+                existing.message = message
+                existing.link = link
+                existing.data = data
+                existing.updated_at = datetime.now(UTC)
+                notification = existing
+
+        if notification is None:
+            notification = Notification(
+                tenant_id=self.tenant_id,
+                recipient_user_id=recipient_user_id,
+                recipient_roles=recipient_roles,
+                category=category,
+                title=title,
+                message=message,
+                link=link,
+                data=data,
+                dedupe_key=dedupe_key,
+            )
+            self.session.add(notification)
         await self.session.flush()
 
         try:

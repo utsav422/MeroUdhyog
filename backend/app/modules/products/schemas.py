@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -134,6 +135,23 @@ class StockMovementRead(BaseModel):
     reason: str
     order_id: UUID | None
     created_at: datetime
+    # Stock level of the variant AFTER this movement applied (whole history,
+    # not just the current page/filter). Mirrors ProductVariant.stock_quantity
+    # for variants that have a complete movement trail.
+    running_balance: int = 0
+
+
+class StockAdjustCreate(BaseModel):
+    """Manual ledger entry: add stock to a variant, or consume stock for production.
+
+    ``quantity`` is always a positive count; the sign is derived from ``reason``
+    (stock_in adds, production consumes). Order-driven changes use their own
+    reason and are never created through this endpoint.
+    """
+
+    variant_id: UUID
+    quantity: int = Field(gt=0)
+    reason: Literal["stock_in", "production"] = "stock_in"
 
 
 class LowStockItemRead(BaseModel):

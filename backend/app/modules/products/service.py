@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
+from datetime import time as dtime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
@@ -22,6 +24,7 @@ from app.modules.products.schemas import (
     ProductCreate,
     ProductRead,
     ProductUpdate,
+    StockAdjustCreate,
     StockMovementRead,
     VariantCreate,
     VariantPriceCreate,
@@ -30,7 +33,8 @@ from app.modules.products.schemas import (
     VariantRead,
     VariantUpdate,
 )
-from app.shared.exceptions import ConflictError, ValidationError
+from app.modules.products.stock import StockChange, apply_stock_changes
+from app.shared.exceptions import ConflictError, NotFoundError, ValidationError
 
 
 def _generate_slug(name: str) -> str:
@@ -104,16 +108,122 @@ class ProductService:
             for variant, product in variants
         ]
 
-    async def stock_movements(self, limit: int) -> list[StockMovementRead]:
-        movements = (
-            await self.session.execute(
-                select(InventoryMovement)
-                .where(InventoryMovement.tenant_id == self.tenant_id)
-                .order_by(InventoryMovement.created_at.desc())
-                .limit(limit)
+    async def stock_movements(
+        self,
+        limit: int,
+        offset: int = 0,
+        *,
+        product_id: UUID | None = None,
+        variant_id: UUID | None = None,
+        reason: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[StockMovementRead]:
+        """List ledger entries, newest first.
+
+        ``running_balance`` is computed with a window function across the
+        variant's *entire* history (partitioned by variant, ordered by created
+        time) so every row shows the stock level right after that movement,
+        regardless of the filters applied here. Assigning balances to each
+        entry this way makes the ledger auditable end to end.
+        """
+        running = func.sum(InventoryMovement.quantity).over(
+            partition_by=InventoryMovement.variant_id,
+            order_by=(
+                InventoryMovement.created_at.asc(),
+                InventoryMovement.id.asc(),
+            ),
+        )
+        fields = [
+            InventoryMovement.id,
+            InventoryMovement.variant_id,
+            InventoryMovement.product_id,
+            InventoryMovement.product_name,
+            InventoryMovement.variant_name,
+            InventoryMovement.quantity,
+            InventoryMovement.reason,
+            InventoryMovement.order_id,
+            InventoryMovement.created_at,
+            running.label("running_balance"),
+        ]
+        stmt = select(*fields).where(InventoryMovement.tenant_id == self.tenant_id)
+        if product_id is not None:
+            stmt = stmt.where(InventoryMovement.product_id == product_id)
+        if variant_id is not None:
+            stmt = stmt.where(InventoryMovement.variant_id == variant_id)
+        if reason is not None:
+            stmt = stmt.where(InventoryMovement.reason == reason)
+        if date_from is not None:
+            stmt = stmt.where(InventoryMovement.created_at >= date_from)
+        if date_to is not None:
+            end = datetime.combine(date_to.date(), dtime.max, tzinfo=date_to.tzinfo)
+            stmt = stmt.where(InventoryMovement.created_at <= end)
+        stmt = (
+            stmt.order_by(
+                InventoryMovement.created_at.desc(),
+                InventoryMovement.id.desc(),
             )
-        ).scalars().all()
-        return [StockMovementRead.model_validate(m) for m in movements]
+            .offset(offset)
+            .limit(limit)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return [
+            StockMovementRead(
+                id=row.id,
+                variant_id=row.variant_id,
+                product_id=row.product_id,
+                product_name=row.product_name,
+                variant_name=row.variant_name,
+                quantity=row.quantity,
+                reason=row.reason,
+                order_id=row.order_id,
+                created_at=row.created_at,
+                running_balance=int(row.running_balance),
+            )
+            for row in rows
+        ]
+
+    async def adjust_stock(self, data: StockAdjustCreate) -> StockMovementRead:
+        """Record a manual ledger entry against a variant.
+
+        ``stock_in`` adds units (purchase/restock); ``production`` consumes
+        units as raw material. Sales and cancellations are never recorded here
+        — they flow through the order lifecycle automatically.
+        """
+        row = (
+            await self.session.execute(
+                select(ProductVariant, Product)
+                .join(Product, Product.id == ProductVariant.product_id)
+                .where(
+                    ProductVariant.tenant_id == self.tenant_id,
+                    ProductVariant.id == data.variant_id,
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            raise NotFoundError("Variant not found")
+        variant, product = row
+
+        delta = data.quantity if data.reason == "stock_in" else -data.quantity
+        movements = await apply_stock_changes(
+            self.session,
+            self.tenant_id,
+            [
+                StockChange(
+                    variant_id=variant.id,
+                    product_id=product.id,
+                    product_name=product.name,
+                    variant_name=variant.name,
+                    delta=delta,
+                )
+            ],
+            reason=data.reason,
+        )
+        created = movements[0]
+        rows = await self.stock_movements(1, variant_id=created.variant_id)
+        if rows:
+            return rows[0]
+        return StockMovementRead.model_validate(created)
 
     async def create(self, data: ProductCreate) -> ProductRead:
         slug = _generate_slug(data.name)
@@ -254,6 +364,18 @@ class ProductService:
             sort_order=data.sort_order,
         )
         created = await self.repo.add_variant(variant)
+        if (created.stock_quantity or 0) > 0:
+            self.session.add(
+                InventoryMovement(
+                    tenant_id=self.tenant_id,
+                    variant_id=created.id,
+                    product_id=product.id,
+                    product_name=product.name,
+                    variant_name=created.name,
+                    quantity=created.stock_quantity,
+                    reason="stock_in",
+                )
+            )
         for price_data in data.prices:
             await self.repo.add_price(
                 VariantPrice(
