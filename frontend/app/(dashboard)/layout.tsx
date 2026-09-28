@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
+import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import { SessionProvider } from '@/lib/providers';
 import { useMe, useTenant } from '@/features/auth/hooks';
 import { PushNotificationsProvider } from '@/features/notifications/components/PushNotificationsProvider';
@@ -15,8 +16,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const me = useMe();
   const tenant = useTenant(!!me.data);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (me.isError) {
@@ -26,6 +29,11 @@ export default function DashboardLayout({
       }
     }
   }, [me.isError, me.error, router]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setSidebarOpen(false), 0);
+    return () => window.clearTimeout(id);
+  }, [pathname]);
 
   if (me.isLoading) {
     return (
@@ -56,12 +64,21 @@ export default function DashboardLayout({
   return (
     <SessionProvider value={session}>
       <div className="flex min-h-screen bg-[var(--background)]">
-        <Sidebar tenantName={tenant.data?.name ?? 'Workspace'} />
+        <Sidebar
+          tenantName={tenant.data?.name ?? 'Workspace'}
+          mobileOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
         <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar fullName={session?.full_name ?? ''} email={session?.email ?? ''} />
-          <main className="flex-1 px-6 py-6 lg:px-8">{children}</main>
+          <Topbar
+            fullName={session?.full_name ?? ''}
+            email={session?.email ?? ''}
+            onOpenSidebar={() => setSidebarOpen(true)}
+          />
+          <main className="flex-1 px-6 pb-28 pt-6 lg:px-8 lg:pb-6">{children}</main>
         </div>
       </div>
+      <MobileBottomNav onOpenSidebar={() => setSidebarOpen(true)} />
       <PushNotificationsProvider enabled={!!session} />
     </SessionProvider>
   );

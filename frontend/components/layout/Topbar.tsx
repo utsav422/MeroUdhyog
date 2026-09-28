@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Avatar, Group, Indicator, Menu, Text } from '@mantine/core';
-import { Bell, MagnifyingGlass, SignOut, UserCircle } from '@phosphor-icons/react';
+import { Bell, List, MagnifyingGlass, SignOut, UserCircle } from '@phosphor-icons/react';
 import { apiClient } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/providers';
@@ -26,9 +26,11 @@ const TITLES: Record<string, string> = {
 export default function Topbar({
   fullName = '',
   email = '',
+  onOpenSidebar,
 }: {
   fullName?: string;
   email?: string;
+  onOpenSidebar?: () => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -83,13 +85,25 @@ export default function Topbar({
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-zinc-200/70 bg-[var(--background)]/90 px-6 py-3.5 backdrop-blur">
-      <div>
-        <Text fw={700} size="lg" className="leading-tight">
-          {title}
-        </Text>
-        <Text size="xs" c="dimmed" className="hidden sm:block">
-          Manage your factory operations
-        </Text>
+      <div className="flex items-center gap-3">
+        {onOpenSidebar && (
+          <button
+            type="button"
+            aria-label="Open menu"
+            onClick={onOpenSidebar}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 transition-colors hover:text-zinc-800 lg:hidden"
+          >
+            <List size={20} />
+          </button>
+        )}
+        <div>
+          <Text fw={700} size="lg" className="leading-tight">
+            {title}
+          </Text>
+          <Text size="xs" c="dimmed" className="hidden sm:block">
+            Manage your factory operations
+          </Text>
+        </div>
       </div>
 
       <Group justify="flex-end" align="center" gap="md">

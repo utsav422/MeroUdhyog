@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useMediaQuery } from '@mantine/hooks';
 import {
   Badge,
   Button,
@@ -136,6 +137,7 @@ export function NotificationsDrawer({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const { data: notifications = [], isLoading } = useNotifications(100);
   const { data: unread = { count: 0 } } = useUnreadCount();
   const markRead = useMarkNotificationRead();
@@ -186,7 +188,10 @@ export function NotificationsDrawer({
           )}
         </Group>
       }
-      styles={{ header: { borderBottom: '1px solid var(--app-shell-border-color, #e4e4e7)' } }}
+      styles={{
+        content: isMobile ? { flexBasis: '75%' } : undefined,
+        header: { borderBottom: '1px solid var(--app-shell-border-color, #e4e4e7)' },
+      }}
     >
       <Stack gap="md" className="h-full">
         <Group justify="space-between" align="center">

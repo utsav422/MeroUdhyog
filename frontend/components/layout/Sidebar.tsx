@@ -22,6 +22,7 @@ import {
   HandCoins,
   Stamp,
   BookBookmark,
+  X,
 } from '@phosphor-icons/react';
 import { useSession } from '@/lib/providers';
 
@@ -158,8 +159,12 @@ const NAV_GROUPS: NavGroup[] = [
 
 export default function Sidebar({
   tenantName = 'Workspace',
+  mobileOpen = false,
+  onClose,
 }: {
   tenantName?: string;
+  mobileOpen?: boolean;
+  onClose?: () => void;
 }) {
   const pathname = usePathname();
   const session = useSession();
@@ -193,8 +198,63 @@ export default function Sidebar({
         };
       });
 
+  const active = (item: NavItem) =>
+    pathname === item.href ||
+    (item.href !== '/dashboard' &&
+      pathname.startsWith(item.href) &&
+      !(item.href === '/orders' && pathname.startsWith('/orders/calendar')) &&
+      !(item.href === '/products' && pathname.startsWith('/products/ledger')) &&
+      !(item.href === '/products/ledger' && pathname.startsWith('/products/ledger/today')));
+
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200/70 bg-white px-4 py-5 lg:flex">
+    <>
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200/70 bg-white px-4 py-5 lg:flex">
+        <SidebarInner tenantName={tenantName} navGroups={navGroups} isActive={active} />
+      </aside>
+
+      <div
+        className={`fixed inset-0 z-50 lg:hidden ${
+          mobileOpen ? '' : 'pointer-events-none'
+        }`}
+        aria-hidden={!mobileOpen}
+      >
+        <div
+          onClick={onClose}
+          className={`absolute inset-0 bg-zinc-900/40 backdrop-blur-[2px] transition-opacity duration-300 ${
+            mobileOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+        <div
+          className={`absolute inset-y-0 left-0 flex w-1/2 min-w-[250px] max-w-[340px] flex-col overflow-y-auto border-r border-zinc-200/70 bg-white px-4 py-5 pb-10 shadow-2xl transition-transform duration-300 ease-out ${
+            mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={onClose}
+            className="absolute right-3 top-4 flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:text-zinc-900"
+          >
+            <X size={16} />
+          </button>
+          <SidebarInner tenantName={tenantName} navGroups={navGroups} isActive={active} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SidebarInner({
+  tenantName,
+  navGroups,
+  isActive,
+}: {
+  tenantName: string;
+  navGroups: NavGroup[];
+  isActive: (item: NavItem) => boolean;
+}) {
+  return (
+    <>
       <div className="mb-6 flex items-center gap-2.5 px-2">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white">
           <Factory size={20} weight="duotone" />
@@ -225,24 +285,18 @@ export default function Sidebar({
             </div>
             <div className="flex flex-col gap-1">
               {group.items.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  (item.href !== '/dashboard' &&
-                    pathname.startsWith(item.href) &&
-                    !(item.href === '/orders' && pathname.startsWith('/orders/calendar')) &&
-                    !(item.href === '/products' && pathname.startsWith('/products/ledger')) &&
-                    !(item.href === '/products/ledger' && pathname.startsWith('/products/ledger/today')));
+                const itemActive = isActive(item);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                      active
+                      itemActive
                         ? 'bg-brand-50 text-brand-700'
                         : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
                     }`}
                   >
-                    <span className={active ? 'text-brand-600' : 'text-zinc-400'}>
+                    <span className={itemActive ? 'text-brand-600' : 'text-zinc-400'}>
                       {item.icon}
                     </span>
                     {item.label}
@@ -269,6 +323,6 @@ export default function Sidebar({
           Upgrade
         </button>
       </div>
-    </aside>
+    </>
   );
 }
