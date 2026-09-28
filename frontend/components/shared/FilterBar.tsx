@@ -48,6 +48,13 @@ export type Filters = Record<
   string | string[] | [Date | null, Date | null] | DateRangeValue | null
 >;
 
+function toDateValue(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export default function FilterBar({
   searchValue,
   onSearchChange,
@@ -189,10 +196,17 @@ export default function FilterBar({
                   placeholder={def.label}
                   value={[value.from, value.to]}
                   onChange={(range) => {
-                    const [from, to] = range as [Date | null, Date | null];
+                    if (!range) {
+                      onFiltersChange?.({
+                        ...filterValues,
+                        [def.key]: { mode: 'range', from: null, to: null } as DateRangeValue,
+                      } as Filters);
+                      return;
+                    }
+                    const [from, to] = range as [Date | string | null, Date | string | null];
                     onFiltersChange?.({
                       ...filterValues,
-                      [def.key]: { mode: 'range', from, to } as DateRangeValue,
+                      [def.key]: { mode: 'range', from: toDateValue(from), to: toDateValue(to) } as DateRangeValue,
                     } as Filters);
                   }}
                   className="w-64"

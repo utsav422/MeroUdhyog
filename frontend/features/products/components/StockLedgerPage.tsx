@@ -269,17 +269,21 @@ export default function StockLedgerPage() {
 
   const currentStock = focusVariants.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
 
-  const ledgerParams: LedgerParams = useMemo(
-    () => ({
+  const ledgerParams: LedgerParams = useMemo(() => {
+    const today = new Date();
+    const rangeDate =
+      dateRange.mode === 'range' ? dateRange.from : dateRange.mode === 'today' ? today : null;
+    const rangeTo =
+      dateRange.mode === 'range' ? dateRange.to : dateRange.mode === 'today' ? today : null;
+    return {
       limit: 500,
       product_id: productId,
       variant_id: variantId,
       reason,
-      date_from: toDateParam(dateRange.mode === 'range' ? dateRange.from : null),
-      date_to: toDateParam(dateRange.mode === 'range' ? dateRange.to : null),
-    }),
-    [productId, variantId, reason, dateRange],
-  );
+      date_from: toDateParam(rangeDate),
+      date_to: toDateParam(rangeTo),
+    };
+  }, [productId, variantId, reason, dateRange]);
 
   const movementsQuery = useLedgerMovements(ledgerParams);
   const movements = movementsQuery.data ?? [];

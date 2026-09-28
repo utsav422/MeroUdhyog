@@ -150,11 +150,19 @@ export type StockAdjustInput = {
   reason: 'stock_in' | 'production';
 };
 
-export function toDateParam(date: Date | null | undefined): string | null {
+export function toDateParam(date: Date | string | null | undefined): string | null {
   if (!date) return null;
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  let parsed: Date;
+  if (typeof date === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}/.test(date)) return date.slice(0, 10);
+    parsed = new Date(date);
+  } else {
+    parsed = date;
+  }
+  if (isNaN(parsed.getTime())) return null;
+  const y = parsed.getFullYear();
+  const m = String(parsed.getMonth() + 1).padStart(2, '0');
+  const d = String(parsed.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
 

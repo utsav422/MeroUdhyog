@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["192.168.0.196", "localhost","192.168.0.199","https://mero-udhyog.vercel.app/"],
+  allowedDevOrigins: ["192.168.0.196", "localhost","192.168.0.200","https://mero-udhyog.vercel.app/"],
   webpack: (config) => {
     config.resolve.alias.canvas = require.resolve("./lib/vendor/canvas-stub.js");
     return config;
