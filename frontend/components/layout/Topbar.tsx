@@ -1,13 +1,15 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Avatar, Group, Indicator, Menu, Text } from '@mantine/core';
 import { Bell, MagnifyingGlass, SignOut, UserCircle } from '@phosphor-icons/react';
 import { apiClient } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
+import { useSession } from '@/lib/providers';
 import { useUnreadCount } from '@/features/notifications/api';
 import { NotificationsDrawer } from '@/features/notifications/components/NotificationsDrawer';
+import GlobalSearchModal from '@/features/search/components/GlobalSearchModal';
 
 const TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -30,12 +32,27 @@ export default function Topbar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const session = useSession();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [search, setSearch] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { data: unread } = useUnreadCount();
   const unreadCount = unread?.count ?? 0;
+
+  const showSearch = !!session && session.role !== 'delivery';
+
+  useEffect(() => {
+    if (!showSearch) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showSearch]);
 
   let title = 'Dashboard';
   for (const [prefix, label] of Object.entries(TITLES)) {
@@ -76,24 +93,33 @@ export default function Topbar({
       </div>
 
       <Group justify="flex-end" align="center" gap="md">
-        <div
-          className={`hidden items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 transition-all md:flex ${
-            searchOpen ? 'w-72 border-brand-300 ring-4 ring-brand-50' : 'w-56'
-          }`}
-        >
-          <MagnifyingGlass size={16} className="text-zinc-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
-            onFocus={() => setSearchOpen(true)}
-            onBlur={() => setSearchOpen(false)}
-            placeholder="Search…"
-            className="w-full bg-transparent text-sm text-zinc-700 outline-none placeholder:text-zinc-400"
-          />
-          <kbd className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-400">
-            ⌘K
-          </kbd>
-        </div>
+        {showSearch && (
+          <>
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="hidden items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-left transition-all hover:border-brand-300 hover:ring-4 hover:ring-brand-50 md:flex w-56"
+            >
+              <MagnifyingGlass size={16} className="shrink-0 text-zinc-400" />
+              <span className="w-full text-sm text-zinc-400">Search…</span>
+              <kbd className="shrink-0 rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-400">
+                ⌘K
+              </kbd>
+            </button>
+            <button
+              type="button"
+              aria-label="Search"
+              onClick={() => setSearchOpen(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 transition-colors hover:text-zinc-800 md:hidden"
+            >
+              <MagnifyingGlass size={18} />
+            </button>
+            <GlobalSearchModal
+              opened={searchOpen}
+              onClose={() => setSearchOpen(false)}
+            />
+          </>
+        )}
 
         <Indicator
           inline
