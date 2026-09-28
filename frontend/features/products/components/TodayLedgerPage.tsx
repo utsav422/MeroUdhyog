@@ -4,12 +4,15 @@ import { useMemo, useState } from 'react';
 import { Button, Group } from '@mantine/core';
 import { useRouter } from 'next/navigation';
 import {
-  CalendarBlank,
+  ArrowUUpLeft,
+  ArrowUpRight,
+  BookBookmark,
   FileArrowDown,
   Plus,
   StackSimple,
+  SunHorizon,
+  MoonStars,
   TrendUp,
-  Warehouse,
   Factory,
 } from '@phosphor-icons/react';
 import {
@@ -17,8 +20,6 @@ import {
   FilterBar,
   PaginationBar,
   PageHeader,
-  DateRangeValue,
-  EMPTY_DATE_RANGE,
 } from '@/components/shared';
 import type { Column, SortState, Filters } from '@/components/shared';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -29,7 +30,7 @@ import StockMovementModal from './StockMovementModal';
 import StatCard from './StatCard';
 import { REASON_META, REASON_OPTIONS, ReasonBadge } from './reasonMeta';
 
-export default function StockLedgerPage() {
+export default function TodayLedgerPage() {
   const router = useRouter();
   const productsQuery = useProducts();
 
@@ -39,12 +40,17 @@ export default function StockLedgerPage() {
   });
   const [variantId, setVariantId] = useState<string | null>(null);
   const [reason, setReason] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortState>({ field: 'created_at', direction: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
   const [modalOpen, setModalOpen] = useState(false);
+
+  const today = toDateParam(new Date()) ?? new Date().toISOString().slice(0, 10);
+  const todayLabel = useMemo(
+    () => new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    [],
+  );
 
   const allProducts = productsQuery.data ?? [];
   const focusProduct = productId ? allProducts.find((p) => p.id === productId) : null;
@@ -57,58 +63,59 @@ export default function StockLedgerPage() {
 
   const currentStock = focusVariants.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
 
-  const ledgerParams: LedgerParams = useMemo(() => {
-    const today = new Date();
-    const rangeDate =
-      dateRange.mode === 'range' ? dateRange.from : dateRange.mode === 'today' ? today : null;
-    const rangeTo =
-      dateRange.mode === 'range' ? dateRange.to : dateRange.mode === 'today' ? today : null;
-    return {
+  const scopeParams: LedgerParams = useMemo(
+    () => ({
       limit: 500,
       product_id: productId,
       variant_id: variantId,
-      reason,
-      date_from: toDateParam(rangeDate),
-      date_to: toDateParam(rangeTo),
-    };
-  }, [productId, variantId, reason, dateRange]);
+      date_from: today,
+      date_to: today,
+    }),
+    [productId, variantId, today],
+  );
 
-  const movementsQuery = useLedgerMovements(ledgerParams);
-  const movements = movementsQuery.data ?? [];
+  const tableParams: LedgerParams = useMemo(
+    () => ({ ...scopeParams, reason }),
+    [scopeParams, reason],
+  );
 
-  const stats = useMemo(() => {
+  const scopeQuery = useLedgerMovements(scopeParams);
+  const tableQuery = useLedgerMovements(tableParams);
+  const scopeRows = scopeQuery.data ?? [];
+  const rows = tableQuery.data ?? [];
+
+  const summary = useMemo(() => {
     let added = 0;
     let produced = 0;
     let sold = 0;
-    for (const m of movements) {
+    let returned = 0;
+    for (const m of scopeRows) {
       if (m.reason === 'stock_in') added += m.quantity;
       else if (m.reason === 'production') produced += Math.abs(m.quantity);
       else if (m.reason === 'order') sold += Math.abs(m.quantity);
+      else if (m.reason === 'cancelled') returned += Math.abs(m.quantity);
     }
-    return { added, produced, sold };
-  }, [movements]);
+    const net = added - produced - sold + returned;
+    return { added, produced, sold, returned, net, closing: currentStock, opening: currentStock - net };
+  }, [scopeRows, currentStock]);
 
   const sorted = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const rows = needle
-      ? movements.filter(
+    const result = needle
+      ? rows.filter(
           (m) =>
             m.product_name.toLowerCase().includes(needle) ||
             (m.variant_name ?? '').toLowerCase().includes(needle),
         )
-      : [...movements];
+      : [...rows];
     const dir = sort.direction === 'asc' ? 1 : -1;
-    rows.sort((a, b) => {
-      if (sort.field === 'quantity') {
-        return (a.quantity - b.quantity) * dir;
-      }
-      if (sort.field === 'product_name') {
-        return a.product_name.localeCompare(b.product_name) * dir;
-      }
+    result.sort((a, b) => {
+      if (sort.field === 'quantity') return (a.quantity - b.quantity) * dir;
+      if (sort.field === 'product_name') return a.product_name.localeCompare(b.product_name) * dir;
       return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir;
     });
-    return rows;
-  }, [movements, search, sort]);
+    return result;
+  }, [rows, search, sort]);
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -116,17 +123,11 @@ export default function StockLedgerPage() {
   }, [sorted, page, pageSize]);
 
   const filterValues: Filters = useMemo(
-    () => ({
-      product: productId,
-      variant: variantId,
-      reason,
-      range: dateRange,
-    }),
-    [productId, variantId, reason, dateRange],
+    () => ({ product: productId, variant: variantId, reason }),
+    [productId, variantId, reason],
   );
 
-  const hasActiveFilters =
-    !!productId || !!variantId || !!reason || dateRange.mode !== 'all';
+  const hasActiveFilters = !!productId || !!variantId || !!reason;
 
   const variantFilterOptions = useMemo(() => {
     if (focusProduct) {
@@ -142,9 +143,9 @@ export default function StockLedgerPage() {
 
   const handleExport = () => {
     downloadCsv(
-      `stock-ledger-${new Date().toISOString().slice(0, 10)}.csv`,
+      `stock-ledger-${today}.csv`,
       ['Date', 'Product', 'Variant', 'Type', 'Quantity', 'Order ID', 'Running balance'],
-      movements.map((m) => [
+      rows.map((m) => [
         formatDateTime(m.created_at),
         m.product_name,
         m.variant_name ?? '',
@@ -159,13 +160,11 @@ export default function StockLedgerPage() {
   const columns: Column<StockMovement>[] = [
     {
       key: 'created_at',
-      header: 'Date',
+      header: 'Time',
       sortable: true,
       render: (m) => (
-        <div>
-          <div className="text-sm font-medium text-[var(--foreground)]">
-            {formatDateTime(m.created_at)}
-          </div>
+        <div className="text-sm font-medium text-[var(--foreground)]">
+          {new Date(m.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
         </div>
       ),
     },
@@ -223,7 +222,7 @@ export default function StockLedgerPage() {
     },
     {
       key: 'running_balance',
-      header: 'Running balance',
+      header: 'Balance after',
       align: 'right',
       render: (m) => (
         <span className="font-mono text-sm font-semibold text-[var(--foreground)]">
@@ -233,33 +232,28 @@ export default function StockLedgerPage() {
     },
   ];
 
-  const rowActions = [
-    {
-      label: 'View product',
-      icon: <StackSimple size={16} />,
-      onClick: (m: StockMovement) => router.push(`/products/${m.product_id}`),
-    },
-  ];
+  const scopeHint = variantId ? 'This variant · today' : focusProduct ? 'This product · today' : 'All products · today';
+  const reasonHint = reason ? 'Type filter applies to the list below' : 'Today';
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Stock Ledger"
-        subtitle="Every time stock is added, used in production, or sold"
+        title="Today's Stock Ledger"
+        subtitle={todayLabel}
         actions={
           <Group gap="xs">
             <Button
               variant="default"
-              leftSection={<CalendarBlank size={16} weight="bold" />}
-              onClick={() => router.push('/products/ledger/today')}
+              leftSection={<BookBookmark size={16} weight="bold" />}
+              onClick={() => router.push('/products/ledger')}
             >
-              Today&apos;s summary
+              Full ledger
             </Button>
             <Button
               variant="default"
               leftSection={<FileArrowDown size={16} weight="bold" />}
               onClick={handleExport}
-              disabled={movements.length === 0}
+              disabled={rows.length === 0}
             >
               Export
             </Button>
@@ -273,34 +267,61 @@ export default function StockLedgerPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-7">
         <StatCard
-          icon={<Warehouse size={22} weight="bold" />}
-          label="Units in stock"
-          value={currentStock}
+          icon={<SunHorizon size={22} weight="bold" />}
+          label="Opening stock"
+          value={summary.opening}
           color="bg-brand-50 text-brand-600"
-          hint={variantId ? 'Selected variant' : focusProduct ? 'Selected product' : 'All products'}
+          hint={`At start of day · ${reasonHint}`}
         />
         <StatCard
           icon={<Plus size={22} weight="bold" />}
           label="Stock added"
-          value={stats.added}
+          value={summary.added}
           color="bg-success-50 text-success-600"
-          hint="In current view"
+          hint={scopeHint}
         />
         <StatCard
           icon={<Factory size={22} weight="bold" />}
           label="Used in production"
-          value={stats.produced}
+          value={summary.produced}
           color="bg-accent-50 text-accent-600"
-          hint="In current view"
+          hint="Today"
         />
         <StatCard
           icon={<TrendUp size={22} weight="bold" />}
           label="Sold"
-          value={stats.sold}
+          value={summary.sold}
           color="bg-warning-50 text-warning-600"
-          hint="In current view"
+          hint="Today"
+        />
+        <StatCard
+          icon={<ArrowUUpLeft size={22} weight="bold" />}
+          label="Returned"
+          value={summary.returned}
+          color="bg-black/5 text-[var(--muted)]"
+          hint="Cancelled / returned"
+        />
+        <StatCard
+          icon={<ArrowUpRight size={22} weight="bold" />}
+          label="Net change"
+          value={summary.net >= 0 ? `+${summary.net}` : summary.net}
+          color={
+            summary.net > 0
+              ? 'bg-success-50 text-success-600'
+              : summary.net < 0
+                ? 'bg-danger-50 text-danger-600'
+                : 'bg-black/5 text-[var(--muted)]'
+          }
+          hint="Today, all types"
+        />
+        <StatCard
+          icon={<MoonStars size={22} weight="bold" />}
+          label="Closing stock"
+          value={summary.closing}
+          color="bg-brand-50 text-brand-600"
+          hint="Now (live)"
         />
       </div>
 
@@ -334,25 +355,18 @@ export default function StockLedgerPage() {
               placeholder: 'All types',
               options: REASON_OPTIONS,
             },
-            {
-              type: 'rangedate',
-              key: 'range',
-              label: 'Filter by date',
-            },
           ]}
           filterValues={filterValues}
           onFiltersChange={(f) => {
             setProductId((f.product as string | null) ?? null);
             setVariantId((f.variant as string | null) ?? null);
             setReason((f.reason as string | null) ?? null);
-            setDateRange((f.range as DateRangeValue) ?? EMPTY_DATE_RANGE);
             setPage(1);
           }}
           onClear={() => {
             setProductId(null);
             setVariantId(null);
             setReason(null);
-            setDateRange(EMPTY_DATE_RANGE);
             setSearch('');
             setPage(1);
           }}
@@ -362,25 +376,29 @@ export default function StockLedgerPage() {
         <DataTable
           columns={columns}
           data={paged}
-          loading={movementsQuery.isLoading}
-          error={movementsQuery.isError}
-          retry={() => movementsQuery.refetch()}
-          isPermissionDenied={
-            (movementsQuery.error as { status?: number } | null)?.status === 403
-          }
+          loading={tableQuery.isLoading}
+          error={tableQuery.isError}
+          retry={() => tableQuery.refetch()}
+          isPermissionDenied={(tableQuery.error as { status?: number } | null)?.status === 403}
           sortState={sort}
           onSortChange={(s) => {
             setSort(s);
             setPage(1);
           }}
-          rowActions={rowActions}
+          rowActions={[
+            {
+              label: 'View product',
+              icon: <StackSimple size={16} />,
+              onClick: (m: StockMovement) => router.push(`/products/${m.product_id}`),
+            },
+          ]}
           getRowId={(m) => m.id}
-          minWidth={820}
-          emptyTitle="No stock movements"
+          minWidth={760}
+          emptyTitle="No movements today"
           emptyDescription={
             hasActiveFilters
               ? 'Try adjusting your filters.'
-              : 'Movements appear here as stock is added, produced, or sold.'
+              : 'Nothing moved in or out of stock today yet.'
           }
         />
 

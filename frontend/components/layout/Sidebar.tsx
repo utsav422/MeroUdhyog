@@ -57,6 +57,11 @@ const NAV_GROUPS: NavGroup[] = [
         icon: <BookBookmark size={18} weight="duotone" />,
       },
       {
+        href: '/products/ledger/today',
+        label: "Today's Ledger",
+        icon: <CalendarBlank size={18} weight="duotone" />,
+      },
+      {
         href: '/orders',
         label: 'Orders',
         icon: <ShoppingBag size={18} weight="duotone" />,
@@ -225,7 +230,8 @@ export default function Sidebar({
                   (item.href !== '/dashboard' &&
                     pathname.startsWith(item.href) &&
                     !(item.href === '/orders' && pathname.startsWith('/orders/calendar')) &&
-                    !(item.href === '/products' && pathname.startsWith('/products/ledger')));
+                    !(item.href === '/products' && pathname.startsWith('/products/ledger')) &&
+                    !(item.href === '/products/ledger' && pathname.startsWith('/products/ledger/today')));
                 return (
                   <Link
                     key={item.href}
