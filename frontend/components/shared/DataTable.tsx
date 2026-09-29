@@ -2,7 +2,7 @@
 
 import { Checkbox, Menu, Table } from '@mantine/core';
 import { CaretDoubleDown, CaretDoubleUp, DotsThree, CaretUpDown } from '@phosphor-icons/react';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import {
   EmptyState,
   ErrorState,
@@ -62,6 +62,7 @@ export default function DataTable<T>({
   selectable,
   selectedKeys,
   onSelectionChange,
+  sectionBy,
 }: {
   columns: Column<T>[];
   data: T[];
@@ -84,6 +85,9 @@ export default function DataTable<T>({
   selectable?: boolean;
   selectedKeys?: string[];
   onSelectionChange?: (keys: string[]) => void;
+  /* When provided, a slim full-width section header row is rendered before
+     rows that start a new section (label differs from the previous row). */
+  sectionBy?: (row: T) => string | undefined;
 }) {
   if (isPermissionDenied) {
     return (
@@ -118,6 +122,10 @@ export default function DataTable<T>({
   }
 
   const selectionEnabled = selectable && !!selectedKeys && !!onSelectionChange;
+  const cellsPerRow =
+    columns.length +
+    (selectionEnabled ? 1 : 0) +
+    (rowActions && rowActions.length > 0 ? 1 : 0);
   const pageIds = data.map(getRowId);
   const allPageSelected =
     selectionEnabled && pageIds.length > 0 && pageIds.every((id) => selectedKeys!.includes(id));
@@ -189,11 +197,13 @@ export default function DataTable<T>({
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {data.map((row) => {
+            {data.map((row, index) => {
               const accent = rowAccent?.(row);
-              return (
+              const section = sectionBy?.(row);
+              const prevSection = index > 0 ? sectionBy?.(data[index - 1]) : undefined;
+              const showSection = !!section && (index === 0 || section !== prevSection);
+              const rowEl = (
                 <Table.Tr
-                  key={getRowId(row)}
                   data-row-id={getRowId(row)}
                   className={`border-b border-[var(--border)] transition-colors last:border-0 hover:bg-black/[0.02] ${
                     rowClassName?.(row) ?? ''
@@ -263,6 +273,29 @@ export default function DataTable<T>({
                     </Table.Td>
                   )}
                 </Table.Tr>
+              );
+              return (
+                <Fragment key={getRowId(row)}>
+                  {showSection && (
+                    <Table.Tr className="border-b border-[var(--border)]">
+                      <Table.Td
+                        colSpan={cellsPerRow}
+                        className="!bg-black/[0.02] !px-4 !py-1.5"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-brand-500"
+                            aria-hidden
+                          />
+                          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">
+                            {section}
+                          </span>
+                        </div>
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                  {rowEl}
+                </Fragment>
               );
             })}
           </Table.Tbody>

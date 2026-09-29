@@ -7,27 +7,30 @@ import {
   CalendarBlank,
   FileArrowDown,
   Plus,
-  StackSimple,
   TrendUp,
   Warehouse,
   Factory,
 } from '@phosphor-icons/react';
 import {
-  DataTable,
   FilterBar,
   PaginationBar,
   PageHeader,
   DateRangeValue,
   EMPTY_DATE_RANGE,
 } from '@/components/shared';
-import type { Column, SortState, Filters } from '@/components/shared';
+import type { SortState, Filters } from '@/components/shared';
 import { downloadCsv } from '@/lib/exportCsv';
 import { formatDateTime } from '@/lib/format';
 import { useProducts, useLedgerMovements, toDateParam } from '../api';
 import type { StockMovement, LedgerParams } from '../api';
 import StockMovementModal from './StockMovementModal';
 import StatCard from './StatCard';
-import { REASON_META, REASON_OPTIONS, ReasonBadge } from './reasonMeta';
+import StockLedgerTable, {
+  buildLedgerGroups,
+  sortLedgerMovements,
+} from './StockLedgerTable';
+import { REASON_META, REASON_OPTIONS } from './reasonMeta';
+import { computeDayMetrics, dayLabel, localDayKey } from '../ledgerMetrics';
 
 export default function StockLedgerPage() {
   const router = useRouter();
@@ -57,24 +60,69 @@ export default function StockLedgerPage() {
 
   const currentStock = focusVariants.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
 
-  const ledgerParams: LedgerParams = useMemo(() => {
+  const liveStockByVariant = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const v of focusVariants) map[v.id] = v.stock_quantity ?? 0;
+    return map;
+  }, [focusVariants]);
+
+  const rangeDates = useMemo(() => {
     const today = new Date();
-    const rangeDate =
-      dateRange.mode === 'range' ? dateRange.from : dateRange.mode === 'today' ? today : null;
-    const rangeTo =
-      dateRange.mode === 'range' ? dateRange.to : dateRange.mode === 'today' ? today : null;
-    return {
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    const date =
+      dateRange.mode === 'range'
+        ? dateRange.from
+        : dateRange.mode === 'today'
+          ? today
+          : dateRange.mode === 'yesterday'
+            ? yesterday
+            : null;
+    const dateTo =
+      dateRange.mode === 'range'
+        ? dateRange.to
+        : dateRange.mode === 'today'
+          ? today
+          : dateRange.mode === 'yesterday'
+            ? yesterday
+            : null;
+    return { date, dateTo };
+  }, [dateRange]);
+
+  const metricsParams: LedgerParams = useMemo(
+    () => ({
+      limit: 500,
+      product_id: productId,
+      variant_id: variantId,
+    }),
+    [productId, variantId],
+  );
+
+  const tableParams: LedgerParams = useMemo(
+    () => ({
       limit: 500,
       product_id: productId,
       variant_id: variantId,
       reason,
-      date_from: toDateParam(rangeDate),
-      date_to: toDateParam(rangeTo),
-    };
-  }, [productId, variantId, reason, dateRange]);
+      date_from: toDateParam(rangeDates.date),
+      date_to: toDateParam(rangeDates.dateTo),
+    }),
+    [productId, variantId, reason, rangeDates],
+  );
 
-  const movementsQuery = useLedgerMovements(ledgerParams);
-  const movements = movementsQuery.data ?? [];
+  const metricsQuery = useLedgerMovements(metricsParams);
+  const tableQuery = useLedgerMovements(tableParams);
+  const metricsRows = metricsQuery.data ?? [];
+  const movements = tableQuery.data ?? [];
+
+  const dayMetrics = useMemo(
+    () => computeDayMetrics(metricsRows, liveStockByVariant),
+    [metricsRows, liveStockByVariant],
+  );
+  const metricsByVariantDay = useMemo(
+    () => new Map(dayMetrics.map((dm) => [`${dm.variant_id}::${dm.day}`, dm])),
+    [dayMetrics],
+  );
 
   const stats = useMemo(() => {
     let added = 0;
@@ -96,24 +144,19 @@ export default function StockLedgerPage() {
             m.product_name.toLowerCase().includes(needle) ||
             (m.variant_name ?? '').toLowerCase().includes(needle),
         )
-      : [...movements];
-    const dir = sort.direction === 'asc' ? 1 : -1;
-    rows.sort((a, b) => {
-      if (sort.field === 'quantity') {
-        return (a.quantity - b.quantity) * dir;
-      }
-      if (sort.field === 'product_name') {
-        return a.product_name.localeCompare(b.product_name) * dir;
-      }
-      return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir;
-    });
-    return rows;
+      : movements;
+    return sortLedgerMovements(rows, sort);
   }, [movements, search, sort]);
+
+  const groups = useMemo(
+    () => buildLedgerGroups(sorted, metricsByVariantDay),
+    [sorted, metricsByVariantDay],
+  );
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return sorted.slice(start, start + pageSize);
-  }, [sorted, page, pageSize]);
+    return groups.slice(start, start + pageSize);
+  }, [groups, page, pageSize]);
 
   const filterValues: Filters = useMemo(
     () => ({
@@ -140,106 +183,30 @@ export default function StockLedgerPage() {
     );
   }, [focusProduct, allProducts]);
 
+  const variantDayKey = (m: StockMovement) => `${m.variant_id}::${localDayKey(m.created_at)}`;
+  const dayMetricsOf = (m: StockMovement) => metricsByVariantDay.get(variantDayKey(m));
+
   const handleExport = () => {
     downloadCsv(
       `stock-ledger-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Date', 'Product', 'Variant', 'Type', 'Quantity', 'Order ID', 'Running balance'],
-      movements.map((m) => [
-        formatDateTime(m.created_at),
-        m.product_name,
-        m.variant_name ?? '',
-        REASON_META[m.reason]?.label ?? m.reason,
-        m.quantity,
-        m.order_id ?? '',
-        m.running_balance,
-      ]),
+      ['Date', 'Day', 'Product', 'Variant', 'Type', 'Opening', 'Added', 'Sold', 'Production / damaged', 'Closing'],
+      movements.map((m) => {
+        const dm = metricsByVariantDay.get(variantDayKey(m));
+        return [
+          formatDateTime(m.created_at),
+          dm?.label ?? dayLabel(localDayKey(m.created_at)),
+          m.product_name,
+          m.variant_name ?? '',
+          REASON_META[m.reason]?.label ?? m.reason,
+          dm?.opening ?? 0,
+          dm?.added ?? 0,
+          dm?.sold ?? 0,
+          (dm?.produced ?? 0) + (dm?.damaged ?? 0),
+          dm?.closing ?? 0,
+        ];
+      }),
     );
   };
-
-  const columns: Column<StockMovement>[] = [
-    {
-      key: 'created_at',
-      header: 'Date',
-      sortable: true,
-      render: (m) => (
-        <div>
-          <div className="text-sm font-medium text-[var(--foreground)]">
-            {formatDateTime(m.created_at)}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'product_name',
-      header: 'Product',
-      sortable: true,
-      render: (m) => (
-        <div className="min-w-0">
-          <button
-            type="button"
-            onClick={() => router.push(`/products/${m.product_id}`)}
-            className="block truncate text-sm font-semibold text-[var(--foreground)] hover:text-brand-700"
-          >
-            {m.product_name}
-          </button>
-          {m.variant_name && (
-            <div className="truncate text-xs text-[var(--muted)]">{m.variant_name}</div>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'reason',
-      header: 'Type',
-      render: (m) => <ReasonBadge reason={m.reason} />,
-    },
-    {
-      key: 'quantity',
-      header: 'Quantity',
-      align: 'right',
-      sortable: true,
-      render: (m) => (
-        <span
-          className={`font-mono text-sm font-bold ${
-            m.quantity >= 0 ? 'text-success-600' : 'text-danger-500'
-          }`}
-        >
-          {m.quantity >= 0 ? `+${m.quantity}` : m.quantity}
-        </span>
-      ),
-    },
-    {
-      key: 'order_id',
-      header: 'Order',
-      align: 'center',
-      render: (m) =>
-        m.order_id ? (
-          <span className="rounded-lg bg-black/5 px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
-            {m.order_id.slice(0, 8)}
-          </span>
-        ) : (
-          <span className="text-[var(--muted)]/40">—</span>
-        ),
-    },
-    {
-      key: 'running_balance',
-      header: 'Running balance',
-      align: 'right',
-      render: (m) => (
-        <span className="font-mono text-sm font-semibold text-[var(--foreground)]">
-          {m.running_balance}
-        </span>
-      ),
-    },
-  ];
-
-  const rowActions = [
-    {
-      label: 'View product',
-      icon: <StackSimple size={16} />,
-      onClick: (m: StockMovement) => router.push(`/products/${m.product_id}`),
-    },
-  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -359,23 +326,21 @@ export default function StockLedgerPage() {
           hasActiveFilters={hasActiveFilters}
         />
 
-        <DataTable
-          columns={columns}
-          data={paged}
-          loading={movementsQuery.isLoading}
-          error={movementsQuery.isError}
-          retry={() => movementsQuery.refetch()}
+        <StockLedgerTable
+          groups={paged}
+          loading={tableQuery.isLoading}
+          error={tableQuery.isError}
+          retry={() => tableQuery.refetch()}
           isPermissionDenied={
-            (movementsQuery.error as { status?: number } | null)?.status === 403
+            (tableQuery.error as { status?: number } | null)?.status === 403
           }
           sortState={sort}
           onSortChange={(s) => {
             setSort(s);
             setPage(1);
           }}
-          rowActions={rowActions}
-          getRowId={(m) => m.id}
-          minWidth={820}
+          onViewProduct={(id) => router.push(`/products/${id}`)}
+          minWidth={900}
           emptyTitle="No stock movements"
           emptyDescription={
             hasActiveFilters
@@ -387,7 +352,7 @@ export default function StockLedgerPage() {
         <PaginationBar
           page={page}
           pageSize={pageSize}
-          total={sorted.length}
+          total={groups.length}
           onPageChange={setPage}
           onPageSizeChange={(size) => {
             setPageSize(size);

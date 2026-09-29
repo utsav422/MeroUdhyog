@@ -13,7 +13,7 @@ export type FilterDef =
   | { type: 'rangedate'; key: string; label: string };
 
 export type DateRangeValue = {
-  mode: 'all' | 'today' | 'range';
+  mode: 'all' | 'today' | 'yesterday' | 'range';
   from: Date | null;
   to: Date | null;
 };
@@ -30,6 +30,15 @@ export function dateInRange(
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    return t >= start.getTime() && t <= end.getTime();
+  }
+  if (value.mode === 'yesterday') {
+    const start = new Date();
+    start.setDate(start.getDate() - 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setDate(end.getDate() - 1);
     end.setHours(23, 59, 59, 999);
     return t >= start.getTime() && t <= end.getTime();
   }
@@ -179,6 +188,7 @@ export default function FilterBar({
                 data={[
                   { value: 'all', label: 'All' },
                   { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
                   { value: 'range', label: 'Range' },
                 ]}
                 onChange={(mode) =>

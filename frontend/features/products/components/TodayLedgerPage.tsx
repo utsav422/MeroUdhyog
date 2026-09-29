@@ -9,26 +9,29 @@ import {
   BookBookmark,
   FileArrowDown,
   Plus,
-  StackSimple,
   SunHorizon,
   MoonStars,
   TrendUp,
   Factory,
 } from '@phosphor-icons/react';
 import {
-  DataTable,
   FilterBar,
   PaginationBar,
   PageHeader,
 } from '@/components/shared';
-import type { Column, SortState, Filters } from '@/components/shared';
+import type { SortState, Filters } from '@/components/shared';
 import { downloadCsv } from '@/lib/exportCsv';
 import { formatDateTime } from '@/lib/format';
 import { useProducts, useLedgerMovements, toDateParam } from '../api';
 import type { StockMovement, LedgerParams } from '../api';
 import StockMovementModal from './StockMovementModal';
 import StatCard from './StatCard';
-import { REASON_META, REASON_OPTIONS, ReasonBadge } from './reasonMeta';
+import StockLedgerTable, {
+  buildLedgerGroups,
+  sortLedgerMovements,
+} from './StockLedgerTable';
+import { REASON_META, REASON_OPTIONS } from './reasonMeta';
+import { computeDayMetrics, localDayKey } from '../ledgerMetrics';
 
 export default function TodayLedgerPage() {
   const router = useRouter();
@@ -63,6 +66,12 @@ export default function TodayLedgerPage() {
 
   const currentStock = focusVariants.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
 
+  const liveStockByVariant = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const v of focusVariants) map[v.id] = v.stock_quantity ?? 0;
+    return map;
+  }, [focusVariants]);
+
   const scopeParams: LedgerParams = useMemo(
     () => ({
       limit: 500,
@@ -83,6 +92,17 @@ export default function TodayLedgerPage() {
   const tableQuery = useLedgerMovements(tableParams);
   const scopeRows = scopeQuery.data ?? [];
   const rows = tableQuery.data ?? [];
+
+  const dayMetrics = useMemo(
+    () => computeDayMetrics(scopeRows, liveStockByVariant),
+    [scopeRows, liveStockByVariant],
+  );
+  const metricsByVariantDay = useMemo(
+    () => new Map(dayMetrics.map((dm) => [`${dm.variant_id}::${dm.day}`, dm])),
+    [dayMetrics],
+  );
+  const dayMetricsOf = (m: StockMovement) =>
+    metricsByVariantDay.get(`${m.variant_id}::${localDayKey(m.created_at)}`);
 
   const summary = useMemo(() => {
     let added = 0;
@@ -107,20 +127,19 @@ export default function TodayLedgerPage() {
             m.product_name.toLowerCase().includes(needle) ||
             (m.variant_name ?? '').toLowerCase().includes(needle),
         )
-      : [...rows];
-    const dir = sort.direction === 'asc' ? 1 : -1;
-    result.sort((a, b) => {
-      if (sort.field === 'quantity') return (a.quantity - b.quantity) * dir;
-      if (sort.field === 'product_name') return a.product_name.localeCompare(b.product_name) * dir;
-      return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir;
-    });
-    return result;
+      : rows;
+    return sortLedgerMovements(result, sort);
   }, [rows, search, sort]);
+
+  const groups = useMemo(
+    () => buildLedgerGroups(sorted, metricsByVariantDay),
+    [sorted, metricsByVariantDay],
+  );
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return sorted.slice(start, start + pageSize);
-  }, [sorted, page, pageSize]);
+    return groups.slice(start, start + pageSize);
+  }, [groups, page, pageSize]);
 
   const filterValues: Filters = useMemo(
     () => ({ product: productId, variant: variantId, reason }),
@@ -144,93 +163,24 @@ export default function TodayLedgerPage() {
   const handleExport = () => {
     downloadCsv(
       `stock-ledger-${today}.csv`,
-      ['Date', 'Product', 'Variant', 'Type', 'Quantity', 'Order ID', 'Running balance'],
-      rows.map((m) => [
-        formatDateTime(m.created_at),
-        m.product_name,
-        m.variant_name ?? '',
-        REASON_META[m.reason]?.label ?? m.reason,
-        m.quantity,
-        m.order_id ?? '',
-        m.running_balance,
-      ]),
+      ['Date', 'Day', 'Product', 'Variant', 'Type', 'Opening', 'Added', 'Sold', 'Production / damaged', 'Closing'],
+      rows.map((m) => {
+        const dm = dayMetricsOf(m);
+        return [
+          formatDateTime(m.created_at),
+          dm?.label ?? 'Today',
+          m.product_name,
+          m.variant_name ?? '',
+          REASON_META[m.reason]?.label ?? m.reason,
+          dm?.opening ?? 0,
+          dm?.added ?? 0,
+          dm?.sold ?? 0,
+          (dm?.produced ?? 0) + (dm?.damaged ?? 0),
+          dm?.closing ?? 0,
+        ];
+      }),
     );
   };
-
-  const columns: Column<StockMovement>[] = [
-    {
-      key: 'created_at',
-      header: 'Time',
-      sortable: true,
-      render: (m) => (
-        <div className="text-sm font-medium text-[var(--foreground)]">
-          {new Date(m.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-        </div>
-      ),
-    },
-    {
-      key: 'product_name',
-      header: 'Product',
-      sortable: true,
-      render: (m) => (
-        <div className="min-w-0">
-          <button
-            type="button"
-            onClick={() => router.push(`/products/${m.product_id}`)}
-            className="block truncate text-sm font-semibold text-[var(--foreground)] hover:text-brand-700"
-          >
-            {m.product_name}
-          </button>
-          {m.variant_name && (
-            <div className="truncate text-xs text-[var(--muted)]">{m.variant_name}</div>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'reason',
-      header: 'Type',
-      render: (m) => <ReasonBadge reason={m.reason} />,
-    },
-    {
-      key: 'quantity',
-      header: 'Quantity',
-      align: 'right',
-      sortable: true,
-      render: (m) => (
-        <span
-          className={`font-mono text-sm font-bold ${
-            m.quantity >= 0 ? 'text-success-600' : 'text-danger-500'
-          }`}
-        >
-          {m.quantity >= 0 ? `+${m.quantity}` : m.quantity}
-        </span>
-      ),
-    },
-    {
-      key: 'order_id',
-      header: 'Order',
-      align: 'center',
-      render: (m) =>
-        m.order_id ? (
-          <span className="rounded-lg bg-black/5 px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
-            {m.order_id.slice(0, 8)}
-          </span>
-        ) : (
-          <span className="text-[var(--muted)]/40">—</span>
-        ),
-    },
-    {
-      key: 'running_balance',
-      header: 'Balance after',
-      align: 'right',
-      render: (m) => (
-        <span className="font-mono text-sm font-semibold text-[var(--foreground)]">
-          {m.running_balance}
-        </span>
-      ),
-    },
-  ];
 
   const scopeHint = variantId ? 'This variant · today' : focusProduct ? 'This product · today' : 'All products · today';
   const reasonHint = reason ? 'Type filter applies to the list below' : 'Today';
@@ -373,9 +323,8 @@ export default function TodayLedgerPage() {
           hasActiveFilters={hasActiveFilters}
         />
 
-        <DataTable
-          columns={columns}
-          data={paged}
+        <StockLedgerTable
+          groups={paged}
           loading={tableQuery.isLoading}
           error={tableQuery.isError}
           retry={() => tableQuery.refetch()}
@@ -385,15 +334,8 @@ export default function TodayLedgerPage() {
             setSort(s);
             setPage(1);
           }}
-          rowActions={[
-            {
-              label: 'View product',
-              icon: <StackSimple size={16} />,
-              onClick: (m: StockMovement) => router.push(`/products/${m.product_id}`),
-            },
-          ]}
-          getRowId={(m) => m.id}
-          minWidth={760}
+          onViewProduct={(id) => router.push(`/products/${id}`)}
+          minWidth={880}
           emptyTitle="No movements today"
           emptyDescription={
             hasActiveFilters
@@ -405,7 +347,7 @@ export default function TodayLedgerPage() {
         <PaginationBar
           page={page}
           pageSize={pageSize}
-          total={sorted.length}
+          total={groups.length}
           onPageChange={setPage}
           onPageSizeChange={(size) => {
             setPageSize(size);
