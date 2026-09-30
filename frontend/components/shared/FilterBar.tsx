@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Group, MultiSelect, SegmentedControl, Select, TextInput } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { MagnifyingGlass, X } from '@phosphor-icons/react';
@@ -19,6 +19,9 @@ export type DateRangeValue = {
 };
 
 export const EMPTY_DATE_RANGE: DateRangeValue = { mode: 'all', from: null, to: null };
+
+/** Idle time before the search term is pushed to the caller. */
+export const SEARCH_DEBOUNCE_MS = 350;
 
 export function dateInRange(
   ts: string | Date | null | undefined,
@@ -84,6 +87,8 @@ export default function FilterBar({
   hasActiveFilters?: boolean;
 }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [text, setText] = useState(searchValue);
+  const [lastSearchValue, setLastSearchValue] = useState(searchValue);
 
   useEffect(() => {
     return () => {
@@ -91,9 +96,33 @@ export default function FilterBar({
     };
   }, []);
 
+  // Adopt an externally-changed search term during render (not in an effect,
+  // which would cascade). This is what makes "Clear filters" empty the box.
+  if (searchValue !== lastSearchValue) {
+    setLastSearchValue(searchValue);
+    setText(searchValue);
+  }
+
+  // A keystroke still waiting out the debounce must not fire after the parent
+  // already cleared the term.
+  useEffect(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, [searchValue]);
+
+  // Paint every keystroke immediately, but only push the settled term out
+  // after a pause — so the caller can type a full word without one fetch per
+  // character. The input is driven by local `text`, not by the debounced
+  // `searchValue`, otherwise the visible text would lag behind the caret.
   const handleSearch = (value: string) => {
+    setText(value);
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => onSearchChange(value), 300);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      onSearchChange(value);
+    }, SEARCH_DEBOUNCE_MS);
   };
 
   const localFilters = filterDefs ?? [];
@@ -107,7 +136,7 @@ export default function FilterBar({
     >
       <TextInput
         placeholder={searchPlaceholder}
-        defaultValue={searchValue}
+        value={text}
         leftSection={<MagnifyingGlass size={16} className="text-[var(--muted)]" />}
         onChange={(e) => handleSearch(e.currentTarget.value)}
         className="w-64"

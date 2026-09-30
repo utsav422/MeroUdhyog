@@ -37,12 +37,15 @@ async def _service(db, tenant_id) -> ProductService:
 @router.get("", response_model=list[ProductRead])
 async def list_products(
     pagination: tuple[int, int] = Depends(pagination_params),
+    search: str | None = Query(default=None, max_length=200),
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
 ):
+    """List products. ``search`` matches product name, product SKU, or the
+    name/SKU of any of the product's variants."""
     limit, offset = pagination
     service = await _service(db, tenant_id)
-    return await service.list(limit, offset)
+    return await service.list(limit, offset, search)
 
 
 @router.post("", response_model=ProductRead, status_code=status.HTTP_201_CREATED)

@@ -179,13 +179,19 @@ export function useProducts(enabled = true) {
 /**
  * Every product and variant, for views that must enumerate the whole
  * catalogue (e.g. the as-of stock sheet) rather than a working set.
- * Separate cache entry from {@link useProducts} so a small list does not
- * masquerade as the full catalogue.
+ * ``search`` is resolved by the backend against product name, product SKU and
+ * variant name/SKU. Separate cache entry from {@link useProducts} so a small
+ * list does not masquerade as the full catalogue.
  */
-export function useAllProducts(enabled = true) {
+export function useAllProducts(search?: string | null, enabled = true) {
+  const term = (search ?? '').trim();
   return useQuery({
-    queryKey: [...productsKeys.list(), 'all'],
-    queryFn: () => apiClient.get<Product[]>(`/products?limit=${ALL_PRODUCTS_LIMIT}`),
+    queryKey: [...productsKeys.list(), 'all', term],
+    queryFn: () => {
+      const qs = new URLSearchParams({ limit: String(ALL_PRODUCTS_LIMIT) });
+      if (term) qs.set('search', term);
+      return apiClient.get<Product[]>(`/products?${qs.toString()}`);
+    },
     enabled,
   });
 }

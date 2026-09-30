@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.products.models import Product, ProductVariant, VariantPrice
@@ -36,13 +36,36 @@ class ProductRepository:
         )
         variant.prices = list(result.scalars().all())
 
-    async def list(self, limit: int, offset: int) -> list[Product]:
+    async def list(
+        self, limit: int, offset: int, search: str | None = None
+    ) -> list[Product]:
+        stmt = select(Product).where(Product.tenant_id == self.tenant_id)
+        if search and search.strip():
+            pattern = f"%{search.strip()}%"
+            # A product matches when its own name/SKU hits, or when any of its
+            # variants does. EXISTS keeps the result set at one row per product
+            # so limit/offset stay meaningful.
+            variant_hit = (
+                select(ProductVariant.id)
+                .where(
+                    ProductVariant.tenant_id == self.tenant_id,
+                    ProductVariant.product_id == Product.id,
+                    or_(
+                        ProductVariant.name.ilike(pattern),
+                        ProductVariant.sku.ilike(pattern),
+                    ),
+                )
+                .exists()
+            )
+            stmt = stmt.where(
+                or_(
+                    Product.name.ilike(pattern),
+                    Product.sku.ilike(pattern),
+                    variant_hit,
+                )
+            )
         result = await self.session.execute(
-            select(Product)
-            .where(Product.tenant_id == self.tenant_id)
-            .order_by(Product.created_at.desc())
-            .limit(limit)
-            .offset(offset)
+            stmt.order_by(Product.created_at.desc()).limit(limit).offset(offset)
         )
         products = list(result.scalars().all())
         for product in products:

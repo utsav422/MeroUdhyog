@@ -70,8 +70,10 @@ class ProductService:
         self.tenant_id = tenant_id
         self.repo = ProductRepository(session, tenant_id)
 
-    async def list(self, limit: int, offset: int) -> list[ProductRead]:
-        products = await self.repo.list(limit, offset)
+    async def list(
+        self, limit: int, offset: int, search: str | None = None
+    ) -> list[ProductRead]:
+        products = await self.repo.list(limit, offset, search)
         return [ProductRead.model_validate(p) for p in products]
 
     async def get(self, product_id: UUID) -> ProductRead:

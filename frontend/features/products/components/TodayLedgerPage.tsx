@@ -44,15 +44,16 @@ function FlowCell({ value, tone }: { value: number; tone: 'success' | 'warning' 
 
 export default function TodayLedgerPage() {
   const router = useRouter();
-  const productsQuery = useAllProducts();
 
+  // FilterBar already debounces typing before it calls onSearchChange, so this
+  // state is the settled term that goes to the backend.
+  const [searchInput, setSearchInput] = useState('');
   const [productId, setProductId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('product');
   });
   const [variantId, setVariantId] = useState<string | null>(null);
   const [movement, setMovement] = useState<MovementFilter>('all');
-  const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortState>({ field: 'product', direction: 'asc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -70,59 +71,81 @@ export default function TodayLedgerPage() {
     [],
   );
 
-  const allProducts = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
+  // Two catalogue reads: the unfiltered one feeds the Product / Variant
+  // dropdowns (they must always list everything so you can navigate away from
+  // a search), the searched one is what the ledger rows are built from.
+  const catalogQuery = useAllProducts();
+  const productsQuery = useAllProducts(searchInput);
+
+  const allProducts = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
   const focusProduct = productId ? allProducts.find((p) => p.id === productId) : null;
 
   const variantFilterOptions = useMemo(
-    () =>
-      allProducts.flatMap((p) =>
+    () => {
+      const source = focusProduct ? [focusProduct] : allProducts;
+      return source.flatMap((p) =>
         p.variants.map((v) => ({
           value: v.id,
           label: `${p.name} · ${v.name || 'Default'}`,
         })),
-      ),
-    [allProducts],
+      );
+    },
+    [allProducts, focusProduct],
   );
 
-  // Every movement of today, unscoped: the as-of rows are derived from the
-  // full day's flows so opening/closing always reconcile, then narrowed for
-  // display by the product / variant filters.
+  // Product and variant scope is pushed to the backend so the movements
+  // payload shrinks with the filter. The catalogue is narrowed to the same
+  // scope, otherwise the out-of-scope variants would be listed with their
+  // movement hidden and report opening === closing.
+  const ledgerProducts = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
+  const scopedProducts = useMemo(() => {
+    if (productId) {
+      const product = ledgerProducts.find((p) => p.id === productId);
+      if (!product) return [];
+      if (!variantId) return [product];
+      return [{ ...product, variants: product.variants.filter((v) => v.id === variantId) }];
+    }
+    if (variantId) {
+      return ledgerProducts
+        .map((p) => ({ ...p, variants: p.variants.filter((v) => v.id === variantId) }))
+        .filter((p) => p.variants.length > 0);
+    }
+    return ledgerProducts;
+  }, [ledgerProducts, productId, variantId]);
+
   const movementParams: LedgerParams = useMemo(
-    () => ({ limit: 500, date_from: today, date_to: today }),
-    [today],
+    () => ({
+      limit: 500,
+      product_id: productId,
+      variant_id: variantId,
+      date_from: today,
+      date_to: today,
+    }),
+    [productId, variantId, today],
   );
   const movementsQuery = useLedgerMovements(movementParams);
   const movements = useMemo(() => movementsQuery.data ?? [], [movementsQuery.data]);
 
   const allRows = useMemo(
-    () => buildStockAsOfRows(allProducts, movements, today),
-    [allProducts, movements, today],
+    () => buildStockAsOfRows(scopedProducts, movements, today),
+    [scopedProducts, movements, today],
   );
 
-  const scopedRows = useMemo(() => {
-    let rows = allRows;
-    if (productId) rows = rows.filter((r) => r.productId === productId);
-    if (variantId) rows = rows.filter((r) => r.variantId === variantId);
-    return rows;
-  }, [allRows, productId, variantId]);
+  const totals = useMemo(() => sumStockAsOf(allRows), [allRows]);
 
-  const totals = useMemo(() => sumStockAsOf(scopedRows), [scopedRows]);
-
+  // The text search is resolved by the backend against product name, product
+  // SKU and variant name/SKU. The movement toggle has no server equivalent —
+  // "no movement today" is the absence of rows, which this endpoint cannot
+  // express — so it is the one filter resolved client-side.
   const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    let rows = scopedRows;
-    if (movement === 'moved') rows = rows.filter((r) => r.movementCount > 0);
-    else if (movement === 'unchanged') rows = rows.filter((r) => r.movementCount === 0);
-    if (needle) {
-      rows = rows.filter(
-        (r) =>
-          r.productName.toLowerCase().includes(needle) ||
-          (r.variantName ?? '').toLowerCase().includes(needle) ||
-          (r.sku ?? '').toLowerCase().includes(needle),
-      );
-    }
+    const rows =
+      movement === 'moved'
+        ? allRows.filter((r) => r.movementCount > 0)
+        : movement === 'unchanged'
+          ? allRows.filter((r) => r.movementCount === 0)
+          : allRows;
     return sortStockAsOfRows(rows, sort);
-  }, [scopedRows, movement, search, sort]);
+  }, [allRows, movement, sort]);
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -318,9 +341,9 @@ export default function TodayLedgerPage() {
 
       <div>
         <FilterBar
-          searchValue={search}
+          searchValue={searchInput}
           onSearchChange={(value) => {
-            setSearch(value);
+            setSearchInput(value);
             setPage(1);
           }}
           searchPlaceholder="Search by product, variant or SKU…"
@@ -358,7 +381,7 @@ export default function TodayLedgerPage() {
             setProductId(null);
             setVariantId(null);
             setMovement('all');
-            setSearch('');
+            setSearchInput('');
             setPage(1);
           }}
           hasActiveFilters={hasActiveFilters}
@@ -368,8 +391,8 @@ export default function TodayLedgerPage() {
           <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
             <Package size={14} />
             <span>
-              Showing {visible.length} of {scopedRows.length} variant
-              {scopedRows.length === 1 ? '' : 's'} in scope · {totals.moved} moved today
+              Showing {visible.length} of {allRows.length} variant
+              {allRows.length === 1 ? '' : 's'} in scope · {totals.moved} moved today
             </span>
             {totals.unchanged > 0 && (
               <Tooltip label="Opening equals closing for these — nothing came in or went out today.">
