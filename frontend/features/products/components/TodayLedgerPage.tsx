@@ -4,15 +4,12 @@ import { useMemo, useState } from 'react';
 import { Button, Group, Text, Tooltip } from '@mantine/core';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowUUpLeft,
   ArrowUpRight,
   BookBookmark,
   FileArrowDown,
   Minus,
-  MoonStars,
   Package,
   Plus,
-  SunHorizon,
   TrendUp,
   Factory,
   WarningDiamond,
@@ -197,13 +194,6 @@ export default function TodayLedgerPage() {
         render: (r) => <FlowCell value={r.used} tone="brand" />,
       },
       {
-        key: 'returned',
-        header: 'Returned',
-        align: 'right',
-        sortable: true,
-        render: (r) => <FlowCell value={r.returned} tone="muted" />,
-      },
-      {
         key: 'closing',
         header: 'Closing',
         align: 'right',
@@ -239,7 +229,6 @@ export default function TodayLedgerPage() {
         'Added',
         'Sold',
         'Product use / Damaged',
-        'Returned',
         'Closing',
         'Movements',
       ],
@@ -252,7 +241,6 @@ export default function TodayLedgerPage() {
         r.added,
         r.sold,
         r.used,
-        r.returned,
         r.closing,
         r.movementCount,
       ]),
@@ -291,14 +279,7 @@ export default function TodayLedgerPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-7">
-        <StatCard
-          icon={<SunHorizon size={22} weight="bold" />}
-          label="Opening stock"
-          value={totals.opening}
-          color="bg-brand-50 text-brand-600"
-          hint={`At start of day · ${scopeHint}`}
-        />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           icon={<Plus size={22} weight="bold" />}
           label="Stock added"
@@ -321,13 +302,6 @@ export default function TodayLedgerPage() {
           hint={scopeHint}
         />
         <StatCard
-          icon={<ArrowUUpLeft size={22} weight="bold" />}
-          label="Returned"
-          value={totals.returned}
-          color="bg-black/5 text-[var(--muted)]"
-          hint="Cancelled / returned"
-        />
-        <StatCard
           icon={<ArrowUpRight size={22} weight="bold" />}
           label="Net change"
           value={totals.net >= 0 ? `+${totals.net}` : totals.net}
@@ -339,13 +313,6 @@ export default function TodayLedgerPage() {
                 : 'bg-black/5 text-[var(--muted)]'
           }
           hint="Today, all types"
-        />
-        <StatCard
-          icon={<MoonStars size={22} weight="bold" />}
-          label="Closing stock"
-          value={totals.closing}
-          color="bg-brand-50 text-brand-600"
-          hint={`Now · ${totals.moved} moved, ${totals.unchanged} unchanged`}
         />
       </div>
 
@@ -402,7 +369,7 @@ export default function TodayLedgerPage() {
             <Package size={14} />
             <span>
               Showing {visible.length} of {scopedRows.length} variant
-              {scopedRows.length === 1 ? '' : 's'} in scope
+              {scopedRows.length === 1 ? '' : 's'} in scope · {totals.moved} moved today
             </span>
             {totals.unchanged > 0 && (
               <Tooltip label="Opening equals closing for these — nothing came in or went out today.">

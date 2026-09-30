@@ -220,7 +220,7 @@ export default function StockLedgerPage() {
               leftSection={<CalendarBlank size={16} weight="bold" />}
               onClick={() => router.push('/products/ledger/today')}
             >
-              Today&apos;s summary
+              Stock as of today
             </Button>
             <Button
               variant="default"
