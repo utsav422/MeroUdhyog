@@ -13,10 +13,11 @@ import GlobalSearchModal from '@/features/search/components/GlobalSearchModal';
 
 const TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
-  '/products/ledger/today': "Today's Ledger",
+  '/products/ledger/today': 'Stock as of Today',
   '/products/ledger': 'Stock Ledger',
   '/products': 'Products',
   '/orders/calendar': 'Activity Calendar',
+  '/orders/delivered': 'Delivered Orders',
   '/orders': 'Orders',
   '/deliveries': 'Deliveries',
   '/customers': 'Customers',

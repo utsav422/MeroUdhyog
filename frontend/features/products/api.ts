@@ -104,6 +104,8 @@ export type ProductInput = {
 };
 
 export const MAX_FETCH = 100;
+/** Backend `pagination_params` caps `limit` at 500. */
+export const ALL_PRODUCTS_LIMIT = 500;
 
 export const productsKeys = {
   all: ['products'] as const,
@@ -170,6 +172,20 @@ export function useProducts(enabled = true) {
   return useQuery({
     queryKey: productsKeys.list(),
     queryFn: () => apiClient.get<Product[]>(`/products?limit=${MAX_FETCH}`),
+    enabled,
+  });
+}
+
+/**
+ * Every product and variant, for views that must enumerate the whole
+ * catalogue (e.g. the as-of stock sheet) rather than a working set.
+ * Separate cache entry from {@link useProducts} so a small list does not
+ * masquerade as the full catalogue.
+ */
+export function useAllProducts(enabled = true) {
+  return useQuery({
+    queryKey: [...productsKeys.list(), 'all'],
+    queryFn: () => apiClient.get<Product[]>(`/products?limit=${ALL_PRODUCTS_LIMIT}`),
     enabled,
   });
 }

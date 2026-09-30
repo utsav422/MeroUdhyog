@@ -11,9 +11,6 @@ import {
   Table,
   Text,
   Textarea,
-  Badge,
-  Divider,
-  Card,
   Tabs,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
@@ -34,6 +31,8 @@ import {
   Truck,
   DownloadSimple,
   FilePdf,
+  CheckCircle,
+  HandCoins,
 } from '@phosphor-icons/react';
 import {
   DataTable,
@@ -68,6 +67,33 @@ type LineItem = {
   unit_price: string;
 };
 
+/**
+ * Orders are partitioned across two pages. `undelivered` is everything still
+ * in the fulfilment pipeline (including failed/cancelled); `delivered` is the
+ * completed archive. The two sets are an exact partition of all orders.
+ */
+export type OrdersScope = 'undelivered' | 'delivered';
+
+const SCOPE_META: Record<
+  OrdersScope,
+  { title: string; subtitle: string; href: string; emptyTitle: string; emptyDescription: string }
+> = {
+  undelivered: {
+    title: 'Orders',
+    subtitle: 'Orders that have not been delivered yet',
+    href: '/orders',
+    emptyTitle: 'No pending orders',
+    emptyDescription: 'Every order has been delivered. Check the delivered page for the full history.',
+  },
+  delivered: {
+    title: 'Delivered Orders',
+    subtitle: 'Completed orders that have been delivered',
+    href: '/orders/delivered',
+    emptyTitle: 'No delivered orders',
+    emptyDescription: 'Orders appear here once their delivery is marked as delivered.',
+  },
+};
+
 const ORDER_STATUSES = [
   'draft',
   'confirmed',
@@ -80,6 +106,31 @@ const ORDER_STATUSES = [
   'failed',
   'cancelled',
 ];
+
+function ScopeSwitch({ scope }: { scope: OrdersScope }) {
+  const router = useRouter();
+  return (
+    <div className="flex items-center gap-0.5 rounded-xl border border-zinc-200 bg-white p-1">
+      {(['undelivered', 'delivered'] as const).map((s) => {
+        const isCurrent = s === scope;
+        return (
+          <button
+            key={s}
+            type="button"
+            onClick={() => router.push(SCOPE_META[s].href)}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              isCurrent
+                ? 'bg-brand-50 text-brand-700'
+                : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'
+            }`}
+          >
+            {s === 'delivered' ? 'Delivered' : 'Pending'}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function OrderStatCard({
   icon,
@@ -108,9 +159,11 @@ function OrderStatCard({
   );
 }
 
-export default function OrdersPage() {
+export default function OrdersListPage({ scope = 'undelivered' }: { scope?: OrdersScope }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const meta = SCOPE_META[scope];
+  const isDeliveredScope = scope === 'delivered';
   const [routeFilter, setRouteFilter] = useState<string | null>(null);
   const ordersQuery = useOrders(routeFilter);
   const productsQuery = useProducts();
@@ -201,18 +254,43 @@ export default function OrdersPage() {
     },
   });
 
-  const allOrders = ordersQuery.data ?? [];
+  // The two pages are an exact partition of the order list, so scope is
+  // applied before any search/filter/sort work below.
+  const scopedOrders = useMemo(() => {
+    const all = ordersQuery.data ?? [];
+    return isDeliveredScope
+      ? all.filter((o) => o.status === 'delivered')
+      : all.filter((o) => o.status !== 'delivered');
+  }, [ordersQuery.data, isDeliveredScope]);
 
   const stats = useMemo(() => {
-    const total = allOrders.length;
-    const pending = allOrders.filter((o) => ['draft', 'confirmed'].includes(o.status)).length;
-    const active = allOrders.filter((o) =>
+    const total = scopedOrders.length;
+    const pending = scopedOrders.filter((o) => ['draft', 'confirmed'].includes(o.status)).length;
+    const active = scopedOrders.filter((o) =>
       ['ready', 'assigned', 'picked_up', 'in_transit', 'in_delivery'].includes(o.status),
     ).length;
-    const completed = allOrders.filter((o) => o.status === 'delivered').length;
-    const revenue = allOrders.filter((o) => o.payment_status === 'paid' && !['failed', 'cancelled'].includes(o.status)).reduce((s, o) => s + Number(o.total_amount || 0), 0);
-    return { total, pending, active, completed, revenue };
-  }, [allOrders]);
+    const failed = scopedOrders.filter((o) => ['failed', 'cancelled'].includes(o.status)).length;
+    const billable = scopedOrders
+      .filter((o) => !['failed', 'cancelled'].includes(o.status))
+      .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+    const paid = scopedOrders
+      .filter((o) => o.payment_status === 'paid' && !['failed', 'cancelled'].includes(o.status))
+      .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+    const units = scopedOrders.reduce(
+      (s, o) => s + o.items.reduce((n, it) => n + Number(it.quantity || 0), 0),
+      0,
+    );
+    return {
+      total,
+      pending,
+      active,
+      failed,
+      billable,
+      paid,
+      units,
+      outstanding: billable - paid,
+    };
+  }, [scopedOrders]);
 
   const customerMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -250,7 +328,7 @@ export default function OrdersPage() {
   }, [productsQuery.data]);
 
   const filtered = useMemo(() => {
-    let rows = [...allOrders];
+    let rows = [...scopedOrders];
     if (search.trim()) {
       const needle = search.trim().toLowerCase();
       rows = rows.filter(
@@ -269,7 +347,7 @@ export default function OrdersPage() {
       return String(av).localeCompare(String(bv)) * dir;
     });
     return rows;
-  }, [allOrders, search, statusFilter, customerFilter, dateFilter, sort, customerMap]);
+  }, [scopedOrders, search, statusFilter, customerFilter, dateFilter, sort, customerMap]);
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -278,7 +356,7 @@ export default function OrdersPage() {
 
   const handleExport = () => {
     downloadCsv(
-      `orders-${new Date().toISOString().slice(0, 10)}.csv`,
+      `${isDeliveredScope ? 'delivered-orders' : 'pending-orders'}-${new Date().toISOString().slice(0, 10)}.csv`,
       [
         'Order',
         'Customer',
@@ -510,6 +588,22 @@ export default function OrdersPage() {
       sortable: true,
       render: (o) => <span className="text-zinc-500">{formatDate(o.created_at)}</span>,
     },
+    ...(isDeliveredScope
+      ? [
+          {
+            key: 'delivered_at',
+            header: 'Delivered on',
+            render: (o: Order) => {
+              const at = deliveryByOrder.get(o.id)?.delivered_at;
+              return at ? (
+                <span className="text-zinc-500">{formatDateTime(at)}</span>
+              ) : (
+                <span className="text-zinc-300">—</span>
+              );
+            },
+          },
+        ]
+      : []),
     {
       key: 'count',
       header: 'Items',
@@ -558,19 +652,24 @@ export default function OrdersPage() {
     {
       key: 'status',
       header: 'Order status',
-      render: (o) => (
-        <Select
-          size="xs"
-          w={140}
-          value={o.status}
-          data={[
-            { value: o.status, label: o.status.replace(/_/g, ' ') },
-            ...nextOrderStatuses(o.status).map((s) => ({ value: s, label: s.replace(/_/g, ' ') })),
-          ]}
-          onChange={(v) => v && changeOrderStatus(o, v)}
-          disabled={o.status === 'failed' || statusMutation.isPending}
-        />
-      ),
+      // Delivered is terminal, so there is no transition to offer — show a
+      // read-only badge instead of an empty dropdown.
+      render: (o) =>
+        isDeliveredScope ? (
+          <StatusBadge status={o.status} />
+        ) : (
+          <Select
+            size="xs"
+            w={140}
+            value={o.status}
+            data={[
+              { value: o.status, label: o.status.replace(/_/g, ' ') },
+              ...nextOrderStatuses(o.status).map((s) => ({ value: s, label: s.replace(/_/g, ' ') })),
+            ]}
+            onChange={(v) => v && changeOrderStatus(o, v)}
+            disabled={o.status === 'failed' || statusMutation.isPending}
+          />
+        ),
     },
     {
       key: 'delivery',
@@ -613,8 +712,8 @@ export default function OrdersPage() {
     !!statusFilter || !!customerFilter || dateFilter.mode !== 'all';
 
   const selectedOrders = useMemo(
-    () => allOrders.filter((o) => selected.includes(o.id)),
-    [allOrders, selected],
+    () => scopedOrders.filter((o) => selected.includes(o.id)),
+    [scopedOrders, selected],
   );
 
   // Only statuses every selected order can legally move to (intersection of
@@ -660,10 +759,11 @@ export default function OrdersPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Orders"
-        subtitle="Create and manage your sales orders"
+        title={meta.title}
+        subtitle={meta.subtitle}
         actions={
           <Group gap="sm">
+            <ScopeSwitch scope={scope} />
             <Button
               variant="default"
               leftSection={<DownloadSimple size={16} />}
@@ -671,53 +771,95 @@ export default function OrdersPage() {
             >
               Export CSV
             </Button>
-            <Button
-              leftSection={<Plus size={16} weight="bold" />}
-              onClick={openCreate}
-              className="shadow-sm shadow-brand-200"
-            >
-              New Order
-            </Button>
+            {!isDeliveredScope && (
+              <Button
+                leftSection={<Plus size={16} weight="bold" />}
+                onClick={openCreate}
+                className="shadow-sm shadow-brand-200"
+              >
+                New Order
+              </Button>
+            )}
           </Group>
         }
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <OrderStatCard
-          icon={<ShoppingCart size={22} weight="bold" />}
-          label="Total orders"
-          value={stats.total}
-          color="bg-brand-50 text-brand-600"
-        />
-        <OrderStatCard
-          icon={<Clock size={22} weight="bold" />}
-          label="Pending"
-          value={stats.pending}
-          subtext="Awaiting processing"
-          color="bg-accent-50 text-accent-600"
-        />
-        <OrderStatCard
-          icon={<ArrowsClockwise size={22} weight="bold" />}
-          label="Active"
-          value={stats.active}
-          subtext="In progress"
-          color="bg-brand-50 text-brand-600"
-        />
-        <OrderStatCard
-          icon={<TrendUp size={22} weight="bold" />}
-          label="Completed"
-          value={stats.completed}
-          subtext="Delivered"
-          color="bg-success-50 text-success-700"
-        />
-        <OrderStatCard
-          icon={<CurrencyDollar size={22} weight="bold" />}
-          label="Revenue"
-          value={formatMoney(stats.revenue)}
-          subtext="Paid orders"
-          color="bg-brand-50 text-brand-600"
-        />
-      </div>
+      {isDeliveredScope ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <OrderStatCard
+            icon={<CheckCircle size={22} weight="bold" />}
+            label="Delivered orders"
+            value={stats.total}
+            color="bg-success-50 text-success-700"
+          />
+          <OrderStatCard
+            icon={<Package size={22} weight="bold" />}
+            label="Units delivered"
+            value={stats.units}
+            subtext="Across all delivered orders"
+            color="bg-brand-50 text-brand-600"
+          />
+          <OrderStatCard
+            icon={<TrendUp size={22} weight="bold" />}
+            label="Order value"
+            value={formatMoney(stats.billable.toString())}
+            subtext="Excludes failed / cancelled"
+            color="bg-brand-50 text-brand-600"
+          />
+          <OrderStatCard
+            icon={<CurrencyDollar size={22} weight="bold" />}
+            label="Collected"
+            value={formatMoney(stats.paid.toString())}
+            subtext="Fully paid orders"
+            color="bg-success-50 text-success-700"
+          />
+          <OrderStatCard
+            icon={<HandCoins size={22} weight="bold" />}
+            label="Outstanding"
+            value={formatMoney(stats.outstanding.toString())}
+            subtext="Awaiting payment"
+            color="bg-accent-50 text-accent-600"
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <OrderStatCard
+            icon={<ShoppingCart size={22} weight="bold" />}
+            label="Undelivered"
+            value={stats.total}
+            subtext="Not yet delivered"
+            color="bg-brand-50 text-brand-600"
+          />
+          <OrderStatCard
+            icon={<Clock size={22} weight="bold" />}
+            label="Pending"
+            value={stats.pending}
+            subtext="Awaiting processing"
+            color="bg-accent-50 text-accent-600"
+          />
+          <OrderStatCard
+            icon={<ArrowsClockwise size={22} weight="bold" />}
+            label="Active"
+            value={stats.active}
+            subtext="In progress"
+            color="bg-brand-50 text-brand-600"
+          />
+          <OrderStatCard
+            icon={<Warning size={22} weight="bold" />}
+            label="Failed / cancelled"
+            value={stats.failed}
+            subtext="Need re-order"
+            color="bg-danger-50 text-danger-700"
+          />
+          <OrderStatCard
+            icon={<CurrencyDollar size={22} weight="bold" />}
+            label="Order value"
+            value={formatMoney(stats.billable.toString())}
+            subtext="Excludes failed / cancelled"
+            color="bg-brand-50 text-brand-600"
+          />
+        </div>
+      )}
 
       <div>
         <Tabs
@@ -744,22 +886,28 @@ export default function OrdersPage() {
           onSearchChange={setSearch}
           searchPlaceholder="Search by order number or customer…"
           filterDefs={[
+            // Every row on the delivered page is already 'delivered', so a
+            // status select there could only ever have one option.
+            ...(isDeliveredScope
+              ? []
+              : [
+                  {
+                    type: 'select' as const,
+                    key: 'status',
+                    label: 'Status',
+                    placeholder: 'All statuses',
+                    options: ORDER_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') })),
+                  },
+                ]),
             {
-              type: 'select',
-              key: 'status',
-              label: 'Status',
-              placeholder: 'All statuses',
-              options: ORDER_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') })),
-            },
-            {
-              type: 'select',
+              type: 'select' as const,
               key: 'customerId',
               label: 'Customer',
               placeholder: 'Any customer',
               options: customerOptions,
             },
             {
-              type: 'rangedate',
+              type: 'rangedate' as const,
               key: 'createdRange',
               label: 'Order date',
             },
@@ -804,15 +952,15 @@ export default function OrdersPage() {
           rowActions={rowActions}
           getRowId={(o) => o.id}
           rowClassName={(o) => (o.status === 'failed' ? 'opacity-50' : undefined)}
-          selectable
+          selectable={!isDeliveredScope}
           selectedKeys={selected}
           onSelectionChange={setSelected}
           minWidth={1000}
-          emptyTitle="No orders found"
-          emptyDescription="Create your first order to get started."
+          emptyTitle={meta.emptyTitle}
+          emptyDescription={meta.emptyDescription}
         />
 
-        {selected.length > 0 && (
+        {!isDeliveredScope && selected.length > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-brand-200 bg-brand-50/60 px-4 py-3">
             <Text size="sm" fw={600} className="text-brand-800">
               {selected.length} selected

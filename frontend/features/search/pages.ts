@@ -4,6 +4,7 @@ import {
   BookBookmark,
   CalendarDots,
   ChartLineUp,
+  CheckCircle,
   ClipboardText,
   Coins,
   CurrencyInr,
@@ -45,16 +46,22 @@ export const SEARCH_PAGES: SearchPage[] = [
     icon: Archive,
   },
   {
-    title: 'Today’s Ledger',
-    description: 'Summary of today’s stock movements',
+    title: 'Stock as of Today',
+    description: 'Opening, movement and closing stock for every product',
     href: '/products/ledger/today',
     icon: CalendarDots,
   },
   {
     title: 'Orders',
-    description: 'Create and track customer orders',
+    description: 'Create and track orders that are not delivered yet',
     href: '/orders',
     icon: Receipt,
+  },
+  {
+    title: 'Delivered Orders',
+    description: 'Browse completed and delivered orders',
+    href: '/orders/delivered',
+    icon: CheckCircle,
   },
   {
     title: 'Activity Calendar',

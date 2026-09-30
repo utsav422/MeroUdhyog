@@ -1,195 +1,269 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Button, Group } from '@mantine/core';
+import { Button, Group, Text, Tooltip } from '@mantine/core';
 import { useRouter } from 'next/navigation';
 import {
   ArrowUUpLeft,
   ArrowUpRight,
   BookBookmark,
   FileArrowDown,
+  Minus,
+  MoonStars,
+  Package,
   Plus,
   SunHorizon,
-  MoonStars,
   TrendUp,
   Factory,
+  WarningDiamond,
 } from '@phosphor-icons/react';
 import {
+  DataTable,
   FilterBar,
   PaginationBar,
   PageHeader,
 } from '@/components/shared';
-import type { SortState, Filters } from '@/components/shared';
+import type { Column, SortState, Filters } from '@/components/shared';
 import { downloadCsv } from '@/lib/exportCsv';
-import { formatDateTime } from '@/lib/format';
-import { useProducts, useLedgerMovements, toDateParam } from '../api';
-import type { StockMovement, LedgerParams } from '../api';
+import { useAllProducts, useLedgerMovements } from '../api';
+import type { LedgerParams } from '../api';
+import {
+  MOVEMENT_FILTER_OPTIONS,
+  buildStockAsOfRows,
+  sortStockAsOfRows,
+  sumStockAsOf,
+} from '../stockAsOf';
+import type { MovementFilter, StockAsOfRow } from '../stockAsOf';
+import { localDayKey } from '../ledgerMetrics';
 import StockMovementModal from './StockMovementModal';
 import StatCard from './StatCard';
-import StockLedgerTable, {
-  buildLedgerGroups,
-  sortLedgerMovements,
-} from './StockLedgerTable';
-import { REASON_META, REASON_OPTIONS } from './reasonMeta';
-import { computeDayMetrics, localDayKey } from '../ledgerMetrics';
+import MetricCell from './MetricCell';
+
+/** Flow columns that are worth reading at a glance; a zero reads as a dash. */
+function FlowCell({ value, tone }: { value: number; tone: 'success' | 'warning' | 'brand' | 'muted' }) {
+  if (value === 0) return <MetricCell value={0} tone="muted" />;
+  return <MetricCell value={value} tone={tone} />;
+}
 
 export default function TodayLedgerPage() {
   const router = useRouter();
-  const productsQuery = useProducts();
+  const productsQuery = useAllProducts();
 
   const [productId, setProductId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('product');
   });
   const [variantId, setVariantId] = useState<string | null>(null);
-  const [reason, setReason] = useState<string | null>(null);
+  const [movement, setMovement] = useState<MovementFilter>('all');
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<SortState>({ field: 'created_at', direction: 'desc' });
+  const [sort, setSort] = useState<SortState>({ field: 'product', direction: 'asc' });
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(15);
+  const [pageSize, setPageSize] = useState(25);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const today = toDateParam(new Date()) ?? new Date().toISOString().slice(0, 10);
+  const today = localDayKey(new Date());
   const todayLabel = useMemo(
-    () => new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    () =>
+      new Date().toLocaleDateString(undefined, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }),
     [],
   );
 
-  const allProducts = productsQuery.data ?? [];
+  const allProducts = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
   const focusProduct = productId ? allProducts.find((p) => p.id === productId) : null;
-  const allVariants = useMemo(() => allProducts.flatMap((p) => p.variants), [allProducts]);
-  const focusVariants = variantId
-    ? allVariants.filter((v) => v.id === variantId)
-    : focusProduct
-      ? focusProduct.variants
-      : allVariants;
 
-  const currentStock = focusVariants.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
-
-  const liveStockByVariant = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const v of focusVariants) map[v.id] = v.stock_quantity ?? 0;
-    return map;
-  }, [focusVariants]);
-
-  const scopeParams: LedgerParams = useMemo(
-    () => ({
-      limit: 500,
-      product_id: productId,
-      variant_id: variantId,
-      date_from: today,
-      date_to: today,
-    }),
-    [productId, variantId, today],
+  const variantFilterOptions = useMemo(
+    () =>
+      allProducts.flatMap((p) =>
+        p.variants.map((v) => ({
+          value: v.id,
+          label: `${p.name} · ${v.name || 'Default'}`,
+        })),
+      ),
+    [allProducts],
   );
 
-  const tableParams: LedgerParams = useMemo(
-    () => ({ ...scopeParams, reason }),
-    [scopeParams, reason],
+  // Every movement of today, unscoped: the as-of rows are derived from the
+  // full day's flows so opening/closing always reconcile, then narrowed for
+  // display by the product / variant filters.
+  const movementParams: LedgerParams = useMemo(
+    () => ({ limit: 500, date_from: today, date_to: today }),
+    [today],
+  );
+  const movementsQuery = useLedgerMovements(movementParams);
+  const movements = useMemo(() => movementsQuery.data ?? [], [movementsQuery.data]);
+
+  const allRows = useMemo(
+    () => buildStockAsOfRows(allProducts, movements, today),
+    [allProducts, movements, today],
   );
 
-  const scopeQuery = useLedgerMovements(scopeParams);
-  const tableQuery = useLedgerMovements(tableParams);
-  const scopeRows = scopeQuery.data ?? [];
-  const rows = tableQuery.data ?? [];
+  const scopedRows = useMemo(() => {
+    let rows = allRows;
+    if (productId) rows = rows.filter((r) => r.productId === productId);
+    if (variantId) rows = rows.filter((r) => r.variantId === variantId);
+    return rows;
+  }, [allRows, productId, variantId]);
 
-  const dayMetrics = useMemo(
-    () => computeDayMetrics(scopeRows, liveStockByVariant),
-    [scopeRows, liveStockByVariant],
-  );
-  const metricsByVariantDay = useMemo(
-    () => new Map(dayMetrics.map((dm) => [`${dm.variant_id}::${dm.day}`, dm])),
-    [dayMetrics],
-  );
-  const dayMetricsOf = (m: StockMovement) =>
-    metricsByVariantDay.get(`${m.variant_id}::${localDayKey(m.created_at)}`);
+  const totals = useMemo(() => sumStockAsOf(scopedRows), [scopedRows]);
 
-  const summary = useMemo(() => {
-    let added = 0;
-    let produced = 0;
-    let sold = 0;
-    let returned = 0;
-    for (const m of scopeRows) {
-      if (m.reason === 'stock_in') added += m.quantity;
-      else if (m.reason === 'production') produced += Math.abs(m.quantity);
-      else if (m.reason === 'order') sold += Math.abs(m.quantity);
-      else if (m.reason === 'cancelled') returned += Math.abs(m.quantity);
-    }
-    const net = added - produced - sold + returned;
-    return { added, produced, sold, returned, net, closing: currentStock, opening: currentStock - net };
-  }, [scopeRows, currentStock]);
-
-  const sorted = useMemo(() => {
+  const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const result = needle
-      ? rows.filter(
-          (m) =>
-            m.product_name.toLowerCase().includes(needle) ||
-            (m.variant_name ?? '').toLowerCase().includes(needle),
-        )
-      : rows;
-    return sortLedgerMovements(result, sort);
-  }, [rows, search, sort]);
-
-  const groups = useMemo(
-    () => buildLedgerGroups(sorted, metricsByVariantDay),
-    [sorted, metricsByVariantDay],
-  );
+    let rows = scopedRows;
+    if (movement === 'moved') rows = rows.filter((r) => r.movementCount > 0);
+    else if (movement === 'unchanged') rows = rows.filter((r) => r.movementCount === 0);
+    if (needle) {
+      rows = rows.filter(
+        (r) =>
+          r.productName.toLowerCase().includes(needle) ||
+          (r.variantName ?? '').toLowerCase().includes(needle) ||
+          (r.sku ?? '').toLowerCase().includes(needle),
+      );
+    }
+    return sortStockAsOfRows(rows, sort);
+  }, [scopedRows, movement, search, sort]);
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return groups.slice(start, start + pageSize);
-  }, [groups, page, pageSize]);
+    return visible.slice(start, start + pageSize);
+  }, [visible, page, pageSize]);
 
-  const filterValues: Filters = useMemo(
-    () => ({ product: productId, variant: variantId, reason }),
-    [productId, variantId, reason],
+  const columns: Column<StockAsOfRow>[] = useMemo(
+    () => [
+      {
+        key: 'product',
+        header: 'Product',
+        sortable: true,
+        render: (r) => (
+          <div className="min-w-0">
+            <button
+              type="button"
+              onClick={() => router.push(`/products/${r.productId}`)}
+              className="block max-w-[220px] truncate text-left text-sm font-semibold text-[var(--foreground)] hover:text-brand-700"
+            >
+              {r.productName}
+            </button>
+            <div className="truncate text-xs text-[var(--muted)]">
+              {r.sku ? <span className="font-mono">{r.sku}</span> : <span>No SKU</span>}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: 'variant',
+        header: 'Variant',
+        sortable: true,
+        render: (r) => (
+          <div className="min-w-0">
+            <div className="truncate text-sm text-[var(--foreground)]">
+              {r.variantName || 'Default'}
+            </div>
+            <div className="truncate text-xs text-[var(--muted)]">
+              {r.unit ? `per ${r.unit}` : '—'}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: 'opening',
+        header: 'Opening',
+        align: 'right',
+        sortable: true,
+        render: (r) => <MetricCell value={r.opening} />,
+      },
+      {
+        key: 'added',
+        header: 'Added',
+        align: 'right',
+        sortable: true,
+        render: (r) => <FlowCell value={r.added} tone="success" />,
+      },
+      {
+        key: 'sold',
+        header: 'Sold',
+        align: 'right',
+        sortable: true,
+        render: (r) => <FlowCell value={r.sold} tone="warning" />,
+      },
+      {
+        key: 'used',
+        header: 'Product use / Damaged',
+        align: 'right',
+        sortable: true,
+        render: (r) => <FlowCell value={r.used} tone="brand" />,
+      },
+      {
+        key: 'returned',
+        header: 'Returned',
+        align: 'right',
+        sortable: true,
+        render: (r) => <FlowCell value={r.returned} tone="muted" />,
+      },
+      {
+        key: 'closing',
+        header: 'Closing',
+        align: 'right',
+        sortable: true,
+        render: (r) => <MetricCell value={r.closing} tone="strong" />,
+      },
+    ],
+    [router],
   );
 
-  const hasActiveFilters = !!productId || !!variantId || !!reason;
+  const filterValues: Filters = useMemo(
+    () => ({ product: productId, variant: variantId, movement }),
+    [productId, variantId, movement],
+  );
 
-  const variantFilterOptions = useMemo(() => {
-    if (focusProduct) {
-      return focusProduct.variants.map((v) => ({
-        value: v.id,
-        label: `${focusProduct.name} · ${v.name || 'Default'}`,
-      }));
-    }
-    return allProducts.flatMap((p) =>
-      p.variants.map((v) => ({ value: v.id, label: `${p.name} · ${v.name || 'Default'}` })),
-    );
-  }, [focusProduct, allProducts]);
+  const hasActiveFilters = !!productId || !!variantId || movement !== 'all';
+
+  const scopeHint = variantId
+    ? 'Selected variant'
+    : focusProduct
+      ? 'Selected product'
+      : `${totals.variants} variant${totals.variants === 1 ? '' : 's'}`;
 
   const handleExport = () => {
     downloadCsv(
-      `stock-ledger-${today}.csv`,
-      ['Date', 'Day', 'Product', 'Variant', 'Type', 'Opening', 'Added', 'Sold', 'Production / damaged', 'Closing'],
-      rows.map((m) => {
-        const dm = dayMetricsOf(m);
-        return [
-          formatDateTime(m.created_at),
-          dm?.label ?? 'Today',
-          m.product_name,
-          m.variant_name ?? '',
-          REASON_META[m.reason]?.label ?? m.reason,
-          dm?.opening ?? 0,
-          dm?.added ?? 0,
-          dm?.sold ?? 0,
-          (dm?.produced ?? 0) + (dm?.damaged ?? 0),
-          dm?.closing ?? 0,
-        ];
-      }),
+      `stock-as-of-${today}.csv`,
+      [
+        'Product',
+        'SKU',
+        'Variant',
+        'Unit',
+        'Opening',
+        'Added',
+        'Sold',
+        'Product use / Damaged',
+        'Returned',
+        'Closing',
+        'Movements',
+      ],
+      visible.map((r) => [
+        r.productName,
+        r.sku ?? '',
+        r.variantName ?? '',
+        r.unit ?? '',
+        r.opening,
+        r.added,
+        r.sold,
+        r.used,
+        r.returned,
+        r.closing,
+        r.movementCount,
+      ]),
     );
   };
-
-  const scopeHint = variantId ? 'This variant · today' : focusProduct ? 'This product · today' : 'All products · today';
-  const reasonHint = reason ? 'Type filter applies to the list below' : 'Today';
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Today's Stock Ledger"
-        subtitle={todayLabel}
+        title="Stock as of Today"
+        subtitle={`${todayLabel} · opening, movement and closing for every product`}
         actions={
           <Group gap="xs">
             <Button
@@ -203,7 +277,7 @@ export default function TodayLedgerPage() {
               variant="default"
               leftSection={<FileArrowDown size={16} weight="bold" />}
               onClick={handleExport}
-              disabled={rows.length === 0}
+              disabled={visible.length === 0}
             >
               Export
             </Button>
@@ -221,46 +295,46 @@ export default function TodayLedgerPage() {
         <StatCard
           icon={<SunHorizon size={22} weight="bold" />}
           label="Opening stock"
-          value={summary.opening}
+          value={totals.opening}
           color="bg-brand-50 text-brand-600"
-          hint={`At start of day · ${reasonHint}`}
+          hint={`At start of day · ${scopeHint}`}
         />
         <StatCard
           icon={<Plus size={22} weight="bold" />}
           label="Stock added"
-          value={summary.added}
+          value={totals.added}
           color="bg-success-50 text-success-600"
           hint={scopeHint}
         />
         <StatCard
-          icon={<Factory size={22} weight="bold" />}
-          label="Used in production"
-          value={summary.produced}
-          color="bg-accent-50 text-accent-600"
-          hint="Today"
-        />
-        <StatCard
           icon={<TrendUp size={22} weight="bold" />}
           label="Sold"
-          value={summary.sold}
+          value={totals.sold}
           color="bg-warning-50 text-warning-600"
-          hint="Today"
+          hint={scopeHint}
+        />
+        <StatCard
+          icon={<Factory size={22} weight="bold" />}
+          label="Product use / damaged"
+          value={totals.used}
+          color="bg-accent-50 text-accent-600"
+          hint={scopeHint}
         />
         <StatCard
           icon={<ArrowUUpLeft size={22} weight="bold" />}
           label="Returned"
-          value={summary.returned}
+          value={totals.returned}
           color="bg-black/5 text-[var(--muted)]"
           hint="Cancelled / returned"
         />
         <StatCard
           icon={<ArrowUpRight size={22} weight="bold" />}
           label="Net change"
-          value={summary.net >= 0 ? `+${summary.net}` : summary.net}
+          value={totals.net >= 0 ? `+${totals.net}` : totals.net}
           color={
-            summary.net > 0
+            totals.net > 0
               ? 'bg-success-50 text-success-600'
-              : summary.net < 0
+              : totals.net < 0
                 ? 'bg-danger-50 text-danger-600'
                 : 'bg-black/5 text-[var(--muted)]'
           }
@@ -269,9 +343,9 @@ export default function TodayLedgerPage() {
         <StatCard
           icon={<MoonStars size={22} weight="bold" />}
           label="Closing stock"
-          value={summary.closing}
+          value={totals.closing}
           color="bg-brand-50 text-brand-600"
-          hint="Now (live)"
+          hint={`Now · ${totals.moved} moved, ${totals.unchanged} unchanged`}
         />
       </div>
 
@@ -282,7 +356,7 @@ export default function TodayLedgerPage() {
             setSearch(value);
             setPage(1);
           }}
-          searchPlaceholder="Search by product or variant…"
+          searchPlaceholder="Search by product, variant or SKU…"
           filterDefs={[
             {
               type: 'select',
@@ -300,54 +374,99 @@ export default function TodayLedgerPage() {
             },
             {
               type: 'select',
-              key: 'reason',
-              label: 'Type',
-              placeholder: 'All types',
-              options: REASON_OPTIONS,
+              key: 'movement',
+              label: 'Movement',
+              placeholder: 'All variants',
+              options: MOVEMENT_FILTER_OPTIONS,
             },
           ]}
           filterValues={filterValues}
           onFiltersChange={(f) => {
             setProductId((f.product as string | null) ?? null);
             setVariantId((f.variant as string | null) ?? null);
-            setReason((f.reason as string | null) ?? null);
+            setMovement((f.movement as MovementFilter) ?? 'all');
             setPage(1);
           }}
           onClear={() => {
             setProductId(null);
             setVariantId(null);
-            setReason(null);
+            setMovement('all');
             setSearch('');
             setPage(1);
           }}
           hasActiveFilters={hasActiveFilters}
         />
 
-        <StockLedgerTable
-          groups={paged}
-          loading={tableQuery.isLoading}
-          error={tableQuery.isError}
-          retry={() => tableQuery.refetch()}
-          isPermissionDenied={(tableQuery.error as { status?: number } | null)?.status === 403}
+        {totals.variants > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+            <Package size={14} />
+            <span>
+              Showing {visible.length} of {scopedRows.length} variant
+              {scopedRows.length === 1 ? '' : 's'} in scope
+            </span>
+            {totals.unchanged > 0 && (
+              <Tooltip label="Opening equals closing for these — nothing came in or went out today.">
+                <span className="inline-flex items-center gap-1 rounded-lg bg-black/5 px-2 py-0.5 font-medium">
+                  <Minus size={11} />
+                  {totals.unchanged} with no movement
+                </span>
+              </Tooltip>
+            )}
+            {totals.closing === 0 && (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-danger-50 px-2 py-0.5 font-medium text-danger-700">
+                <WarningDiamond size={11} />
+                Nothing left in stock
+              </span>
+            )}
+          </div>
+        )}
+
+        <DataTable<StockAsOfRow>
+          columns={columns}
+          data={paged}
+          loading={productsQuery.isLoading || movementsQuery.isLoading}
+          error={productsQuery.isError || movementsQuery.isError}
+          retry={() => {
+            void productsQuery.refetch();
+            void movementsQuery.refetch();
+          }}
+          isPermissionDenied={
+            (movementsQuery.error as { status?: number } | null)?.status === 403 ||
+            (productsQuery.error as { status?: number } | null)?.status === 403
+          }
           sortState={sort}
           onSortChange={(s) => {
             setSort(s);
             setPage(1);
           }}
-          onViewProduct={(id) => router.push(`/products/${id}`)}
-          minWidth={880}
-          emptyTitle="No movements today"
+          rowActions={[
+            {
+              label: 'View product',
+              icon: <Package size={16} />,
+              onClick: (r) => router.push(`/products/${r.productId}`),
+            },
+          ]}
+          getRowId={(r) => r.key}
+          rowClassName={(r) => (r.isActive ? undefined : 'opacity-50')}
+          minWidth={1040}
+          emptyTitle="No products found"
           emptyDescription={
             hasActiveFilters
               ? 'Try adjusting your filters.'
-              : 'Nothing moved in or out of stock today yet.'
+              : 'Create a product to start tracking stock.'
           }
         />
+
+        {visible.some((r) => !r.isActive) && (
+          <Text size="xs" c="var(--muted)" className="mt-2">
+            Dimmed rows are inactive products or variants.
+          </Text>
+        )}
 
         <PaginationBar
           page={page}
           pageSize={pageSize}
-          total={groups.length}
+          total={visible.length}
           onPageChange={setPage}
           onPageSizeChange={(size) => {
             setPageSize(size);

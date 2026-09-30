@@ -44,7 +44,10 @@ export default function MobileBottomNav({
     pathname === href ||
     (href !== '/dashboard' &&
       pathname.startsWith(href) &&
-      !(href === '/orders' && pathname.startsWith('/orders/calendar')) &&
+      !(
+        href === '/orders' &&
+        (pathname.startsWith('/orders/calendar') || pathname.startsWith('/orders/delivered'))
+      ) &&
       !(href === '/products' && pathname.startsWith('/products/ledger')) &&
       !(href === '/products/ledger' && pathname.startsWith('/products/ledger/today')));
 

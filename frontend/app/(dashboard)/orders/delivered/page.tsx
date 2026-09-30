@@ -3,5 +3,5 @@
 import OrdersListPage from '@/features/orders/components/OrdersListPage';
 
 export default function Page() {
-  return <OrdersListPage scope="undelivered" />;
+  return <OrdersListPage scope="delivered" />;
 }

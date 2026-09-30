@@ -22,6 +22,7 @@ import {
   HandCoins,
   Stamp,
   BookBookmark,
+  CheckCircle,
   X,
 } from '@phosphor-icons/react';
 import { useSession } from '@/lib/providers';
@@ -59,13 +60,18 @@ const NAV_GROUPS: NavGroup[] = [
       },
       {
         href: '/products/ledger/today',
-        label: "Today's Ledger",
+        label: 'Stock as of Today',
         icon: <CalendarBlank size={18} weight="duotone" />,
       },
       {
         href: '/orders',
         label: 'Orders',
         icon: <ShoppingBag size={18} weight="duotone" />,
+      },
+      {
+        href: '/orders/delivered',
+        label: 'Delivered Orders',
+        icon: <CheckCircle size={18} weight="duotone" />,
       },
       {
         href: '/orders/calendar',
@@ -202,7 +208,11 @@ export default function Sidebar({
     pathname === item.href ||
     (item.href !== '/dashboard' &&
       pathname.startsWith(item.href) &&
-      !(item.href === '/orders' && pathname.startsWith('/orders/calendar')) &&
+      // More specific sibling routes own their own highlight.
+      !(
+        item.href === '/orders' &&
+        (pathname.startsWith('/orders/calendar') || pathname.startsWith('/orders/delivered'))
+      ) &&
       !(item.href === '/products' && pathname.startsWith('/products/ledger')) &&
       !(item.href === '/products/ledger' && pathname.startsWith('/products/ledger/today')));
 
