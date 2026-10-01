@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.customers.models import Customer
-from app.modules.khata.models import BillTemplate, LedgerAllocation, LedgerEntry, OrderInvoice
+from app.modules.khata.models import (
+    BillLayout,
+    BillTemplate,
+    LedgerAllocation,
+    LedgerEntry,
+    OrderInvoice,
+)
 from app.modules.orders.models import Order
 from app.modules.users.models import User
 from app.shared.exceptions import NotFoundError
@@ -276,6 +282,19 @@ class KhataRepository:
         )
         return list(result.scalars().all())
 
+    async def invoice_numbers_by_order(self, order_ids: list[UUID]) -> dict[UUID, str]:
+        """Most recent invoice number per order (idempotent — one per order)."""
+        if not order_ids:
+            return {}
+        result = await self.session.execute(
+            select(OrderInvoice.order_id, OrderInvoice.invoice_number)
+            .where(
+                OrderInvoice.tenant_id == self.tenant_id,
+                OrderInvoice.order_id.in_(order_ids),
+            )
+        )
+        return dict(result.all())
+
     async def get_template(self) -> BillTemplate | None:
         result = await self.session.execute(
             select(BillTemplate).where(BillTemplate.tenant_id == self.tenant_id)
@@ -293,3 +312,62 @@ class KhataRepository:
         if template is None:
             template = await self.add_template()
         return template
+
+    # ---- bill layout presets -----------------------------------------------------
+
+    async def list_bill_layouts(self) -> list[BillLayout]:
+        result = await self.session.execute(
+            select(BillLayout)
+            .where(BillLayout.tenant_id == self.tenant_id)
+            .order_by(BillLayout.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def count_bill_layouts(self) -> int:
+        result = await self.session.execute(
+            select(func.count(BillLayout.id)).where(BillLayout.tenant_id == self.tenant_id)
+        )
+        return int(result.scalar_one())
+
+    async def get_bill_layout(self, preset_id: UUID) -> BillLayout:
+        result = await self.session.execute(
+            select(BillLayout).where(
+                BillLayout.id == preset_id, BillLayout.tenant_id == self.tenant_id
+            )
+        )
+        preset = result.scalar_one_or_none()
+        if not preset:
+            raise NotFoundError("Bill layout not found")
+        return preset
+
+    async def add_bill_layout(
+        self,
+        name: str,
+        layout: dict,
+        *,
+        is_default_invoice: bool = False,
+        is_default_receipt: bool = False,
+    ) -> BillLayout:
+        preset = BillLayout(
+            tenant_id=self.tenant_id,
+            name=name,
+            layout=layout,
+            is_default_invoice=is_default_invoice,
+            is_default_receipt=is_default_receipt,
+        )
+        self.session.add(preset)
+        await self.session.flush()
+        return preset
+
+    async def get_default_bill_layout(self, doc_type: str) -> BillLayout | None:
+        column = (
+            BillLayout.is_default_invoice
+            if doc_type == "invoice"
+            else BillLayout.is_default_receipt
+        )
+        result = await self.session.execute(
+            select(BillLayout)
+            .where(BillLayout.tenant_id == self.tenant_id, column.is_(True))
+            .order_by(BillLayout.updated_at.desc())
+        )
+        return result.scalars().first()

@@ -14,14 +14,17 @@ from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from app.modules.khata import pdf
-from app.modules.khata.layout import normalize_layout
-from app.modules.khata.models import BillTemplate, LedgerEntry
+from app.modules.khata.layout import default_layout, normalize_layout
+from app.modules.khata.models import BillLayout, BillTemplate, LedgerEntry
 from app.modules.khata.repository import KhataRepository
 from app.modules.khata.schemas import (
     VALID_METHODS,
+    BillLayoutPresetCreate,
+    BillLayoutPresetRead,
+    BillLayoutPresetUpdate,
     BillTemplateRead,
     BillTemplateUpdate,
     CustomerKhataDetail,
@@ -30,12 +33,14 @@ from app.modules.khata.schemas import (
     InvoiceRead,
     KhataCustomerSummary,
     KhataOrderRead,
+    LedgerEntryRead,
     ManualAllocation,
     PaymentAllocationRead,
     PaymentListRead,
     PaymentRead,
     ReceiptRead,
     RecordPaymentInput,
+    SetBillLayoutDefaultInput,
 )
 from app.modules.orders.models import Order
 from app.modules.users.models import User
@@ -91,6 +96,7 @@ class KhataService:
         customer = await self.repo.get_customer(customer_id)
         orders = await self.repo.list_billable_orders(customer_id)
         payments = await self.repo.list_payments(customer_id)
+        invoice_numbers = await self.repo.invoice_numbers_by_order([o.id for o in orders])
         total_billed = sum(((o.total_amount or ZERO) for o in orders), ZERO)
         total_paid = sum((p.amount for p in payments if p.status == "active"), ZERO)
 
@@ -121,7 +127,88 @@ class KhataService:
             outstanding=_q2(total_billed - total_paid),
             orders=order_reads,
             payments=payment_reads,
+            ledger=self._build_ledger(orders, payments, invoice_numbers),
         )
+
+    def _build_ledger(
+        self,
+        orders: list[Order],
+        payments: list[LedgerEntry],
+        invoice_numbers: dict,
+    ) -> list[LedgerEntryRead]:
+        """Chronological debit/credit ledger for the customer's account.
+
+        Billed orders appear as debit rows (the customer owes) and active
+        payments as credit rows. Voided payments are excluded so the closing
+        balance always reconciles with ``total_billed - total_paid``. The
+        running balance is debtor (Dr) when positive and creditor (Cr) when
+        negative — i.e. the customer paid ahead of their bills.
+        """
+        rows: list[dict] = []
+        for o in orders:
+            rows.append(
+                {
+                    "date": o.created_at,
+                    "entry_type": "invoice",
+                    "order_id": o.id,
+                    "order_ref": o.order_ref,
+                    "invoice_number": invoice_numbers.get(o.id),
+                    "payment_id": None,
+                    "receipt_number": None,
+                    "payer_bill_no": None,
+                    "debit": _q2(o.total_amount or ZERO),
+                    "credit": None,
+                }
+            )
+        for p in payments:
+            if p.status != "active":
+                continue
+            rows.append(
+                {
+                    "date": p.collected_at,
+                    "entry_type": "payment",
+                    "order_id": None,
+                    "order_ref": None,
+                    "invoice_number": None,
+                    "payment_id": p.id,
+                    "receipt_number": p.receipt_number,
+                    "payer_bill_no": p.payer_bill_no,
+                    "debit": None,
+                    "credit": _q2(p.amount),
+                }
+            )
+        rows.sort(
+            key=lambda r: (
+                r["date"],
+                0 if r["entry_type"] == "invoice" else 1,
+                r["order_id"] or r["payment_id"] or "",
+            )
+        )
+        running = ZERO
+        ledger: list[LedgerEntryRead] = []
+        for r in rows:
+            debit = r["debit"] or ZERO
+            credit = r["credit"] or ZERO
+            running = _q2(running + debit - credit)
+            side = "dr" if running > ZERO else "cr" if running < ZERO else "zero"
+            ledger.append(
+                LedgerEntryRead(
+                    date=r["date"],
+                    entry_type=r["entry_type"],
+                    ref=r["order_ref"] or r["receipt_number"],
+                    order_id=r["order_id"],
+                    order_ref=r["order_ref"],
+                    invoice_number=r["invoice_number"],
+                    payment_id=r["payment_id"],
+                    receipt_number=r["receipt_number"],
+                    payer_bill_no=r["payer_bill_no"],
+                    debit=r["debit"],
+                    credit=r["credit"],
+                    balance=running,
+                    balance_side=side,
+                )
+            )
+        return ledger
 
     def _payment_read(self, entry: LedgerEntry) -> PaymentRead:
         return PaymentRead(
@@ -134,6 +221,7 @@ class KhataService:
             collector_name=entry.collector_name,
             collected_at=entry.collected_at,
             note=entry.note,
+            payer_bill_no=entry.payer_bill_no,
             receipt_number=entry.receipt_number,
             status=entry.status,
             voided_at=entry.voided_at,
@@ -245,6 +333,7 @@ class KhataService:
             collected_by=self.user_id,
             collected_at=collected_at,
             note=data.note,
+            payer_bill_no=data.payer_bill_no,
             receipt_number=receipt_number,
             receipt_snapshot=template.snapshot() if data.generate_receipt else None,
             status="active",
@@ -368,6 +457,7 @@ class KhataService:
             method=entry.method,
             collected_at=entry.collected_at,
             note=entry.note,
+            payer_bill_no=entry.payer_bill_no,
             collector_name=entry.collector_name,
             status=entry.status,
             voided_at=entry.voided_at,
@@ -391,6 +481,10 @@ class KhataService:
         default placeholders like "My Business" into every PDF forever. Any
         field that is empty/missing in the frozen snapshot is backfilled from
         the live template; branding that was actually configured stays frozen.
+
+        Layouts are NOT part of this merge — they are resolved separately via
+        ``get_default_layout`` so documents always render with the tenant's
+        current default layout.
         """
         live = await self.repo.get_template_or_create()
         live_snap = live.snapshot()
@@ -407,7 +501,6 @@ class KhataService:
             "receipt_number_prefix",
             "logo",
             "signature",
-            "layout",
         ):
             if not merged.get(key):
                 merged[key] = live_snap[key]
@@ -447,7 +540,8 @@ class KhataService:
             ],
         }
         snapshot = await self._resolved_snapshot(entry.receipt_snapshot)
-        return pdf.render_receipt_pdf(snapshot=snapshot, receipt=receipt)
+        layout = await self.get_default_layout("receipt")
+        return pdf.render_receipt_pdf(snapshot=snapshot, layout=layout, receipt=receipt)
 
     # ---- invoices ---------------------------------------------------------------
 
@@ -582,7 +676,8 @@ class KhataService:
             ],
         }
         snapshot = await self._resolved_snapshot(invoice.template_snapshot)
-        return pdf.render_invoice_pdf(snapshot=snapshot, invoice=payload)
+        layout = await self.get_default_layout("invoice")
+        return pdf.render_invoice_pdf(snapshot=snapshot, layout=layout, invoice=payload)
 
     # ---- bill template ---------------------------------------------------------------
 
@@ -594,6 +689,10 @@ class KhataService:
         template = await self.repo.get_template_or_create()
         updates = data.model_dump(exclude_unset=True)
         # Validate + normalize layout before writing anything else.
+        # TODO(remove-template-layout): the `layout` field on the bill template
+        # is deprecated — layouts now live in bill_layouts presets. Keep this
+        # path for back-compat until the new frontend stops sending it, then
+        # drop the field and the bill_templates.layout column.
         layout_raw = updates.pop("layout", None)
         if layout_raw is not None:
             try:
@@ -646,5 +745,149 @@ class KhataService:
             next_receipt_number=template.next_receipt_number,
             logo=_asset(template.logo_mime, template.logo_data),
             signature=_asset(template.signature_mime, template.signature_data),
+            # Deprecated field — see BillTemplateRead.layout.
             layout=normalize_layout(template.layout),
         )
+
+    # ---- bill layout presets -------------------------------------------------------
+
+    async def get_default_layout(self, doc_type: str) -> dict:
+        """Resolve the layout that renders ``doc_type`` documents right now.
+
+        Returned layout is never stored on the document — it is looked up (and,
+        if the tenant has no preset yet, created as "Standard") at render time,
+        so changing the default preset in Settings changes every document for
+        the whole tenant, old ones included.
+        """
+        if doc_type not in {"invoice", "receipt"}:
+            raise ValidationError("doc_type must be 'invoice' or 'receipt'")
+        preset = await self.repo.get_default_bill_layout(doc_type)
+        if preset is None:
+            preset = await self._ensure_standard_preset()
+        return normalize_layout(preset.layout)
+
+    async def _ensure_standard_preset(self) -> BillLayout:
+        """Lazily create a "Standard" preset from the bill template's layout.
+
+        Only claims the default flags that are currently unset so the partial
+        unique indexes can never be violated.
+        """
+        template = await self.repo.get_template_or_create()
+        layout = normalize_layout(template.layout or default_layout())
+        has_invoice = await self.repo.get_default_bill_layout("invoice")
+        has_receipt = await self.repo.get_default_bill_layout("receipt")
+        # The name is unique per tenant: if "Standard" was renamed away and is
+        # gone we recreate it, otherwise we fall back to the renamed row.
+        existing = {p.name: p for p in await self.repo.list_bill_layouts()}
+        if "Standard" in existing:
+            return existing["Standard"]
+        return await self.repo.add_bill_layout(
+            "Standard",
+            layout,
+            is_default_invoice=has_invoice is None,
+            is_default_receipt=has_receipt is None,
+        )
+
+    def _preset_read(self, preset: BillLayout) -> BillLayoutPresetRead:
+        return BillLayoutPresetRead(
+            id=preset.id,
+            name=preset.name,
+            layout=normalize_layout(preset.layout),
+            is_default_invoice=preset.is_default_invoice,
+            is_default_receipt=preset.is_default_receipt,
+            updated_at=preset.updated_at,
+        )
+
+    async def list_bill_layouts(self) -> list[BillLayoutPresetRead]:
+        presets = await self.repo.list_bill_layouts()
+        if not presets:
+            # Tenants created after this feature (or whose template was updated
+            # before it) get their "Standard" preset lazily on first read.
+            presets = [await self._ensure_standard_preset()]
+        presets.sort(
+            key=lambda p: (not (p.is_default_invoice or p.is_default_receipt), p.name.lower())
+        )
+        return [self._preset_read(p) for p in presets]
+
+    async def create_bill_layout(self, data: BillLayoutPresetCreate) -> BillLayoutPresetRead:
+        name = data.name.strip()
+        if not name:
+            raise ValidationError("Layout name cannot be empty")
+        try:
+            layout = normalize_layout(data.layout, strict=True)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        existing_names = {
+            p.name for p in await self.repo.list_bill_layouts()
+        }
+        if name in existing_names:
+            raise ConflictError("A bill layout with this name already exists")
+        # The tenant's very first preset becomes the default for both doc types.
+        is_first = await self.repo.count_bill_layouts() == 0
+        preset = await self.repo.add_bill_layout(
+            name,
+            layout,
+            is_default_invoice=is_first,
+            is_default_receipt=is_first,
+        )
+        return self._preset_read(preset)
+
+    async def update_bill_layout(
+        self, preset_id: UUID, data: BillLayoutPresetUpdate
+    ) -> BillLayoutPresetRead:
+        preset = await self.repo.get_bill_layout(preset_id)
+        updates = data.model_dump(exclude_unset=True)
+        name = updates.pop("name", None)
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise ValidationError("Layout name cannot be empty")
+            if name != preset.name:
+                siblings = await self.repo.list_bill_layouts()
+                if any(p.id != preset_id and p.name == name for p in siblings):
+                    raise ConflictError("A bill layout with this name already exists")
+            preset.name = name
+        layout_raw = updates.pop("layout", None)
+        if layout_raw is not None:
+            try:
+                preset.layout = normalize_layout(layout_raw, strict=True)
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
+        await self.session.flush()
+        return self._preset_read(preset)
+
+    async def delete_bill_layout(self, preset_id: UUID) -> None:
+        preset = await self.repo.get_bill_layout(preset_id)
+        if preset.is_default_invoice or preset.is_default_receipt:
+            raise ConflictError(
+                "This layout is in use as the default for invoices or receipts. "
+                "Make another layout the default first."
+            )
+        if await self.repo.count_bill_layouts() <= 1:
+            raise ConflictError("You cannot delete the last layout. Create another layout first.")
+        await self.session.delete(preset)
+        await self.session.flush()
+
+    async def set_default_bill_layout(
+        self, preset_id: UUID, data: SetBillLayoutDefaultInput
+    ) -> BillLayoutPresetRead:
+        preset = await self.repo.get_bill_layout(preset_id)
+        column = "is_default_invoice" if data.doc_type == "invoice" else "is_default_receipt"
+        # Atomic switch for this doc type: clear the old default, set the new
+        # one — both within the same transaction (the partial unique index in
+        # the DB guarantees at most one row can be the default at a time).
+        await self.session.execute(
+            update(BillLayout)
+            .where(
+                BillLayout.tenant_id == self.tenant_id,
+                getattr(BillLayout, column).is_(True),
+            )
+            .values(**{column: False}, updated_at=func.now())
+        )
+        await self.session.execute(
+            update(BillLayout)
+            .where(BillLayout.id == preset_id)
+            .values(**{column: True}, updated_at=func.now())
+        )
+        await self.session.refresh(preset)
+        return self._preset_read(preset)

@@ -8,7 +8,7 @@ import '@react-pdf-viewer/default-layout/lib/styles/index.css';
 import { apiClient } from '@/lib/api-client';
 import { LoadingState, ErrorState } from '@/components/shared';
 
-export default function PdfViewerWindow({ url }: { url: string }) {
+export default function PdfViewerWindow({ url, containerClass }: { url: string; containerClass?: string }) {
   const [file, setFile] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +44,11 @@ export default function PdfViewerWindow({ url }: { url: string }) {
   if (!file) return <LoadingState label="Loading PDF…" />;
 
   return (
-    <div className="h-[calc(100vh-12rem)] overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 shadow-sm">
+    <div
+      className={`overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 shadow-sm ${
+        containerClass ?? 'h-[calc(100vh-12rem)]'
+      }`}
+    >
       <Worker workerUrl="/pdf.worker.min.js">
         <Viewer fileUrl={fileUrl} plugins={[defaultLayoutPluginInstance]} />
       </Worker>

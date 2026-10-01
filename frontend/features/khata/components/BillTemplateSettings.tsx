@@ -1,20 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Button,
   FileInput,
   SegmentedControl,
+  Skeleton,
   Stack,
   Text,
   TextInput,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { ImageSquare, Receipt, FileText, SlidersHorizontal } from '@phosphor-icons/react';
-import { useBillTemplate, useUpdateBillTemplate, useUploadTemplateImage } from '../api';
-import type { BillLayout, BillTemplate } from '../api';
+import {
+  useBillLayouts,
+  useBillTemplate,
+  useUpdateBillLayout,
+  useUpdateBillTemplate,
+  useUploadTemplateImage,
+} from '../api';
+import type { BillDocType, BillLayout, BillLayoutPreset, BillTemplate } from '../api';
 import BillLayoutDesigner from './BillLayoutDesigner';
+import BillLayoutLibrary from './BillLayoutLibrary';
 import BillPreview from './BillPreview';
+
+function cloneLayout(layout: BillLayout): BillLayout {
+  return { blocks: layout.blocks.map((b) => ({ ...b, enabled: { ...b.enabled } })) };
+}
 
 function ImagePicker({
   kind,
@@ -108,8 +120,30 @@ function TextField({
   );
 }
 
-function BillFormatEditor({ template }: { template: BillTemplate }) {
+function LoadingLayout() {
+  return (
+    <div className="flex flex-col gap-6">
+      <Skeleton height={280} radius="lg" />
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <Skeleton height={200} radius="lg" />
+        <Skeleton height={200} radius="lg" />
+      </div>
+      <Skeleton height={220} radius="lg" />
+    </div>
+  );
+}
+
+function BillFormatEditor({
+  template,
+  presets,
+  layoutsLoading,
+}: {
+  template: BillTemplate;
+  presets: BillLayoutPreset[];
+  layoutsLoading: boolean;
+}) {
   const updateTemplate = useUpdateBillTemplate();
+  const updateLayout = useUpdateBillLayout();
 
   const [text, setText] = useState(() => ({
     business_name: template.business_name,
@@ -121,13 +155,55 @@ function BillFormatEditor({ template }: { template: BillTemplate }) {
     invoice_number_prefix: template.invoice_number_prefix,
     receipt_number_prefix: template.receipt_number_prefix,
   }));
-  const [layout, setLayout] = useState<BillLayout>(template.layout ?? { blocks: [] });
-  const [docType, setDocType] = useState<'invoice' | 'receipt'>('invoice');
+  const [docType, setDocType] = useState<BillDocType>('invoice');
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => presets.find((p) => p.is_default_invoice)?.id ?? presets[0]?.id ?? null,
+  );
+  // Once the user picks a preset from the library we stop auto-following the
+  // previewed document type, so toggling Invoice/Receipt never yanks their
+  // selection (or unsaved edits) away.
+  const [followsPreview, setFollowsPreview] = useState(true);
+  // The layout being edited. `draft.id` tracks which preset the working copy
+  // belongs to, so switching presets falls back to the saved copy while
+  // background refetches never clobber in-progress edits.
+  const [draft, setDraft] = useState<{ id: string | null; layout: BillLayout }>(() => ({
+    id: presets.find((p) => p.is_default_invoice)?.id ?? presets[0]?.id ?? null,
+    layout: cloneLayout(
+      presets.find((p) => p.is_default_invoice)?.layout ?? presets[0]?.layout ?? { blocks: [] },
+    ),
+  }));
+
+  const selected = useMemo(
+    () => presets.find((p) => p.id === selectedId) ?? presets[0] ?? null,
+    [presets, selectedId],
+  );
+
+  const layout =
+    selected && draft.id === selected.id
+      ? draft.layout
+      : cloneLayout(selected?.layout ?? { blocks: [] });
+
+  const setLayout = (next: BillLayout) =>
+    setDraft({ id: selected?.id ?? null, layout: next });
+
+  const changeDocType = (next: BillDocType) => {
+    setDocType(next);
+    if (!followsPreview) return;
+    const target = presets.find((p) =>
+      next === 'invoice' ? p.is_default_invoice : p.is_default_receipt,
+    );
+    if (target) setSelectedId(target.id);
+  };
+
+  const selectPreset = (id: string) => {
+    setFollowsPreview(false);
+    setSelectedId(id);
+  };
 
   const set = (field: keyof typeof text) => (value: string) =>
     setText((f) => ({ ...f, [field]: value }));
 
-  const save = () => {
+  const saveDetails = () => {
     updateTemplate.mutate(
       {
         business_name: text.business_name || null,
@@ -138,14 +214,13 @@ function BillFormatEditor({ template }: { template: BillTemplate }) {
         footer_note: text.footer_note || null,
         invoice_number_prefix: text.invoice_number_prefix || null,
         receipt_number_prefix: text.receipt_number_prefix || null,
-        layout,
       },
       {
         onSuccess: () =>
           notifications.show({
             color: 'success',
             title: 'Bill format saved',
-            message: 'New receipts and invoices will use this branding and layout.',
+            message: 'New receipts and invoices will use this branding.',
           }),
         onError: (err) =>
           notifications.show({
@@ -155,6 +230,41 @@ function BillFormatEditor({ template }: { template: BillTemplate }) {
           }),
       },
     );
+  };
+
+  const saveLayout = () => {
+    if (!selected) return;
+    updateLayout.mutate(
+      { id: selected.id, layout },
+      {
+        onSuccess: (preset) => {
+          const inUse =
+            preset.is_default_invoice || preset.is_default_receipt
+              ? `It is used for all ${preset.is_default_invoice ? 'invoices' : 'receipts'}.`
+              : 'It is saved but not used for any document type yet.';
+          notifications.show({
+            color: 'success',
+            title: 'Layout saved',
+            message: `“${preset.name}” updated. ${inUse}`,
+          });
+        },
+        onError: (err) =>
+          notifications.show({
+            color: 'red',
+            title: 'Could not save layout',
+            message: err instanceof Error ? err.message : 'Something went wrong',
+          }),
+      },
+    );
+  };
+
+  const branding = {
+    business_name: text.business_name,
+    tax_id: text.tax_id || null,
+    address: text.address || null,
+    phone: text.phone || null,
+    email: text.email || null,
+    footer_note: text.footer_note || null,
   };
 
   return (
@@ -242,11 +352,44 @@ function BillFormatEditor({ template }: { template: BillTemplate }) {
             <div>
               <Text fw={600} size="md" className="text-zinc-800">Layout</Text>
               <Text size="xs" c="dimmed">
-                Drag blocks to reorder, toggle them per document, and align. Changes preview live.
+                Pick a saved layout, then drag blocks to reorder, toggle them per document, and align.
+                Changes preview live.
               </Text>
             </div>
           </div>
-          <BillLayoutDesigner layout={layout} onChange={setLayout} />
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <BillLayoutLibrary
+              presets={presets}
+              isLoading={layoutsLoading}
+              selectedId={selected?.id ?? null}
+              currentLayout={layout}
+              onSelect={selectPreset}
+              onCreated={(preset) => selectPreset(preset.id)}
+            />
+            <div className="min-w-0">
+              {selected && layout.blocks.length > 0 ? (
+                <>
+                  <Text size="xs" c="dimmed" mb={8}>
+                    Editing “{selected.name}”
+                  </Text>
+                  <BillLayoutDesigner layout={layout} onChange={setLayout} />
+                  <Button
+                    size="sm"
+                    mt="md"
+                    onClick={saveLayout}
+                    loading={updateLayout.isPending}
+                  >
+                    Save layout
+                  </Button>
+                </>
+              ) : (
+                <Text size="sm" c="dimmed">
+                  {layoutsLoading ? 'Loading layouts…' : 'Select a layout to start editing.'}
+                </Text>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -260,7 +403,7 @@ function BillFormatEditor({ template }: { template: BillTemplate }) {
             <SegmentedControl
               size="xs"
               value={docType}
-              onChange={(v) => setDocType(v as 'invoice' | 'receipt')}
+              onChange={(v) => changeDocType(v as BillDocType)}
               data={[
                 { value: 'invoice', label: 'Invoice' },
                 { value: 'receipt', label: 'Receipt' },
@@ -270,11 +413,7 @@ function BillFormatEditor({ template }: { template: BillTemplate }) {
           <div className="flex justify-center">
             <BillPreview
               docType={docType}
-              draft={{
-                ...text,
-                next_invoice_number: template.next_invoice_number,
-                next_receipt_number: template.next_receipt_number,
-              }}
+              branding={branding}
               logo={template.logo?.data_url ?? null}
               signature={template.signature?.data_url ?? null}
               layout={layout}
@@ -282,7 +421,7 @@ function BillFormatEditor({ template }: { template: BillTemplate }) {
           </div>
         </div>
 
-        <Button size="md" onClick={save} loading={updateTemplate.isPending} className="self-end">
+        <Button size="md" onClick={saveDetails} loading={updateTemplate.isPending} className="self-end">
           Save bill format
         </Button>
       </div>
@@ -292,11 +431,31 @@ function BillFormatEditor({ template }: { template: BillTemplate }) {
 
 export default function BillTemplateSettings() {
   const templateQuery = useBillTemplate();
+  const layoutsQuery = useBillLayouts();
 
-  if (templateQuery.isLoading) return null;
+  const presets = layoutsQuery.data ?? [];
+  const templateReady = !templateQuery.isLoading && !!templateQuery.data;
+  const presetsReady = !layoutsQuery.isLoading;
+
+  if (!templateReady && !templateQuery.isError) return <LoadingLayout />;
   if (templateQuery.isError || !templateQuery.data) {
     return <Text c="dimmed" size="sm">Could not load the bill format template.</Text>;
   }
 
-  return <BillFormatEditor template={templateQuery.data} />;
+  if (!presetsReady) {
+    return (
+      <div className="flex flex-col gap-6">
+        <LoadingLayout />
+        <Text size="sm" c="dimmed">Loading saved bill layouts…</Text>
+      </div>
+    );
+  }
+
+  return (
+    <BillFormatEditor
+      template={templateQuery.data}
+      presets={presets}
+      layoutsLoading={layoutsQuery.isLoading}
+    />
+  );
 }

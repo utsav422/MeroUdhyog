@@ -1,5 +1,5 @@
-from uuid import UUID
 from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response, UploadFile, status
 
@@ -7,6 +7,9 @@ from app.core.dependencies import get_current_tenant_id, get_current_user_id, ge
 from app.core.paginator import pagination_params
 from app.core.permissions import Permissions, require_any_permission, require_permission
 from app.modules.khata.schemas import (
+    BillLayoutPresetCreate,
+    BillLayoutPresetRead,
+    BillLayoutPresetUpdate,
     BillTemplateRead,
     BillTemplateUpdate,
     CustomerKhataDetail,
@@ -16,6 +19,7 @@ from app.modules.khata.schemas import (
     PaymentRead,
     ReceiptRead,
     RecordPaymentInput,
+    SetBillLayoutDefaultInput,
     VoidPaymentInput,
 )
 from app.modules.khata.service import KhataService
@@ -220,3 +224,64 @@ async def upload_signature(
     _=Depends(require_permission(Permissions.MANAGE_BILL_TEMPLATE)),
 ):
     return await _upload_image(db, tenant_id, user_id, "signature", file)
+
+
+@router.get("/settings/bill-layouts", response_model=list[BillLayoutPresetRead])
+async def list_bill_layouts(
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    _=Depends(require_permission(Permissions.MANAGE_BILL_TEMPLATE)),
+):
+    service = await _service(db, tenant_id)
+    return await service.list_bill_layouts()
+
+
+@router.post(
+    "/settings/bill-layouts",
+    response_model=BillLayoutPresetRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_bill_layout(
+    data: BillLayoutPresetCreate,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    _=Depends(require_permission(Permissions.MANAGE_BILL_TEMPLATE)),
+):
+    service = await _service(db, tenant_id)
+    return await service.create_bill_layout(data)
+
+
+@router.put("/settings/bill-layouts/{preset_id}", response_model=BillLayoutPresetRead)
+async def update_bill_layout(
+    preset_id: UUID,
+    data: BillLayoutPresetUpdate,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    _=Depends(require_permission(Permissions.MANAGE_BILL_TEMPLATE)),
+):
+    service = await _service(db, tenant_id)
+    return await service.update_bill_layout(preset_id, data)
+
+
+@router.delete("/settings/bill-layouts/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_bill_layout(
+    preset_id: UUID,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    _=Depends(require_permission(Permissions.MANAGE_BILL_TEMPLATE)),
+):
+    service = await _service(db, tenant_id)
+    await service.delete_bill_layout(preset_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/settings/bill-layouts/{preset_id}/default", response_model=BillLayoutPresetRead)
+async def set_bill_layout_default(
+    preset_id: UUID,
+    data: SetBillLayoutDefaultInput,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    _=Depends(require_permission(Permissions.MANAGE_BILL_TEMPLATE)),
+):
+    service = await _service(db, tenant_id)
+    return await service.set_default_bill_layout(preset_id, data)

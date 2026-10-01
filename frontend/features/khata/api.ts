@@ -28,6 +28,22 @@ export type KhataOrder = {
   payment_status: string;
 };
 
+export type LedgerEntry = {
+  date: string;
+  entry_type: 'invoice' | 'payment';
+  ref: string | null;
+  order_id: string | null;
+  order_ref: string | null;
+  invoice_number: string | null;
+  payment_id: string | null;
+  receipt_number: string | null;
+  payer_bill_no: string | null;
+  debit: string | null;
+  credit: string | null;
+  balance: string;
+  balance_side: 'dr' | 'cr' | 'zero';
+};
+
 export type PaymentAllocation = {
   order_id: string;
   order_ref: string | null;
@@ -44,6 +60,7 @@ export type Payment = {
   collector_name: string | null;
   collected_at: string;
   note: string | null;
+  payer_bill_no: string | null;
   receipt_number: string | null;
   status: string;
   voided_at: string | null;
@@ -64,6 +81,7 @@ export type CustomerKhataDetail = {
   outstanding: string;
   orders: KhataOrder[];
   payments: Payment[];
+  ledger: LedgerEntry[];
 };
 
 export type RecordPaymentInput = {
@@ -72,6 +90,7 @@ export type RecordPaymentInput = {
   method: string;
   collected_at?: string | null;
   note?: string | null;
+  payer_bill_no?: string | null;
   allocations?: { order_id: string; amount: string }[] | null;
   generate_receipt?: boolean;
 };
@@ -85,6 +104,7 @@ export type Receipt = {
   method: string;
   collected_at: string;
   note: string | null;
+  payer_bill_no: string | null;
   collector_name: string | null;
   status: string;
   voided_at: string | null;
@@ -109,12 +129,16 @@ export type Invoice = {
   created_at: string;
   status: string;
   payment_status: string;
+  subtotal: string;
+  tax_rate: string;
+  tax_amount: string;
   total_amount: string;
   amount_paid: string;
   customer_id: string | null;
   customer_name: string | null;
   customer_phone: string | null;
   customer_address: string | null;
+  note: string | null;
   items: InvoiceItem[];
   snapshot: Record<string, unknown> | null;
 };
@@ -134,6 +158,17 @@ export type BillLayoutBlock = {
 
 export type BillLayout = { blocks: BillLayoutBlock[] };
 
+export type BillDocType = 'invoice' | 'receipt';
+
+export type BillLayoutPreset = {
+  id: string;
+  name: string;
+  layout: BillLayout;
+  is_default_invoice: boolean;
+  is_default_receipt: boolean;
+  updated_at: string;
+};
+
 export type BillTemplate = {
   business_name: string;
   tax_id: string | null;
@@ -147,7 +182,6 @@ export type BillTemplate = {
   next_receipt_number: number;
   logo: ImageAsset | null;
   signature: ImageAsset | null;
-  layout: BillLayout;
 };
 
 export type BillTemplateUpdate = {
@@ -159,7 +193,6 @@ export type BillTemplateUpdate = {
   footer_note?: string | null;
   invoice_number_prefix?: string | null;
   receipt_number_prefix?: string | null;
-  layout?: BillLayout | null;
 };
 
 export const khataKeys = {
@@ -169,6 +202,10 @@ export const khataKeys = {
   receipt: (id: string) => [...khataKeys.all, 'receipts', id] as const,
   template: () => [...khataKeys.all, 'template'] as const,
   invoice: (orderId: string) => [...khataKeys.all, 'invoice', orderId] as const,
+  layouts: (docType?: BillDocType) =>
+    docType
+      ? ([...khataKeys.all, 'layouts', docType] as const)
+      : ([...khataKeys.all, 'layouts'] as const),
 };
 
 export function useKhataCustomers() {
@@ -191,6 +228,14 @@ export function useReceipt(id: string) {
     queryKey: khataKeys.receipt(id),
     queryFn: () => apiClient.get<Receipt>(`/khata/receipts/${id}`),
     enabled: !!id,
+  });
+}
+
+export function useInvoice(orderId: string) {
+  return useQuery({
+    queryKey: khataKeys.invoice(orderId),
+    queryFn: () => apiClient.get<Invoice>(`/khata/orders/${orderId}/invoice`),
+    enabled: !!orderId,
   });
 }
 
@@ -243,6 +288,71 @@ export function useUploadTemplateImage() {
     mutationFn: ({ kind, file }: { kind: 'logo' | 'signature'; file: File }) =>
       apiClient.upload<BillTemplate>(`/khata/settings/bill-template/${kind}`, file),
     onSuccess: () => qc.invalidateQueries({ queryKey: khataKeys.template() }),
+  });
+}
+
+export function useBillLayouts(docType?: BillDocType) {
+  return useQuery({
+    queryKey: khataKeys.layouts(docType),
+    queryFn: () => apiClient.get<BillLayoutPreset[]>('/khata/settings/bill-layouts'),
+  });
+}
+
+/**
+ * The saved layout every invoice/receipt in the app currently renders with.
+ * Resolution mirrors the backend: the tenant's default preset for that
+ * document type, falling back to the (lazily seeded) Standard preset.
+ */
+export function useDefaultBillLayout(docType: BillDocType) {
+  const query = useBillLayouts();
+  const presets = query.data ?? [];
+
+  const preset =
+    presets.find((p) => (docType === 'invoice' ? p.is_default_invoice : p.is_default_receipt)) ??
+    presets[0] ??
+    null;
+
+  return {
+    ...query,
+    preset,
+    layout: preset?.layout ?? null,
+  };
+}
+
+export function useCreateBillLayout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; layout: BillLayout }) =>
+      apiClient.post<BillLayoutPreset>('/khata/settings/bill-layouts', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: khataKeys.all }),
+  });
+}
+
+export function useUpdateBillLayout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: string; name?: string; layout?: BillLayout }) =>
+      apiClient.put<BillLayoutPreset>(`/khata/settings/bill-layouts/${id}`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: khataKeys.all }),
+  });
+}
+
+export function useDeleteBillLayout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.delete<void>(`/khata/settings/bill-layouts/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: khataKeys.all }),
+  });
+}
+
+export function useSetDefaultBillLayout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, docType }: { id: string; docType: BillDocType }) =>
+      apiClient.post<BillLayoutPreset>(`/khata/settings/bill-layouts/${id}/default`, {
+        doc_type: docType,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: khataKeys.all }),
   });
 }
 

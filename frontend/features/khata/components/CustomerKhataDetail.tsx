@@ -33,6 +33,8 @@ import {
 } from '../api';
 import type { Payment } from '../api';
 import RecordPaymentModal from './RecordPaymentModal';
+import LedgerTable from './LedgerTable';
+import PdfPreviewModal from './PdfPreviewModal';
 
 function methodIcon(method: string) {
   const icons: Record<string, ReactNode> = {
@@ -81,6 +83,14 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
   const detailQuery = useCustomerKhata(customerId);
   const voidPayment = useVoidPayment();
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [invoicePreview, setInvoicePreview] = useState<{
+    orderId: string;
+    orderRef: string;
+  } | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<{
+    paymentId: string;
+    receiptNumber: string | null;
+  } | null>(null);
 
   if (detailQuery.isLoading) return <LoadingState />;
   if (detailQuery.isError) return <ErrorState retry={() => detailQuery.refetch()} />;
@@ -157,6 +167,19 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         )}
       </div>
 
+      <LedgerTable
+        ledger={detail.ledger}
+        customerName={detail.customer_name}
+        onOpenInvoice={(orderId) => {
+          const order = detail.orders.find((o) => o.order_id === orderId);
+          setInvoicePreview({ orderId, orderRef: order?.order_ref ?? '' });
+        }}
+        onOpenReceipt={(paymentId) => {
+          const payment = detail.payments.find((p) => p.id === paymentId);
+          setReceiptPreview({ paymentId, receiptNumber: payment?.receipt_number ?? null });
+        }}
+      />
+
       <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm">
         <div className="border-b border-zinc-100 px-6 py-4">
           <Text fw={600} size="md" className="text-zinc-800">
@@ -209,7 +232,7 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
                         size="compact-sm"
                         variant="subtle"
                         leftSection={<FilePdf size={14} />}
-                        onClick={() => router.push(`/orders/${o.order_id}/invoice`)}
+                        onClick={() => setInvoicePreview({ orderId: o.order_id, orderRef: o.order_ref })}
                       >
                         Invoice
                       </Button>
@@ -277,7 +300,9 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
                         size="compact-xs"
                         variant="subtle"
                         leftSection={<FilePdf size={14} />}
-                        onClick={() => router.push(`/khata/receipts/${p.id}`)}
+                        onClick={() =>
+                          setReceiptPreview({ paymentId: p.id, receiptNumber: p.receipt_number })
+                        }
                         disabled={!p.receipt_number}
                       >
                         Receipt
@@ -317,6 +342,23 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         onClose={() => setPaymentOpen(false)}
         customerId={detail.customer_id}
         orders={detail.orders}
+      />
+
+      <PdfPreviewModal
+        opened={!!invoicePreview}
+        onClose={() => setInvoicePreview(null)}
+        url={invoicePreview ? `/khata/orders/${invoicePreview.orderId}/invoice/pdf` : ''}
+        title={invoicePreview ? `Invoice · ${invoicePreview.orderRef}` : 'Invoice'}
+        subtitle={invoicePreview ? invoicePreview.orderRef : undefined}
+        fallbackName={`invoice-${invoicePreview?.orderId.slice(0, 8) ?? 'preview'}.pdf`}
+      />
+      <PdfPreviewModal
+        opened={!!receiptPreview}
+        onClose={() => setReceiptPreview(null)}
+        url={receiptPreview ? `/khata/receipts/${receiptPreview.paymentId}/pdf` : ''}
+        title={receiptPreview?.receiptNumber ?? 'Receipt'}
+        subtitle={receiptPreview ? 'Printable receipt' : undefined}
+        fallbackName={`receipt-${receiptPreview?.paymentId.slice(0, 8) ?? 'preview'}.pdf`}
       />
     </div>
   );

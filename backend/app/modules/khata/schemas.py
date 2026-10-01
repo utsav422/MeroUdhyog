@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -57,6 +58,33 @@ class PaymentAllocationRead(BaseModel):
     amount_applied: Decimal
 
 
+class LedgerEntryRead(BaseModel):
+    """A single row of the customer's account ledger (debit/credit + balance).
+
+    Debit rows are issued invoices/orders (customer owes), credit rows are
+    recorded payments. ``balance`` is the running balance after this row and
+    ``balance_side`` tells whether it is Dr or Cr (``zero`` when balanced).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    date: datetime
+    entry_type: str  # 'invoice' | 'payment'
+    # Primary reference: order no for invoices, receipt no for payments.
+    ref: str | None = None
+    order_id: UUID | None = None
+    order_ref: str | None = None
+    invoice_number: str | None = None
+    payment_id: UUID | None = None
+    receipt_number: str | None = None
+    # Bill/voucher no supplied by the paying party (money recipient).
+    payer_bill_no: str | None = None
+    debit: Decimal | None = None
+    credit: Decimal | None = None
+    balance: Decimal = Decimal("0")
+    balance_side: str = "zero"  # 'dr' | 'cr' | 'zero'
+
+
 class PaymentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -69,6 +97,7 @@ class PaymentRead(BaseModel):
     collector_name: str | None = None
     collected_at: datetime
     note: str | None = None
+    payer_bill_no: str | None = None
     receipt_number: str | None = None
     status: str
     voided_at: datetime | None = None
@@ -99,6 +128,7 @@ class CustomerKhataDetail(BaseModel):
     outstanding: Decimal
     orders: list[KhataOrderRead] = Field(default_factory=list)
     payments: list[PaymentRead] = Field(default_factory=list)
+    ledger: list[LedgerEntryRead] = Field(default_factory=list)
 
 
 class ManualAllocation(BaseModel):
@@ -112,6 +142,8 @@ class RecordPaymentInput(BaseModel):
     method: str = Field(min_length=1, max_length=20)
     collected_at: datetime | None = None
     note: str | None = Field(default=None, max_length=500)
+    # Bill/voucher no supplied by the paying party (money recipient).
+    payer_bill_no: str | None = Field(default=None, max_length=40)
     # Optional manual allocations. When omitted the payment is auto-applied to
     # the oldest outstanding orders first (FIFO).
     allocations: list[ManualAllocation] | None = None
@@ -146,26 +178,34 @@ class BillTemplateRead(BaseModel):
     invoice_tax_rate: Decimal = Decimal("0")
     logo: ImageAsset | None = None
     signature: ImageAsset | None = None
-    # Normalized bill layout (blocks) — see app.modules.khata.layout.
+    # Deprecated: layouts are now managed as bill_layouts presets (see the
+    # /khata/settings/bill-layouts endpoints). TODO(remove-template-layout):
+    # keep this field + the bill_templates.layout column until nothing reads
+    # them, then drop both.
     layout: dict
 
-    def to_snapshot(self) -> dict:
-        return {
-            "business_name": self.business_name,
-            "tax_id": self.tax_id,
-            "address": self.address,
-            "phone": self.phone,
-            "email": self.email,
-            "footer_note": self.footer_note,
-            "invoice_number_prefix": self.invoice_number_prefix,
-            "receipt_number_prefix": self.receipt_number_prefix,
-            "next_invoice_number": self.next_invoice_number,
-            "next_receipt_number": self.next_receipt_number,
-            "invoice_tax_rate": self.invoice_tax_rate,
-            "logo": self.logo,
-            "signature": self.signature,
-            "layout": self.layout,
-        }
+
+class BillLayoutPresetRead(BaseModel):
+    id: UUID
+    name: str
+    layout: dict
+    is_default_invoice: bool = False
+    is_default_receipt: bool = False
+    updated_at: datetime
+
+
+class BillLayoutPresetCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    layout: dict
+
+
+class BillLayoutPresetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    layout: dict | None = None
+
+
+class SetBillLayoutDefaultInput(BaseModel):
+    doc_type: Literal["invoice", "receipt"]
 
 
 class BillTemplateUpdate(BaseModel):
@@ -193,6 +233,7 @@ class ReceiptRead(BaseModel):
     method: str
     collected_at: datetime
     note: str | None = None
+    payer_bill_no: str | None = None
     collector_name: str | None = None
     status: str
     voided_at: datetime | None = None

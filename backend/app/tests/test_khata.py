@@ -2,6 +2,7 @@ import asyncio
 import uuid
 
 import pytest
+from sqlalchemy import select
 
 from app.core.security import create_access_token
 
@@ -93,7 +94,24 @@ async def _place_order(client, order_id):
     return r.json()
 
 
-async def _pay(client, customer_id, amount, method="cash", allocations=None, generate_receipt=True):
+async def _deliver_order(order_id):
+    """Mark an order delivered so it becomes billable in khata.
+
+    The order's own workflow only reaches 'ready'; 'delivered' is owned by the
+    delivery lifecycle, so tests flip it directly on the row.
+    """
+    from app.core.database import get_session
+    from app.modules.orders.models import Order
+
+    async with get_session() as session:
+        order = (
+            await session.execute(select(Order).where(Order.id == order_id))
+        ).scalar_one()
+        order.status = "delivered"
+        await session.commit()
+
+
+async def _pay(client, customer_id, amount, method="cash", allocations=None, generate_receipt=True, payer_bill_no=None):
     payload = {
         "customer_id": customer_id,
         "amount": amount,
@@ -102,6 +120,8 @@ async def _pay(client, customer_id, amount, method="cash", allocations=None, gen
     }
     if allocations is not None:
         payload["allocations"] = allocations
+    if payer_bill_no is not None:
+        payload["payer_bill_no"] = payer_bill_no
     r = await client.post("/api/v1/khata/payments", json=payload)
     response = r.json()
     assert r.status_code == 201, response
@@ -114,6 +134,8 @@ async def _setup_two_orders(client, product, customer):
     order_b = await _create_order(client, product, customer)
     await _place_order(client, order_a["id"])
     await _place_order(client, order_b["id"])
+    await _deliver_order(order_a["id"])
+    await _deliver_order(order_b["id"])
     return order_a, order_b
 
 
@@ -441,3 +463,74 @@ async def test_payment_requires_placed_order(client):
         json={"customer_id": customer["id"], "amount": "10.00", "method": "cash"},
     )
     assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_customer_ledger_debit_credit_running_balance(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "Hummus")
+    customer = await _create_customer(client)
+    order_a, order_b = await _setup_two_orders(client, product, customer)
+
+    payment = await _pay(client, customer["id"], "25.00", payer_bill_no="BILL-42")
+    assert payment["payer_bill_no"] == "BILL-42"
+
+    r = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    detail = r.json()
+    ledger = detail["ledger"]
+
+    invoice_rows = [row for row in ledger if row["entry_type"] == "invoice"]
+    payment_rows = [row for row in ledger if row["entry_type"] == "payment"]
+    assert len(ledger) == 3
+    assert all(row["debit"] == "20.00" for row in invoice_rows)
+    assert all(row["balance_side"] == "dr" for row in invoice_rows)
+    assert {row["ref"] for row in invoice_rows} == {order_a["order_ref"], order_b["order_ref"]}
+
+    assert len(payment_rows) == 1
+    pay_row = payment_rows[0]
+    assert pay_row["credit"] == "25.00"
+    assert pay_row["ref"] == "RCT-1"
+    assert pay_row["receipt_number"] == "RCT-1"
+    assert pay_row["payer_bill_no"] == "BILL-42"
+
+    # Running balance closes on the recorded outstanding (Dr when the customer owes).
+    assert ledger[-1]["balance"] == detail["outstanding"]
+    assert ledger[-1]["balance"] == "15.00"
+    assert ledger[-1]["balance_side"] == "dr"
+
+    # The payer's bill number also flows through to the receipt detail.
+    r = await client.get(f"/api/v1/khata/receipts/{payment['id']}")
+    assert r.json()["payer_bill_no"] == "BILL-42"
+
+
+@pytest.mark.asyncio
+async def test_customer_ledger_credit_when_paid_ahead(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "Tzatziki")
+    customer = await _create_customer(client)
+    await _setup_two_orders(client, product, customer)
+
+    await _pay(client, customer["id"], "60.00")
+
+    r = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    detail = r.json()
+    ledger = detail["ledger"]
+
+    assert len(ledger) == 3
+    assert ledger[-1]["entry_type"] == "payment"
+    assert ledger[-1]["credit"] == "60.00"
+    assert ledger[-1]["balance"] == "-20.00"
+    assert ledger[-1]["balance_side"] == "cr"
+
+    # A voided payment is excluded from the ledger so it reconciles with total_paid.
+    payment = await _pay(client, customer["id"], "5.00")
+    r = await client.post(
+        f"/api/v1/khata/payments/{payment['id']}/void", json={"reason": "test"}
+    )
+    assert r.status_code == 200
+
+    r = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    detail = r.json()
+    assert len(detail["ledger"]) == 3  # 2 invoices + 2 payments, of which one is voided
+    assert detail["ledger"][-1]["balance"] == detail["outstanding"]
+    assert detail["ledger"][-1]["balance_side"] == "cr"

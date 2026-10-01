@@ -40,6 +40,7 @@ export default function RecordPaymentModal({
   const [amount, setAmount] = useState<string>('0');
   const [method, setMethod] = useState('cash');
   const [note, setNote] = useState('');
+  const [payerBillNo, setPayerBillNo] = useState('');
   const [collectedDate, setCollectedDate] = useState('');
   const [generateReceipt, setGenerateReceipt] = useState(true);
   const [manualMode, setManualMode] = useState(false);
@@ -63,6 +64,7 @@ export default function RecordPaymentModal({
     setAmount('0');
     setMethod('cash');
     setNote('');
+    setPayerBillNo('');
     setCollectedDate('');
     setGenerateReceipt(true);
     setManualMode(false);
@@ -132,6 +134,7 @@ export default function RecordPaymentModal({
         amount: amount,
         method,
         note: note || null,
+        payer_bill_no: payerBillNo.trim() || null,
         collected_at: collectedDate
           ? new Date(`${collectedDate}T12:00:00`).toISOString()
           : null,
@@ -186,6 +189,13 @@ export default function RecordPaymentModal({
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TextInput
+            label="Money recipient bill no."
+            placeholder="Bill / voucher no. of the paying party"
+            value={payerBillNo}
+            onChange={(e) => setPayerBillNo(e.currentTarget.value)}
+            maxLength={40}
+          />
           <TextInput
             label="Collection date"
             type="date"

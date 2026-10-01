@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { Button, Table, Text } from '@mantine/core';
+import { Button, Skeleton, Text } from '@mantine/core';
 import {
   ArrowLeft,
   DownloadSimple,
@@ -11,7 +11,13 @@ import {
   Receipt,
 } from '@phosphor-icons/react';
 import PdfViewer from '@/features/khata/components/PdfViewer';
-import { downloadReceiptPdf, useReceipt } from '@/features/khata/api';
+import BillDocument, { toBillDocumentDate } from '@/features/khata/components/BillDocument';
+import {
+  downloadReceiptPdf,
+  useBillTemplate,
+  useDefaultBillLayout,
+  useReceipt,
+} from '@/features/khata/api';
 import { LoadingState, ErrorState, StatusBadge } from '@/components/shared';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { paymentMethodLabel } from '@/features/khata/constants';
@@ -20,10 +26,15 @@ export default function ReceiptViewerPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { data, isLoading, isError, refetch } = useReceipt(params.id);
+  const templateQuery = useBillTemplate();
+  const defaultLayout = useDefaultBillLayout('receipt');
 
   if (isLoading) return <LoadingState label="Loading receipt…" />;
   if (isError) return <ErrorState retry={() => refetch()} />;
   if (!data) return null;
+
+  const template = templateQuery.data;
+  const layout = defaultLayout.layout;
 
   return (
     <div className="flex flex-col gap-6">
@@ -91,53 +102,58 @@ export default function ReceiptViewerPage() {
         </div>
       </div>
 
-      {data.allocations.length > 0 && (
-        <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm">
-          <div className="border-b border-zinc-100 px-6 py-4">
-            <Text fw={600} size="md" className="text-zinc-800">Payment allocations</Text>
-            <Text size="xs" c="dimmed" className="mt-0.5">
-              Orders settled by this receipt
+      <div className="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <Text fw={600} size="sm" className="text-zinc-800">Receipt</Text>
+            <Text size="xs" c="dimmed">
+              Uses your default receipt layout
+              {defaultLayout.preset ? ` (${defaultLayout.preset.name})` : ''}.
             </Text>
           </div>
-          <Table verticalSpacing="sm" horizontalSpacing="md">
-            <Table.Thead>
-              <Table.Tr className="text-zinc-400">
-                <Table.Th className="text-xs font-semibold uppercase tracking-wider">#</Table.Th>
-                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Order</Table.Th>
-                <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Amount applied</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {data.allocations.map((a, idx) => (
-                <Table.Tr key={a.order_id}>
-                  <Table.Td>
-                    <span className="text-xs text-zinc-400">{idx + 1}</span>
-                  </Table.Td>
-                  <Table.Td>
-                    <button
-                      type="button"
-                      className="font-medium text-brand-700 hover:underline"
-                      onClick={() => router.push(`/orders/${a.order_id}`)}
-                    >
-                      {a.order_ref ?? a.order_id.slice(0, 8)}
-                    </button>
-                  </Table.Td>
-                  <Table.Td ta="right" fw={600} className="text-zinc-800">
-                    {formatMoney(a.amount_applied)}
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
         </div>
-      )}
-
-      {data.note && (
-        <div className="rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm">
-          <Text fw={600} size="sm" mb="xs" className="text-zinc-700">Note</Text>
-          <Text size="sm" className="text-zinc-600">{data.note}</Text>
-        </div>
-      )}
+        {!layout || !template ? (
+          <div className="flex justify-center">
+            <Skeleton height={340} width={420} radius="lg" />
+          </div>
+        ) : (
+          <div className="flex justify-center">
+            <BillDocument
+              docType="receipt"
+              branding={{
+                business_name: template.business_name,
+                tax_id: template.tax_id,
+                address: template.address,
+                phone: template.phone,
+                email: template.email,
+                footer_note: template.footer_note,
+              }}
+              logo={template.logo?.data_url ?? null}
+              signature={template.signature?.data_url ?? null}
+              layout={layout}
+              data={{
+                number: data.receipt_number ?? '—',
+                date: toBillDocumentDate(data.collected_at),
+                customer_name: data.customer_name,
+                customer_phone: null,
+                customer_address: null,
+                status: null,
+                payment_status: null,
+                note: data.note,
+                collected_by: data.collector_name,
+                method: paymentMethodLabel(data.method),
+                items: [],
+                allocations: data.allocations.map((a) => ({
+                  ref: a.order_ref ?? a.order_id.slice(0, 8),
+                  amount: a.amount_applied,
+                })),
+                total_amount: data.amount,
+                amount_paid: null,
+              }}
+            />
+          </div>
+        )}
+      </div>
 
       <PdfViewer url={`/khata/receipts/${params.id}/pdf`} />
     </div>

@@ -525,6 +525,7 @@ def _render_document(
     *,
     doc_type: str,
     snapshot: dict | None,
+    layout: dict | None,
     payload: dict,
     watermark: str | None = None,
 ) -> bytes:
@@ -533,7 +534,9 @@ def _render_document(
     story, small, body = _base_story(title, snapshot)
 
     snap = snapshot or {}
-    layout = normalize_layout(snap.get("layout"))
+    # The layout always comes from the tenant's current default preset. Any
+    # `layout` key left inside a legacy snapshot is deliberately ignored.
+    layout = normalize_layout(layout)
     for block in layout["blocks"]:
         if not block["enabled"].get(doc_type, False):
             continue
@@ -556,7 +559,7 @@ def _render_document(
     return stream.getvalue()
 
 
-def render_receipt_pdf(*, snapshot: dict | None, receipt) -> bytes:
+def render_receipt_pdf(*, snapshot: dict | None, layout: dict | None, receipt) -> bytes:
     """Render a receipt PDF.
 
     `receipt` carries the flattened fields: number, collected_at, customer_name,
@@ -569,12 +572,13 @@ def render_receipt_pdf(*, snapshot: dict | None, receipt) -> bytes:
         io.BytesIO(),
         doc_type="receipt",
         snapshot=snapshot,
+        layout=layout,
         payload=receipt,
         watermark="VOIDED" if receipt.get("status") == "voided" else None,
     )
 
 
-def render_invoice_pdf(*, snapshot: dict | None, invoice) -> bytes:
+def render_invoice_pdf(*, snapshot: dict | None, layout: dict | None, invoice) -> bytes:
     """Render an invoice PDF.
 
     `invoice` carries: number, order_id, order_ref, created_at, customer_name,
@@ -585,6 +589,7 @@ def render_invoice_pdf(*, snapshot: dict | None, invoice) -> bytes:
         io.BytesIO(),
         doc_type="invoice",
         snapshot=snapshot,
+        layout=layout,
         payload=invoice,
         watermark=None,
     )

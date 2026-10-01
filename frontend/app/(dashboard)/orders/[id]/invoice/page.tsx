@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { Button, Table, Text } from '@mantine/core';
+import { Button, Skeleton, Table, Text } from '@mantine/core';
 import {
   ArrowLeft,
   DownloadSimple,
@@ -11,15 +11,27 @@ import {
   FilePdf,
 } from '@phosphor-icons/react';
 import PdfViewer from '@/features/khata/components/PdfViewer';
-import { downloadInvoicePdf } from '@/features/khata/api';
-import { useOrder } from '@/features/orders/api';
+import BillDocument, { toBillDocumentDate } from '@/features/khata/components/BillDocument';
+import {
+  downloadInvoicePdf,
+  useBillTemplate,
+  useDefaultBillLayout,
+  useInvoice,
+} from '@/features/khata/api';
 import { LoadingState, ErrorState, StatusBadge } from '@/components/shared';
 import { formatMoney, formatPriceUnit, formatDateTime } from '@/lib/format';
 
 export default function InvoiceViewerPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { data, isLoading, isError, refetch } = useOrder(params.id);
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+  } = useInvoice(params.id);
+  const templateQuery = useBillTemplate();
+  const defaultLayout = useDefaultBillLayout('invoice');
 
   if (isLoading) return <LoadingState label="Loading invoice…" />;
   if (isError) return <ErrorState retry={() => refetch()} />;
@@ -27,6 +39,8 @@ export default function InvoiceViewerPage() {
 
   const balance = Math.max(0, Number(data.total_amount) - Number(data.amount_paid));
   const itemCount = data.items.reduce((s, it) => s + Number(it.quantity), 0);
+  const template = templateQuery.data;
+  const layout = defaultLayout.layout;
 
   return (
     <div className="flex flex-col gap-6">
@@ -157,12 +171,68 @@ export default function InvoiceViewerPage() {
         </div>
       </div>
 
-      {data.notes && (
+      {data.note && (
         <div className="rounded-2xl border border-zinc-100 bg-white p-6 shadow-sm">
           <Text fw={600} size="sm" mb="xs" className="text-zinc-700">Notes</Text>
-          <Text size="sm" className="text-zinc-600">{data.notes}</Text>
+          <Text size="sm" className="text-zinc-600">{data.note}</Text>
         </div>
       )}
+
+      <div className="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <Text fw={600} size="sm" className="text-zinc-800">Invoice</Text>
+            <Text size="xs" c="dimmed">
+              Uses your default invoice layout
+              {defaultLayout.preset ? ` (${defaultLayout.preset.name})` : ''}.
+            </Text>
+          </div>
+        </div>
+        {!layout || !template ? (
+          <div className="flex justify-center">
+            <Skeleton height={420} width={460} radius="lg" />
+          </div>
+        ) : (
+          <div className="flex justify-center">
+            <BillDocument
+              docType="invoice"
+              branding={{
+                business_name: template.business_name,
+                tax_id: template.tax_id,
+                address: template.address,
+                phone: template.phone,
+                email: template.email,
+                footer_note: template.footer_note,
+              }}
+              logo={template.logo?.data_url ?? null}
+              signature={template.signature?.data_url ?? null}
+              layout={layout}
+              data={{
+                number: data.invoice_number,
+                date: toBillDocumentDate(data.created_at),
+                customer_name: data.customer_name,
+                customer_phone: data.customer_phone,
+                customer_address: data.customer_address,
+                status: data.status,
+                payment_status: data.payment_status,
+                note: data.note,
+                collected_by: null,
+                method: null,
+                items: data.items.map((it) => ({
+                  name: it.variant_name ? `${it.product_name} / ${it.variant_name}` : it.product_name,
+                  quantity: it.quantity,
+                  unit: it.unit,
+                  unit_price: it.unit_price,
+                  amount: it.amount,
+                })),
+                allocations: [],
+                total_amount: data.total_amount,
+                amount_paid: data.amount_paid,
+              }}
+            />
+          </div>
+        )}
+      </div>
 
       <PdfViewer url={`/khata/orders/${params.id}/invoice/pdf`} />
     </div>

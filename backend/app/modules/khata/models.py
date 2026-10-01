@@ -13,6 +13,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -29,7 +30,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.modules.customers.models import Customer
-from app.modules.khata.layout import normalize_layout
 from app.modules.orders.models import Order
 from app.modules.users.models import User
 
@@ -74,6 +74,9 @@ class LedgerEntry(Base):
         DateTime(timezone=True), nullable=False, default=_now
     )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Bill/voucher number supplied by the party paying the money (the recipient
+    # of the payment's source bill). Shown on the customer ledger.
+    payer_bill_no: Mapped[str | None] = mapped_column(String(40), nullable=True)
     receipt_number: Mapped[str | None] = mapped_column(String(40), nullable=True)
     # Snapshot of the BillTemplate at collection time, frozen so later template
     # changes never rewrite already-issued receipts.
@@ -195,6 +198,56 @@ class OrderInvoice(Base):
     )
 
 
+class BillLayout(Base):
+    """A saved, named bill layout preset (one tenant can hold several).
+
+    ``layout`` stores the normalized block list (see ``app.modules.khata.layout``).
+    At most one preset per tenant is the default for invoices, and at most one is
+    the default for receipts — enforced by partial unique indexes below.
+    """
+
+    __tablename__ = "bill_layouts"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_bill_layouts_tenant_name"),
+        Index(
+            "uq_bill_layouts_one_invoice_default",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("is_default_invoice = true"),
+        ),
+        Index(
+            "uq_bill_layouts_one_receipt_default",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("is_default_receipt = true"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    layout: Mapped[dict] = mapped_column(JSON, nullable=False)
+    is_default_invoice: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    is_default_receipt: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
+
+
 class BillTemplate(Base):
     """Owner-configured branding for receipts and invoices (one per tenant)."""
 
@@ -248,7 +301,14 @@ class BillTemplate(Base):
     )
 
     def snapshot(self, extra: dict | None = None) -> dict:
-        """Freeze the branding + numbering into a JSON snapshot for a document."""
+        """Freeze the branding + numbering into a JSON snapshot for a document.
+
+        TODO(remove-template-layout): the `layout` key is no longer written here —
+        layouts are resolved per-document-type at render time (see
+        ``app.modules.khata.service.KhataService.get_default_layout``). The
+        ``bill_templates.layout`` column still exists for back-compat with older
+        clients; once nothing reads it the column can be dropped.
+        """
         import base64
 
         def _img(mime: str | None, data: bytes | None) -> dict | None:
@@ -268,7 +328,6 @@ class BillTemplate(Base):
             "invoice_tax_rate": str(self.invoice_tax_rate or 0),
             "logo": _img(self.logo_mime, self.logo_data),
             "signature": _img(self.signature_mime, self.signature_data),
-            "layout": normalize_layout(self.layout),
         }
         if extra:
             snap.update(extra)
