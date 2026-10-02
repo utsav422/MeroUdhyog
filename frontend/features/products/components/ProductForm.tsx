@@ -492,7 +492,7 @@ export default function ProductForm({ product }: { product?: Product }) {
                       key={dv.key}
                       className="rounded-lg border border-dashed border-brand-200 bg-brand-50/30 p-3"
                     >
-                      <div className="mb-2 flex items-center justify-between">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <Text size="xs" fw={600} className="text-brand-700">
                           New variant
                         </Text>

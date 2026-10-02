@@ -48,6 +48,13 @@ class KhataCustomerSummary(BaseModel):
     order_count: int = 0
     last_payment_date: datetime | None = None
     last_payment_amount: Decimal | None = None
+    # Optional credit ceiling copied from the customer, plus the derived
+    # figures the khata screens render as a progress bar. `credit_available`
+    # and `credit_utilization` are None when the customer has no limit.
+    credit_limit: Decimal | None = None
+    credit_used: Decimal = Decimal("0.00")
+    credit_available: Decimal | None = None
+    credit_utilization: Decimal | None = None
 
 
 class PaymentAllocationRead(BaseModel):
@@ -126,6 +133,11 @@ class CustomerKhataDetail(BaseModel):
     total_billed: Decimal
     total_paid: Decimal
     outstanding: Decimal
+    # Credit ceiling and derived usage — see `KhataCustomerSummary`.
+    credit_limit: Decimal | None = None
+    credit_used: Decimal = Decimal("0.00")
+    credit_available: Decimal | None = None
+    credit_utilization: Decimal | None = None
     orders: list[KhataOrderRead] = Field(default_factory=list)
     payments: list[PaymentRead] = Field(default_factory=list)
     ledger: list[LedgerEntryRead] = Field(default_factory=list)

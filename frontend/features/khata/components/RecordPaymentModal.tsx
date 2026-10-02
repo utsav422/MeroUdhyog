@@ -225,7 +225,7 @@ export default function RecordPaymentModal({
 
         {billableOrders.length > 0 && (
           <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <Text size="sm" fw={600} className="text-zinc-700">
                 Allocation
               </Text>

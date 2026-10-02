@@ -20,7 +20,7 @@ import { useOrder, itemCount, useOrderStatusUpdate, useAssignDelivery, useUpdate
 import { useReorder, ReorderBadge } from '@/features/orders/components/Reorder';
 import { useCustomers } from '@/features/customers/api';
 import { useUsers } from '@/features/staff/api';
-import { LoadingState, ErrorState, StatusBadge } from '@/components/shared';
+import { ErrorState, LoadingState, ResponsiveTable, StatusBadge } from '@/components/shared';
 import { formatMoney, formatDateTime, formatPriceUnit } from '@/lib/format';
 
 // The order timeline up to "ready" is all the staff control manually; from
@@ -282,15 +282,21 @@ export default function OrderDetailPage() {
         <Text fw={600} size="sm" mb="md" className="text-zinc-700">
           Order progress
         </Text>
-        <div className="flex items-center gap-0">
+        {/* Seven steps cannot fit a 375px line (min-content is ~390px even with
+            truncated labels), so below `sm` each step becomes a row in a
+            vertical rail; the horizontal row is used from `sm` up. */}
+        <ol className="flex flex-col sm:flex-row sm:items-center">
           {STATUS_TIMELINE.map((step, i) => {
             const isActive = i <= currentStepIndex && data.status !== 'cancelled';
             const isCurrent = i === currentStepIndex;
+            const isLast = i === STATUS_TIMELINE.length - 1;
+            const reached = isActive && !isCurrent;
+            const railColor = reached ? 'bg-success-500' : 'bg-zinc-100';
             return (
-              <div key={step} className="flex flex-1 items-center">
-                <div className="flex flex-col items-center gap-2">
+              <li key={step} className="flex flex-col sm:flex-1 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 items-center gap-3 sm:flex-col sm:items-center sm:gap-2">
                   <div
-                    className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
                       isActive
                         ? isCurrent
                           ? 'border-brand-600 bg-brand-600 text-white shadow-md shadow-brand-200'
@@ -298,23 +304,33 @@ export default function OrderDetailPage() {
                         : 'border-zinc-200 bg-white text-zinc-300'
                     }`}
                   >
-                    {isActive && !isCurrent ? (
+                    {reached ? (
                       <CheckCircle size={16} weight="fill" />
                     ) : (
                       <span className="text-xs font-bold">{i + 1}</span>
                     )}
                   </div>
-                  <span className={`text-[11px] font-medium capitalize ${isCurrent ? 'text-brand-700' : isActive ? 'text-zinc-600' : 'text-zinc-300'}`}>
+                  <span
+                    className={`min-w-0 truncate text-[11px] font-medium capitalize sm:text-center ${
+                      isCurrent ? 'text-brand-700' : isActive ? 'text-zinc-600' : 'text-zinc-300'
+                    }`}
+                  >
                     {step.replace(/_/g, ' ')}
                   </span>
                 </div>
-                {i < STATUS_TIMELINE.length - 1 && (
-                  <div className={`mx-2 h-0.5 flex-1 rounded-full ${isActive && i < currentStepIndex ? 'bg-success-500' : 'bg-zinc-100'}`} />
+                {!isLast && (
+                  /* Vertical tick under the icon on mobile; horizontal
+                     connector between steps from `sm` up. `ml-[17px]` centres
+                     the tick under the 36px icon. */
+                  <div
+                    aria-hidden
+                    className={`ml-[17px] my-1 h-4 w-0.5 rounded-full sm:mx-2 sm:my-0 sm:h-0.5 sm:w-auto sm:flex-1 ${railColor}`}
+                  />
                 )}
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ol>
         {data.status === 'cancelled' && (
           <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-danger-50 px-4 py-2.5">
             <span className="text-xs font-semibold text-danger-600">
@@ -400,8 +416,8 @@ export default function OrderDetailPage() {
 
       <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm">
         <div className="border-b border-zinc-100 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
               <Text fw={600} size="md" className="text-zinc-800">Line items</Text>
               <Text size="xs" c="dimmed" className="mt-0.5">{data.items.length} products in this order</Text>
             </div>
@@ -411,7 +427,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
         </div>
-        <Table verticalSpacing="sm" horizontalSpacing="md">
+        <ResponsiveTable minWidth={560}>
           <Table.Thead>
             <Table.Tr className="text-zinc-400">
               <Table.Th className="text-xs font-semibold uppercase tracking-wider">#</Table.Th>
@@ -453,9 +469,9 @@ export default function OrderDetailPage() {
               </Table.Tr>
             ))}
           </Table.Tbody>
-        </Table>
+        </ResponsiveTable>
         <div className="border-t border-zinc-100 px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Text size="sm" c="dimmed">
               Total ({itemsCount} units)
             </Text>

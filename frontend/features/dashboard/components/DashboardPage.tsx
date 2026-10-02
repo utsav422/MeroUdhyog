@@ -70,7 +70,7 @@ function Panel({
   return (
     <div className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 ${className}`}>
       {(title || action) && (
-        <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             {title && <p className="text-sm font-semibold text-[var(--foreground)]">{title}</p>}
             {subtitle && <p className="mt-0.5 text-xs text-[var(--muted)]">{subtitle}</p>}
@@ -456,8 +456,8 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:flex-wrap sm:justify-between">
+        <div className="min-w-0">
           <p className="text-2xl font-bold leading-tight tracking-tight text-[var(--foreground)]">
             Welcome back, {firstName}
           </p>

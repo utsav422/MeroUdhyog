@@ -395,7 +395,7 @@ function BillFormatEditor({
 
       <div className="sticky top-6 flex flex-col gap-4">
         <div className="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <Text fw={600} size="sm" className="text-zinc-800">Live preview</Text>
               <Text size="xs" c="dimmed">Matches the printed PDF.</Text>

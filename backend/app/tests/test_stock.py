@@ -71,7 +71,11 @@ async def test_order_create_deducts_stock_and_records_movement(client):
     await _create_order(client, product, "2")
     assert await _get_variant_stock(client, product) == 8
 
-    movements = await client.get("/api/v1/products/inventory/movements?limit=10")
+    # Creating the variant also writes an opening-stock movement, so filter to
+    # the order's own movement rather than counting every row.
+    movements = await client.get(
+        "/api/v1/products/inventory/movements?limit=10&reason=order"
+    )
     assert movements.status_code == 200
     body = movements.json()
     assert len(body) == 1

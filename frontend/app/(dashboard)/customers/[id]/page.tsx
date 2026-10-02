@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Button, Table, Text, Input } from '@mantine/core';
+import { Button, Group, Table, Text, Input } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, PencilSimple, MapPin, Phone, Envelope, BuildingOffice, ArrowsClockwise, Notebook, Check } from '@phosphor-icons/react';
 import { useCustomer, useCustomerPrices, useCustomerOrders, customersKeys } from '@/features/customers/api';
 import { useProducts, defaultVariantPrice } from '@/features/products/api';
 import { useReorder, ReorderBadge, canReorder } from '@/features/orders/components/Reorder';
-import { LoadingState, ErrorState, StatusBadge } from '@/components/shared';
+import { CreditLimitBar, ErrorState, LoadingState, ResponsiveTable, StatusBadge } from '@/components/shared';
 import { formatMoney, formatDate, formatPriceUnit } from '@/lib/format';
 import { apiClient } from '@/lib/api-client';
 
@@ -146,14 +146,16 @@ export default function CustomerDetailPage() {
             Back to customers
           </Button>
         </div>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
+        {/* Avatar + name and the two buttons together need ~546px, so below `sm`
+            this stacks instead of overflowing the viewport. */}
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 text-xl font-bold">
               {customer.name.charAt(0).toUpperCase()}
             </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <Text fw={700} size="xl" className="leading-tight">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <Text fw={700} size="xl" className="min-w-0 truncate leading-tight">
                   {customer.name}
                 </Text>
                 <span
@@ -167,29 +169,31 @@ export default function CustomerDetailPage() {
                   {customer.is_active ? 'Active' : 'Inactive'}
                 </span>
               </div>
-              <Text size="sm" c="dimmed" className="mt-0.5">
+              <Text size="sm" c="dimmed" className="mt-0.5 break-words">
                 {customer.company ?? 'No company'} · {customer.city ?? 'No city'}
               </Text>
             </div>
           </div>
-          <Button
-            variant="default"
-            leftSection={<Notebook size={16} />}
-            onClick={() => router.push(`/khata/${customer.id}`)}
-          >
-            Khata ledger
-          </Button>
-          <Button
-            variant="default"
-            leftSection={<PencilSimple size={16} />}
-            onClick={() => router.push(`/customers/${customer.id}/edit`)}
-          >
-            Edit customer
-          </Button>
+          <Group gap="sm" className="w-full sm:w-auto">
+            <Button
+              variant="default"
+              leftSection={<Notebook size={16} />}
+              onClick={() => router.push(`/khata/${customer.id}`)}
+            >
+              Khata ledger
+            </Button>
+            <Button
+              variant="default"
+              leftSection={<PencilSimple size={16} />}
+              onClick={() => router.push(`/customers/${customer.id}/edit`)}
+            >
+              Edit customer
+            </Button>
+          </Group>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
           <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <Envelope size={20} weight="bold" />
@@ -238,6 +242,25 @@ export default function CustomerDetailPage() {
             {formatMoney(totalRevenue)} total revenue
           </Text>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <Text fw={600} size="sm" className="text-zinc-700">Credit limit</Text>
+            <Text size="xs" c="dimmed" className="mt-0.5">
+              {customer.credit_limit
+                ? 'Committed orders and payments are checked against this ceiling before an order is created.'
+                : 'No limit set — orders are never blocked. Add one from Edit customer.'}
+            </Text>
+          </div>
+          {customer.credit_limit && (
+            <Text fw={700} size="lg" className="tabular-nums">
+              {formatMoney(customer.credit_limit)}
+            </Text>
+          )}
+        </div>
+        <CreditLimitBar figures={customer} className="mt-4" />
       </div>
 
       {customer.notes && (
@@ -355,7 +378,7 @@ export default function CustomerDetailPage() {
             {orders.length} orders placed
           </Text>
         </div>
-        <Table verticalSpacing="sm" horizontalSpacing="md">
+        <ResponsiveTable minWidth={560}>
           <Table.Thead>
             <Table.Tr className="text-zinc-400">
               <Table.Th className="text-xs font-semibold uppercase tracking-wider">Order</Table.Th>
@@ -426,7 +449,7 @@ export default function CustomerDetailPage() {
               </Table.Tr>
             )}
           </Table.Tbody>
-        </Table>
+        </ResponsiveTable>
       </div>
     </div>
   );

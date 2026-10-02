@@ -4,8 +4,8 @@ Column layout (headers are case-insensitive, spaces are ignored, and a
 trailing ``*`` marks a required column):
 
 required:  name
-optional:  email, phone, contact_number, pan_no, company, address, city,
-           latitude, longitude, notes
+    optional:  email, phone, contact_number, pan_no, company, address, city,
+               latitude, longitude, notes, credit_limit
 """
 
 from __future__ import annotations
@@ -24,12 +24,13 @@ OPTIONAL_COLUMNS = (
     "latitude",
     "longitude",
     "notes",
+    "credit_limit",
 )
 ALL_COLUMNS = MANDATORY_COLUMNS + OPTIONAL_COLUMNS
 
 SAMPLE_HEADER = (
     "name*,email,phone,contact_number,pan_no,company,address,"
-    "city,latitude,longitude,notes"
+    "city,latitude,longitude,notes,credit_limit"
 )
 
 

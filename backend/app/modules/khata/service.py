@@ -16,6 +16,12 @@ from uuid import UUID
 
 from sqlalchemy import func, select, update
 
+from app.modules.customers.credit import (
+    credit_available,
+    credit_used_for,
+    credit_used_map,
+    credit_utilization,
+)
 from app.modules.khata import pdf
 from app.modules.khata.layout import default_layout, normalize_layout
 from app.modules.khata.models import BillLayout, BillTemplate, LedgerEntry
@@ -69,12 +75,14 @@ class KhataService:
         billed = await self.repo.billed_by_customer()
         paid = await self.repo.paid_by_customer()
         last = await self.repo.last_payment_by_customer()
+        credit_used = await credit_used_map(self.session, self.tenant_id)
 
         rows: list[KhataCustomerSummary] = []
         for c in customers:
             billed_total, order_count = billed.get(c.id, (ZERO, 0))
             paid_total = paid.get(c.id, ZERO)
             last_date, last_amount = last.get(c.id, (None, None))
+            used = credit_used.get(c.id, ZERO)
             rows.append(
                 KhataCustomerSummary(
                     customer_id=c.id,
@@ -88,6 +96,10 @@ class KhataService:
                     order_count=order_count,
                     last_payment_date=last_date,
                     last_payment_amount=last_amount,
+                    credit_limit=c.credit_limit,
+                    credit_used=used,
+                    credit_available=credit_available(c.credit_limit, used),
+                    credit_utilization=credit_utilization(c.credit_limit, used),
                 )
             )
         return rows
@@ -114,6 +126,7 @@ class KhataService:
         ]
         payment_reads = [self._payment_read(p) for p in payments]
 
+        used = await credit_used_for(self.session, self.tenant_id, customer.id)
         return CustomerKhataDetail(
             customer_id=customer.id,
             customer_name=customer.name,
@@ -125,6 +138,10 @@ class KhataService:
             total_billed=_q2(total_billed),
             total_paid=_q2(total_paid),
             outstanding=_q2(total_billed - total_paid),
+            credit_limit=customer.credit_limit,
+            credit_used=used,
+            credit_available=credit_available(customer.credit_limit, used),
+            credit_utilization=credit_utilization(customer.credit_limit, used),
             orders=order_reads,
             payments=payment_reads,
             ledger=self._build_ledger(orders, payments, invoice_numbers),

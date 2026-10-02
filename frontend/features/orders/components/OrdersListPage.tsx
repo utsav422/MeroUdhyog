@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   Button,
   Drawer,
   Group,
+  Modal,
   NumberInput,
   Select,
   Stack,
@@ -35,6 +37,7 @@ import {
   HandCoins,
 } from '@phosphor-icons/react';
 import {
+  CreditLimitBar,
   DataTable,
   FilterBar,
   PaginationBar,
@@ -43,7 +46,7 @@ import {
 } from '@/components/shared';
 import type { Column, SortState, Filters, DateRangeValue } from '@/components/shared';
 import { EMPTY_DATE_RANGE, dateInRange } from '@/components/shared';
-import { apiClient } from '@/lib/api-client';
+import { ApiClientError, apiClient } from '@/lib/api-client';
 import { formatMoney, formatDate, formatDateTime } from '@/lib/format';
 import { downloadCsv } from '@/lib/exportCsv';
 import { useOrders, ordersKeys, itemCount, useOrderStatusUpdate, useCreateDeliveryForOrder, useBulkOrderStatusUpdate, nextOrderStatuses } from '../api';
@@ -53,8 +56,9 @@ import { useDeliveries } from '../../deliveries/api';
 import type { Delivery } from '../../deliveries/api';
 import { useProducts, defaultVariantPrice } from '../../products/api';
 import type { Variant } from '../../products/api';
-import { useCustomers } from '../../customers/api';
+import { useCustomers, customersKeys } from '../../customers/api';
 import type { CustomerPrice } from '../../customers/api';
+import { khataKeys } from '../../khata/api';
 import { useRoutes } from '../../routes/api';
 import CustomerSelect from './CustomerSelect';
 
@@ -253,6 +257,22 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
       notes: '',
     },
   });
+
+  // Non-null while the credit-limit confirmation dialog is open; holds the
+  // values it will submit if the user chooses to continue.
+  const [creditPrompt, setCreditPrompt] = useState<{
+    values: typeof form.values;
+    // Snapshot of the overage, so the modal still renders even if the local
+    // projection changes (or was the stale reason we got here).
+    block: {
+      customerName: string;
+      limit: number;
+      used: number;
+      total: number;
+      projected: number;
+      overBy: number;
+    };
+  } | null>(null);
 
   // The two pages are an exact partition of the order list, so scope is
   // applied before any search/filter/sort work below.
@@ -490,7 +510,10 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
   };
 
   const saveMutation = useMutation({
-    mutationFn: async (values: typeof form.values) => {
+    mutationFn: async ({ values, overrideCreditLimit }: {
+      values: typeof form.values;
+      overrideCreditLimit?: boolean;
+    }) => {
       const validItems = items
         .filter((it) => it.variant_id && it.quantity > 0)
         .map((it) => ({
@@ -516,6 +539,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
           : null,
         notes: values.notes || null,
         items: validItems,
+        override_credit_limit: overrideCreditLimit === true,
       };
       if (editing) {
         await apiClient.patch(`/orders/${editing.id}`, payload);
@@ -530,11 +554,40 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
         message: editing ? 'Changes saved successfully' : 'New order placed successfully',
       });
       qc.invalidateQueries({ queryKey: ordersKeys.all });
+      // Order totals drive the customer's credit figures, so every surface
+      // showing a credit bar has to refetch.
+      qc.invalidateQueries({ queryKey: customersKeys.all });
+      qc.invalidateQueries({ queryKey: khataKeys.all });
       setDrawerOpen(false);
+      setCreditPrompt(null);
       form.reset();
       setEditing(null);
     },
     onError: (error) => {
+      // The local preview can be stale (e.g. another order was just placed).
+      // A 409 means the server still considers this order over the limit, so
+      // fall back to the confirmation prompt rather than a dead-end error.
+      if (error instanceof ApiClientError && error.status === 409 && form.values.customer_id) {
+        // Re-read from cache after invalidating, but fall back to the server's
+        // message so the dialog never opens with nothing to show.
+        const customer = customersQuery.data?.find((c) => c.id === form.values.customer_id);
+        const limit = Number(customer?.credit_limit);
+        const used = Math.max(Number(customer?.credit_used ?? 0) - (editing ? Number(editing.total_amount || 0) : 0), 0);
+        const total = Number(lineTotal) || 0;
+        setCreditPrompt({
+          values: form.values,
+          block: {
+            customerName: customer?.name ?? 'This customer',
+            limit: Number.isFinite(limit) ? limit : 0,
+            used,
+            total,
+            projected: used + total,
+            overBy: Math.max(used + total - (Number.isFinite(limit) ? limit : 0), 0),
+          },
+        });
+        qc.invalidateQueries({ queryKey: customersKeys.all });
+        return;
+      }
       notifications.show({
         color: 'red',
         title: 'Save failed',
@@ -542,6 +595,54 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
       });
     },
   });
+
+  const selectedCustomer = useMemo(
+    () => customersQuery.data?.find((c) => c.id === form.values.customer_id) ?? null,
+    [customersQuery.data, form.values.customer_id],
+  );
+
+  // A customer with no limit is never gated, and a zero limit means "no
+  // credit" — both are handled by the null/zero check here.
+  const creditBlock = useMemo(() => {
+    const customer = selectedCustomer;
+    if (!customer || customer.credit_limit == null) return null;
+    const limit = Number(customer.credit_limit);
+    if (!Number.isFinite(limit)) return null;
+    const used = Number(customer.credit_used ?? 0);
+    const total = Number(lineTotal) || 0;
+    // credit_used already counts the order being edited, so discount its
+    // current total before adding the edited one. Without this, shrinking an
+    // over-limit order would still look blocked.
+    const editingTotal = editing ? Number(editing.total_amount || 0) : 0;
+    const projected = used - editingTotal + total;
+    if (!(projected > limit)) return null;
+    return {
+      customer,
+      limit,
+      used: Math.max(used - editingTotal, 0),
+      total,
+      projected,
+      overBy: projected - limit,
+    };
+  }, [selectedCustomer, lineTotal, editing]);
+
+  const submit = (values: typeof form.values) => {
+    if (creditBlock) {
+      setCreditPrompt({
+        values,
+        block: {
+          customerName: creditBlock.customer.name,
+          limit: creditBlock.limit,
+          used: creditBlock.used,
+          total: creditBlock.total,
+          projected: creditBlock.projected,
+          overBy: creditBlock.overBy,
+        },
+      });
+      return;
+    }
+    saveMutation.mutate({ values });
+  };
 
   const columns: Column<Order>[] = [
     {
@@ -1037,7 +1138,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
         size="lg"
         padding="lg"
       >
-        <form onSubmit={form.onSubmit((values) => saveMutation.mutate(values))}>
+        <form onSubmit={form.onSubmit(submit)}>
           <Stack gap="lg">
             <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-4">
               <Text fw={600} size="sm" mb="sm" className="text-zinc-700">
@@ -1062,7 +1163,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
             </div>
 
             <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-4">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <Text fw={600} size="sm" className="text-zinc-700">
                   Line items
                 </Text>
@@ -1162,7 +1263,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
             </div>
 
             <div className="rounded-xl border border-zinc-100 bg-zinc-50/50 p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <Text size="sm" c="dimmed">
                   {items.filter((it) => it.variant_id).length} items · {items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)} units
                 </Text>
@@ -1170,6 +1271,16 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
                   Total: {formatMoney(lineTotal.toString())}
                 </Text>
               </div>
+              {/* Live warning before the user even tries to submit. */}
+              {creditBlock && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2">
+                  <Warning size={16} weight="fill" className="mt-0.5 shrink-0 text-warning-600" />
+                  <Text size="xs" className="text-warning-800">
+                    This order takes {creditBlock.customer.name} {formatMoney(creditBlock.overBy.toString())} past their{' '}
+                    {formatMoney(creditBlock.limit.toString())} credit limit. You will be asked to confirm before saving.
+                  </Text>
+                </div>
+              )}
             </div>
 
             <Group justify="flex-end" gap="sm">
@@ -1192,6 +1303,85 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
           </Stack>
         </form>
       </Drawer>
+
+      <Modal
+        opened={!!creditPrompt}
+        onClose={() => setCreditPrompt(null)}
+        title={
+          <div>
+            <Text fw={700} size="lg">Credit limit exceeded</Text>
+            <Text size="xs" c="dimmed" className="mt-0.5">
+              This order can still be placed — confirm below.
+            </Text>
+          </div>
+        }
+        centered
+        radius="xl"
+        size="md"
+      >
+        {creditPrompt && (
+          <Stack gap="md">
+            <Alert
+              color="warning"
+              variant="light"
+              icon={<Warning size={18} weight="fill" />}
+              title={`${creditPrompt.block.customerName} is over their credit limit`}
+            >
+              {creditPrompt.block.limit === 0 ? (
+                <>
+                  This customer has no credit, so the {formatMoney(creditPrompt.block.total.toString())}{' '}
+                  order takes them over by {formatMoney(creditPrompt.block.total.toString())}.
+                </>
+              ) : (
+                <>
+                  You are about to add {formatMoney(creditPrompt.block.total.toString())} to an
+                  outstanding {formatMoney(creditPrompt.block.used.toString())}, taking the total to{' '}
+                  {formatMoney(creditPrompt.block.projected.toString())} against a limit of{' '}
+                  {formatMoney(creditPrompt.block.limit.toString())}.
+                </>
+              )}
+            </Alert>
+
+            {creditPrompt.block.limit > 0 && (
+              <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
+                <CreditLimitBar
+                  figures={{
+                    credit_limit: String(creditPrompt.block.limit),
+                    credit_used: String(creditPrompt.block.projected),
+                  }}
+                />
+              </div>
+            )}
+
+            <Text size="xs" c="dimmed">
+              Continuing records the order normally. Settle the khata balance or raise the
+              customer&apos;s credit limit to bring the usage back down.
+            </Text>
+
+            <Group justify="flex-end" gap="sm">
+              <Button
+                variant="default"
+                onClick={() => setCreditPrompt(null)}
+                size="md"
+              >
+                Go back
+              </Button>
+              <Button
+                color="warning"
+                loading={saveMutation.isPending}
+                size="md"
+                onClick={() => {
+                  const values = creditPrompt.values;
+                  setCreditPrompt(null);
+                  saveMutation.mutate({ values, overrideCreditLimit: true });
+                }}
+              >
+                Continue anyway
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
     </div>
   );
 }

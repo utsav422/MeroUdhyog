@@ -7,6 +7,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.customer_prices.service import resolve_price
+from app.modules.customers.credit import (
+    clamp_used as credit_clamp_used,
+)
+from app.modules.customers.credit import (
+    credit_used_for,
+)
+from app.modules.customers.credit import (
+    exceeds_limit as credit_exceeds_limit,
+)
 from app.modules.customers.models import Customer
 from app.modules.orders.models import Order, OrderItem
 from app.modules.orders.repository import OrderRepository
@@ -244,6 +253,9 @@ class OrderService:
                 )
             )
         order.total_amount = total
+        # Checked once the server-side total is known, and before any stock is
+        # moved, so an over-limit rejection leaves no side effects behind.
+        await self._check_credit_limit(customer, total, data.override_credit_limit)
         movements = await apply_stock_changes(
             self.session, self.tenant_id, stock_changes, reason="order"
         )
@@ -251,6 +263,68 @@ class OrderService:
         for movement in movements:
             movement.order_id = created.id
         return created
+
+    async def _check_credit_limit(
+        self, customer: Customer | None, total: Decimal, override: bool
+    ) -> None:
+        """Reject an order that would take the customer past their credit limit.
+
+        A customer with no `credit_limit` is unlimited, so this is a no-op for
+        them. Otherwise the client must resend with
+        `override_credit_limit: true` once a human has confirmed the order.
+        """
+        if customer is None or customer.credit_limit is None or override:
+            return
+        used = await credit_used_for(self.session, self.tenant_id, customer.id)
+        if credit_exceeds_limit(customer.credit_limit, used, total):
+            projected = credit_clamp_used(used) + total
+            raise ConflictError(
+                f"This order takes {customer.name} past their credit limit of "
+                f"{customer.credit_limit:.2f}. "
+                f"{credit_clamp_used(used):.2f} is already in use and this order adds "
+                f"{total:.2f}, for a total of {projected:.2f}. "
+                "Re-send with override_credit_limit=true to proceed anyway."
+            )
+
+    async def _check_credit_limit_on_update(
+        self, order: Order, override: bool, customer_changed: bool = False
+    ) -> None:
+        """Same guard as `_check_credit_limit`, but for a saved order.
+
+        The order being edited is already part of the committed total, so it is
+        subtracted back out before the new total is re-added — otherwise every
+        edit of an already-flagged order would keep tripping the check.
+
+        `customer_changed` skips that subtraction: when the order moves to a
+        different customer its own total has never counted against the new
+        customer's aggregate, so subtracting it would under-count their usage.
+        """
+        if order.customer_id is None or override:
+            return
+        customer = (
+            await self.session.execute(
+                select(Customer).where(
+                    Customer.tenant_id == self.tenant_id,
+                    Customer.id == order.customer_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if customer is None or customer.credit_limit is None:
+            return
+        used = await credit_used_for(self.session, self.tenant_id, order.customer_id)
+        # The order still holds its pre-edit total in the aggregate because the
+        # row is only flushed at the end of this request.
+        own = (
+            Decimal("0.00")
+            if customer_changed
+            else (order.total_amount or Decimal("0.00"))
+        )
+        if credit_exceeds_limit(customer.credit_limit, used - own, order.total_amount):
+            raise ConflictError(
+                f"This change takes {customer.name} past their credit limit of "
+                f"{customer.credit_limit:.2f}. "
+                f"Re-send with override_credit_limit=true to proceed anyway."
+            )
 
     async def update(self, order_id: UUID, data: OrderUpdate) -> OrderRead:
         order = await self.repo.get(order_id)
@@ -272,6 +346,7 @@ class OrderService:
         # longer be set through this endpoint. OrderUpdate omits the field, so
         # any leftover value arriving here is dropped before the loop below.
         new_items_raw = updates.pop("items", None)
+        override_credit = bool(updates.pop("override_credit_limit", False))
         for field, value in updates.items():
             setattr(order, field, value)
         # The order's route rides along with its customer; when the customer is
@@ -289,6 +364,13 @@ class OrderService:
         if new_items_raw is not None:
             new_items = [OrderItemCreate(**it) for it in new_items_raw]
             await self._replace_items(order, new_items)
+        # Re-checked because editing line items or switching the customer can
+        # push the order past a limit that was previously fine. Cancelling
+        # releases the order's exposure entirely, so it is never gated.
+        if not is_cancelling and (new_items_raw is not None or "customer_id" in updates):
+            await self._check_credit_limit_on_update(
+                order, override_credit, customer_changed="customer_id" in updates
+            )
         # A cancelled order releases its reserved stock back to the warehouse.
         if is_cancelling:
             held, meta = await self._held_stock(order)
@@ -312,8 +394,14 @@ class OrderService:
         read.delivery_created = delivery_created
         if new_status in ("confirmed", "ready", "cancelled"):
             await self._notify_service().order_status(
-                order.id, order.order_ref, new_status,
-                extra="A delivery has been created for it." if new_status == "ready" and delivery_created else None,
+                order.id,
+                order.order_ref,
+                new_status,
+                extra=(
+                    "A delivery has been created for it."
+                    if new_status == "ready" and delivery_created
+                    else None
+                ),
             )
         return read
 

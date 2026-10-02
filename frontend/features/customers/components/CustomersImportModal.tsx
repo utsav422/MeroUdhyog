@@ -147,7 +147,7 @@ export default function CustomersImportModal({
               'linear-gradient(120deg, #f97316 0%, #ea580c 55%, #7c3aed 120%)',
           }}
         >
-          <div className="mb-4 flex items-start justify-between">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 shadow-lg backdrop-blur">
                 <Users size={22} weight="duotone" />

@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.customers import credit as credit_math
 from app.modules.customers.csv_import import parse_customer_csv
 from app.modules.customers.models import Customer
 from app.modules.customers.repository import CustomerRepository
@@ -30,21 +31,52 @@ def _latlng(value: object, field: str, low: float, high: float) -> Decimal | Non
     return parsed
 
 
+def _credit_limit(value: object) -> Decimal | None:
+    """Parse a CSV credit limit. Blank means "no limit"."""
+    if value is None or value == "":
+        return None
+    try:
+        parsed = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError(f"Invalid credit_limit: {value!r}") from None
+    if parsed < 0:
+        raise ValueError("credit_limit cannot be negative")
+    return parsed.quantize(Decimal("0.01"))
+
+
 class CustomerService:
     def __init__(self, session: AsyncSession, tenant_id: UUID):
         self.session = session
         self.tenant_id = tenant_id
         self.repo = CustomerRepository(session, tenant_id)
 
+    async def _with_credit(self, customer: Customer, used: Decimal) -> CustomerRead:
+        """Attach the derived credit figures to a customer's read model."""
+        read = CustomerRead.model_validate(customer)
+        read.credit_used = credit_math.clamp_used(used)
+        read.credit_available = credit_math.credit_available(customer.credit_limit, used)
+        read.credit_utilization = credit_math.credit_utilization(
+            customer.credit_limit, used
+        )
+        return read
+
     async def list(
         self, limit: int, offset: int, route_id: UUID | None = None
     ) -> list[CustomerRead]:
         customers = await self.repo.list(limit, offset, route_id)
-        return [CustomerRead.model_validate(c) for c in customers]
+        if not customers:
+            return []
+        # One pair of aggregate queries for the whole page, not one per row.
+        used_map = await credit_math.credit_used_map(self.session, self.tenant_id)
+        return [
+            await self._with_credit(c, used_map.get(c.id, credit_math.ZERO))
+            for c in customers
+        ]
 
     async def get(self, customer_id: UUID) -> CustomerRead:
         customer = await self.repo.get(customer_id)
-        return CustomerRead.model_validate(customer)
+        used = await credit_math.credit_used_for(self.session, self.tenant_id, customer.id)
+        return await self._with_credit(customer, used)
 
     async def create(self, data: CustomerCreate) -> CustomerRead:
         await self._check_unique_email(data.email)
@@ -62,9 +94,12 @@ class CustomerService:
             latitude=data.latitude,
             longitude=data.longitude,
             notes=data.notes,
+            credit_limit=data.credit_limit,
         )
         created = await self.repo.create(customer)
-        return CustomerRead.model_validate(created)
+        # A brand new customer owes nothing, so used/available follow straight
+        # from the limit without an extra aggregate query.
+        return await self._with_credit(created, credit_math.ZERO)
 
     async def update(self, customer_id: UUID, data: CustomerUpdate) -> CustomerRead:
         customer = await self.repo.get(customer_id)
@@ -83,7 +118,8 @@ class CustomerService:
         for field, value in updates.items():
             setattr(customer, field, value)
         updated = await self.repo.update(customer)
-        return CustomerRead.model_validate(updated)
+        used = await credit_math.credit_used_for(self.session, self.tenant_id, updated.id)
+        return await self._with_credit(updated, used)
 
     async def _resolve_route(self, route_id: UUID | None) -> UUID | None:
         if route_id is None:
@@ -155,6 +191,11 @@ class CustomerService:
                 row.error = str(exc)
                 continue
             try:
+                credit_limit = _credit_limit(data.get("credit_limit", ""))
+            except ValueError as exc:
+                row.error = str(exc)
+                continue
+            try:
                 await self.create(
                     CustomerCreate(
                         name=name,
@@ -168,6 +209,7 @@ class CustomerService:
                         latitude=latitude,
                         longitude=longitude,
                         notes=data.get("notes"),
+                        credit_limit=credit_limit,
                     )
                 )
             except ConflictError as exc:

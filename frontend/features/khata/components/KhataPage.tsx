@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Button, Text } from '@mantine/core';
 import { BookOpen, Plus } from '@phosphor-icons/react';
 import {
+  CreditLimitBar,
   DataTable,
   FilterBar,
   PaginationBar,
@@ -113,6 +114,12 @@ export default function KhataPage() {
       },
     },
     {
+      key: 'credit_utilization',
+      header: 'Credit limit',
+      sortable: true,
+      render: (c) => <CreditLimitBar figures={c} compact />,
+    },
+    {
       key: 'last_payment_date',
       header: 'Last payment',
       sortable: true,
@@ -167,7 +174,7 @@ export default function KhataPage() {
           setPage(1);
         }}
         getRowId={(c) => c.customer_id}
-        minWidth={820}
+        minWidth={1060}
         emptyTitle="No customers yet"
         emptyDescription="Khata balances appear here as soon as customers place orders."
       />

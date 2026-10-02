@@ -16,13 +16,7 @@ import {
   Receipt,
   XCircle,
 } from '@phosphor-icons/react';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-  StatusBadge,
-} from '@/components/shared';
+import { CreditLimitBar, EmptyState, ErrorState, LoadingState, PageHeader, ResponsiveTable, StatusBadge } from '@/components/shared';
 import { useSession } from '@/lib/providers';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { paymentMethodLabel } from '../constants';
@@ -167,6 +161,27 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         )}
       </div>
 
+      <div className="rounded-2xl border border-zinc-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <Text fw={600} size="sm" className="text-zinc-700">Credit limit</Text>
+            <Text size="xs" c="dimmed" className="mt-0.5">
+              {detail.credit_limit
+                ? detail.credit_available && Number(detail.credit_available) > 0
+                  ? `${formatMoney(detail.credit_available)} of headroom left before new orders need confirmation.`
+                  : 'Fully used — new orders will need confirmation before saving.'
+                : 'No limit set — orders are never blocked.'}
+            </Text>
+          </div>
+          {detail.credit_limit && (
+            <Text fw={700} size="lg" className="tabular-nums">
+              {formatMoney(detail.credit_limit)}
+            </Text>
+          )}
+        </div>
+        <CreditLimitBar figures={detail} className="mt-4" />
+      </div>
+
       <LedgerTable
         ledger={detail.ledger}
         customerName={detail.customer_name}
@@ -192,7 +207,7 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         {detail.orders.length === 0 ? (
           <EmptyState title="No orders" description="Place an order before collecting a payment." />
         ) : (
-          <Table verticalSpacing="sm" horizontalSpacing="md">
+          <ResponsiveTable minWidth={640}>
             <Table.Thead>
               <Table.Tr className="text-zinc-400">
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Order</Table.Th>
@@ -241,7 +256,7 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
                 );
               })}
             </Table.Tbody>
-          </Table>
+          </ResponsiveTable>
         )}
       </div>
 

@@ -235,7 +235,7 @@ export default function OrderForm({
         </div>
 
         <div className="rounded-xl border border-zinc-100 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <Text fw={600} size="sm" className="text-zinc-700">
               Line items
             </Text>
@@ -335,7 +335,7 @@ export default function OrderForm({
         </div>
 
         <div className="rounded-xl border border-zinc-100 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Text size="sm" c="dimmed">
               {items.filter((it) => it.variant_id).length} items · {items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)} units
             </Text>

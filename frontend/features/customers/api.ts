@@ -20,6 +20,13 @@ export type Customer = {
   latitude: string | null;
   longitude: string | null;
   notes: string | null;
+  /** Optional credit ceiling. Null means no limit — orders are never gated. */
+  credit_limit: string | null;
+  /** Derived from committed orders minus active payments (see credit.py). */
+  credit_used: string;
+  credit_available: string | null;
+  /** Percentage of the limit used, or null when unlimited. */
+  credit_utilization: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -49,6 +56,8 @@ export type CustomerInput = {
   latitude?: string | null;
   longitude?: string | null;
   notes?: string | null;
+  /** Omit or pass null for no limit. */
+  credit_limit?: number | string | null;
 };
 
 export const customersKeys = {

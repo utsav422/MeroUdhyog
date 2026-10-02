@@ -61,11 +61,10 @@ async def _create_product(client, name):
     return r.json()
 
 
-async def _create_customer(client, name="Acme"):
-    r = await client.post(
-        "/api/v1/customers",
-        json={"name": name, "email": f"{name.lower()}{uuid.uuid4().hex[:6]}@acme.com"},
-    )
+async def _create_customer(client, name="Acme", **extra):
+    payload = {"name": name, "email": f"{name.lower()}{uuid.uuid4().hex[:6]}@acme.com"}
+    payload.update(extra)
+    r = await client.post("/api/v1/customers", json=payload)
     assert r.status_code == 201, r.text
     return r.json()
 

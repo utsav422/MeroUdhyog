@@ -34,6 +34,9 @@ class OrderCreate(BaseModel):
     delivery_lng: Decimal | None = Field(default=None, ge=-180, le=180)
     notes: str | None = None
     items: list[OrderItemCreate] = Field(min_length=1)
+    # Set by the client after the user explicitly confirms an order that takes
+    # the customer past their credit limit. Without it the order is rejected.
+    override_credit_limit: bool = False
 
 
 class OrderUpdate(BaseModel):
@@ -43,6 +46,8 @@ class OrderUpdate(BaseModel):
     delivery_lng: Decimal | None = Field(default=None, ge=-180, le=180)
     notes: str | None = None
     status: str | None = None
+    # Same confirmation handshake as `OrderCreate`.
+    override_credit_limit: bool = False
     # When provided, replaces the order's existing line items.
     items: list[OrderItemCreate] | None = None
 

@@ -29,7 +29,7 @@ import {
 } from '@/features/products/api';
 import type { Variant } from '@/features/products/api';
 import UnitField from '@/features/products/components/UnitField';
-import { LoadingState, ErrorState, StockBar } from '@/components/shared';
+import { ErrorState, LoadingState, ResponsiveTable, StockBar } from '@/components/shared';
 import { apiClient } from '@/lib/api-client';
 import { formatMoney, formatPriceUnit } from '@/lib/format';
 
@@ -249,14 +249,16 @@ export default function ProductDetailPage() {
             Back to products
           </Button>
         </Group>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
+        {/* Identity block plus a 3-button action row need ~420px; stack below
+            `sm` so the buttons wrap instead of being squeezed. */}
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
               <Package size={28} weight="duotone" />
             </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <Text fw={700} size="xl" className="leading-tight">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <Text fw={700} size="xl" className="min-w-0 truncate leading-tight">
                   {data.name}
                 </Text>
                 <span
@@ -268,12 +270,12 @@ export default function ProductDetailPage() {
                   {data.is_active ? 'Active' : 'Inactive'}
                 </span>
               </div>
-              <Text size="sm" c="dimmed" className="mt-0.5">
+              <Text size="sm" c="dimmed" className="mt-0.5 break-words">
                 {data.sku ?? 'No SKU'} · {category?.name ?? 'Uncategorized'}
               </Text>
             </div>
           </div>
-          <Group gap="sm">
+          <Group gap="sm" className="w-full sm:w-auto">
             <Button
               variant="light"
               leftSection={<Plus size={16} weight="bold" />}
@@ -300,7 +302,7 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <CurrencyDollar size={20} weight="bold" />
@@ -350,8 +352,8 @@ export default function ProductDetailPage() {
 
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
         <div className="border-b border-[var(--border)] px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
               <Text fw={600} size="md" className="text-[var(--foreground)]">Variants & pricing</Text>
               <Text size="xs" c="dimmed" className="mt-0.5">
                 {editing
@@ -374,9 +376,9 @@ export default function ProductDetailPage() {
 
         {editing && (
           <div className="border-b border-[var(--border)] p-5">
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Package size={16} weight="duotone" className="text-brand-600" />
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <Package size={16} weight="duotone" className="shrink-0 text-brand-600" />
                 <Text fw={600} size="sm" className="text-[var(--foreground)]">
                   {editing.id ? `Edit variant · ${editing.row.name || 'Untitled'}` : 'New variant'}
                 </Text>
@@ -477,8 +479,7 @@ export default function ProductDetailPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <Table verticalSpacing="sm" horizontalSpacing="md">
+        <ResponsiveTable minWidth={720}>
             <Table.Thead>
               <Table.Tr className="text-[var(--muted)]">
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">#</Table.Th>
@@ -589,8 +590,7 @@ export default function ProductDetailPage() {
                 );
               })}
             </Table.Tbody>
-          </Table>
-        </div>
+        </ResponsiveTable>
       </div>
     </div>
   );

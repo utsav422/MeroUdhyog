@@ -18,7 +18,7 @@ import {
   useDefaultBillLayout,
   useInvoice,
 } from '@/features/khata/api';
-import { LoadingState, ErrorState, StatusBadge } from '@/components/shared';
+import { ErrorState, LoadingState, ResponsiveTable, StatusBadge } from '@/components/shared';
 import { formatMoney, formatPriceUnit, formatDateTime } from '@/lib/format';
 
 export default function InvoiceViewerPage() {
@@ -120,7 +120,7 @@ export default function InvoiceViewerPage() {
             Products billed on this invoice
           </Text>
         </div>
-        <Table verticalSpacing="sm" horizontalSpacing="md">
+        <ResponsiveTable minWidth={560}>
           <Table.Thead>
             <Table.Tr className="text-zinc-400">
               <Table.Th className="text-xs font-semibold uppercase tracking-wider">#</Table.Th>
@@ -162,9 +162,9 @@ export default function InvoiceViewerPage() {
               </Table.Tr>
             ))}
           </Table.Tbody>
-        </Table>
+        </ResponsiveTable>
         <div className="border-t border-zinc-100 px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Text size="sm" c="dimmed">Total ({itemCount} units)</Text>
             <Text fw={700} size="lg" className="text-zinc-800">{formatMoney(data.total_amount)}</Text>
           </div>
@@ -179,8 +179,8 @@ export default function InvoiceViewerPage() {
       )}
 
       <div className="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <Text fw={600} size="sm" className="text-zinc-800">Invoice</Text>
             <Text size="xs" c="dimmed">
               Uses your default invoice layout
@@ -190,7 +190,7 @@ export default function InvoiceViewerPage() {
         </div>
         {!layout || !template ? (
           <div className="flex justify-center">
-            <Skeleton height={420} width={460} radius="lg" />
+            <Skeleton height={420} w="100%" maw={460} radius="lg" />
           </div>
         ) : (
           <div className="flex justify-center">

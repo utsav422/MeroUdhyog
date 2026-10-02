@@ -329,7 +329,7 @@ export default function ProductOverview({
             )}
           </div>
 
-          <div className="mt-3 flex items-center justify-between gap-3 border-t border-zinc-100 pt-3">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-3">
             <p className="text-xs text-zinc-500">{pattern}</p>
             {onViewCustomer && (
               <Button

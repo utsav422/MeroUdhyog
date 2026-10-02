@@ -49,6 +49,10 @@ class Customer(Base):
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     contact_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Optional ceiling on how much this customer may owe at once. `None` means
+    # no limit — every order is allowed without a warning. See
+    # `customers/credit.py` for how the used amount is derived.
+    credit_limit: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )

@@ -1,11 +1,14 @@
 export { default as DataTable } from './DataTable';
 export type { Column, SortState, RowAction } from './DataTable';
+export { default as ResponsiveTable } from './ResponsiveTable';
 export { default as FilterBar } from './FilterBar';
 export type { FilterDef, Filters } from './FilterBar';
 export type { DateRangeValue } from './FilterBar';
 export { EMPTY_DATE_RANGE, dateInRange } from './FilterBar';
 export { default as PaginationBar } from './PaginationBar';
 export { default as StockBar } from './StockBar';
+export { default as CreditLimitBar, creditLimitTone, creditUsedPercent } from './CreditLimitBar';
+export type { CreditLimitFigures } from './CreditLimitBar';
 export { default as StatusBadge } from './StatusBadge';
 export { default as KPICard } from './KPICard';
 export { default as ChartCard, ChartLegend } from './ChartCard';

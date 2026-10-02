@@ -83,7 +83,7 @@ export default function ImportsPage() {
 
       {batch && (
         <Card className="mt-6">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <Text fw={600} size="md">
               {batch.filename}
             </Text>

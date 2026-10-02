@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import {
   Button,
   Group,
+  NumberInput,
   Select,
   Stack,
   Text,
@@ -38,6 +39,8 @@ type FormValues = {
   latitude: string;
   longitude: string;
   notes: string;
+  // Matches the NumberInput below: number, or NaN when the field is cleared.
+  credit_limit: number | '';
 };
 
 type PriceRow = {
@@ -72,6 +75,9 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
       latitude: customer?.latitude ? String(customer.latitude) : '',
       longitude: customer?.longitude ? String(customer.longitude) : '',
       notes: customer?.notes ?? '',
+      // A stored limit of "0.00" is a real limit (no credit), so only a null
+// limit maps to the empty input.
+      credit_limit: customer?.credit_limit == null ? '' : Number(customer.credit_limit),
     },
   });
 
@@ -149,10 +155,20 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
         city: values.city || null,
         route_id: values.route_id || null,
         address: values.address || null,
-        latitude: values.latitude ? Number(values.latitude) : null,
-        longitude: values.longitude ? Number(values.longitude) : null,
-        notes: values.notes || null,
-      };
+latitude: values.latitude ? Number(values.latitude) : null,
+          longitude: values.longitude ? Number(values.longitude) : null,
+          notes: values.notes || null,
+          // Blank clears the limit, which restores unlimited ordering. Guard on
+          // null explicitly: Number(null) is 0, which would silently turn an
+          // unlimited customer into a "no credit" one. A real 0 must survive as
+          // 0, since it means "no credit" rather than "no limit".
+          credit_limit:
+            values.credit_limit === '' ||
+            values.credit_limit == null ||
+            !Number.isFinite(Number(values.credit_limit))
+              ? null
+              : Number(values.credit_limit),
+        };
       let customerId = customer?.id;
       if (customer) {
         await apiClient.patch(`/customers/${customer.id}`, payload);
@@ -288,6 +304,17 @@ export default function CustomerForm({ customer }: { customer?: Customer }) {
               autosize
               minRows={2}
               {...form.getInputProps('notes')}
+            />
+            <NumberInput
+              label="Credit limit"
+              description="Optional. Caps how much this customer may owe at once. Leave blank for no limit — you will be asked to confirm before an order pushes them past it."
+              placeholder="No limit"
+              prefix="₹ "
+              min={0}
+              decimalScale={2}
+              thousandSeparator=","
+              clampBehavior="strict"
+              {...form.getInputProps('credit_limit')}
             />
           </Stack>
         </Paper>

@@ -103,8 +103,8 @@ export default function ReceiptViewerPage() {
       </div>
 
       <div className="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <Text fw={600} size="sm" className="text-zinc-800">Receipt</Text>
             <Text size="xs" c="dimmed">
               Uses your default receipt layout
@@ -114,7 +114,7 @@ export default function ReceiptViewerPage() {
         </div>
         {!layout || !template ? (
           <div className="flex justify-center">
-            <Skeleton height={340} width={420} radius="lg" />
+            <Skeleton height={340} w="100%" maw={420} radius="lg" />
           </div>
         ) : (
           <div className="flex justify-center">
