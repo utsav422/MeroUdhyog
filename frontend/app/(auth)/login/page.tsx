@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button, Checkbox, PasswordInput, TextInput } from '@mantine/core';
-import { EnvelopeSimple, LockSimple } from '@phosphor-icons/react';
+import { EnvelopeSimple, LockSimple, ArrowUpRight } from '@phosphor-icons/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiClientError } from '@/lib/api-client';
 import { authApi } from '@/features/auth/api';
@@ -59,6 +59,17 @@ export default function LoginPage() {
           >
             Create a workspace
           </Link>
+          <div className="mt-3">
+            <a
+              href="https://mero-udhyog-6jp1.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-medium text-brand-600 hover:text-brand-700"
+            >
+              Visit our website
+              <ArrowUpRight size={14} weight="bold" />
+            </a>
+          </div>
         </>
       }
     >
