@@ -23,6 +23,11 @@ import {
   Stamp,
   BookBookmark,
   CheckCircle,
+  Calculator,
+  Scales,
+  ChartLineUp,
+  Buildings,
+  Money,
   X,
 } from '@phosphor-icons/react';
 import { useSession } from '@/lib/providers';
@@ -142,6 +147,36 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Accounting',
+    items: [
+      {
+        href: '/accounting',
+        label: 'Overview',
+        icon: <Calculator size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/trial-balance',
+        label: 'Trial Balance',
+        icon: <Scales size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/profit-loss',
+        label: 'Profit & Loss',
+        icon: <ChartLineUp size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/balance-sheet',
+        label: 'Balance Sheet',
+        icon: <Buildings size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/cash-flow',
+        label: 'Cash Flow',
+        icon: <Money size={18} weight="duotone" />,
+      },
+    ],
+  },
+  {
     label: 'Operations',
     items: [
       {
@@ -214,6 +249,7 @@ export default function Sidebar({
         (pathname.startsWith('/orders/calendar') || pathname.startsWith('/orders/delivered'))
       ) &&
       !(item.href === '/products' && pathname.startsWith('/products/ledger')) &&
+      !(item.href === '/accounting' && pathname.startsWith('/accounting/')) &&
       !(item.href === '/products/ledger' && pathname.startsWith('/products/ledger/today')));
 
   return (

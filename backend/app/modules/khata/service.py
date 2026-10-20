@@ -227,6 +227,114 @@ class KhataService:
             )
         return ledger
 
+    # ---- ledger integration ---------------------------------------------------------
+
+    async def _post_receipt_to_ledger(self, entry: LedgerEntry) -> None:
+        """Mirror a khata payment into the transactions ledger as a `receipt`.
+
+        The ledger is the single source of truth for the accounting statements
+        (cash flow, trial balance, balance sheet). A khata payment is real cash
+        coming in, so it must appear there — otherwise cash-flow reporting is
+        wrong. The transaction carries no revenue effect (see the finance
+        calculator): a receipt only moves cash and clears a receivable.
+
+        Idempotent on ``external_id``: if a receipt transaction already exists
+        for this ledger entry it is not duplicated.
+        """
+        from app.modules.transactions.models import Transaction
+
+        external_id = f"khata-receipt:{entry.id}"
+        existing = (
+            await self.session.execute(
+                select(Transaction.id).where(
+                    Transaction.tenant_id == self.tenant_id,
+                    Transaction.external_id == external_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing:
+            return
+
+        self.session.add(
+            Transaction(
+                tenant_id=self.tenant_id,
+                type="receipt",
+                transaction_date=entry.collected_at,
+                external_id=external_id,
+                amount=entry.amount,
+                currency="NPR",
+                description=f"Payment received ({entry.method})"
+                + (f" · receipt {entry.receipt_number}" if entry.receipt_number else ""),
+                customer_id=entry.customer_id,
+                metadata_={"ledger_entry_id": str(entry.id), "method": entry.method},
+            )
+        )
+        await self.session.flush()
+        await self._recalculate_finance(entry.collected_at)
+
+    async def _reverse_receipt_in_ledger(self, entry: LedgerEntry) -> None:
+        """Cancel the ledger receipt for a voided payment.
+
+        Posts a reversing transaction (``reverses_id`` set) rather than deleting
+        the original, so the audit trail survives and the finance rollups can
+        net it out.
+        """
+        from app.modules.transactions.models import Transaction
+
+        external_id = f"khata-receipt:{entry.id}"
+        original = (
+            await self.session.execute(
+                select(Transaction).where(
+                    Transaction.tenant_id == self.tenant_id,
+                    Transaction.external_id == external_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if original is None:
+            return
+
+        already = (
+            await self.session.execute(
+                select(Transaction.id).where(
+                    Transaction.tenant_id == self.tenant_id,
+                    Transaction.reverses_id == original.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if already:
+            return
+
+        self.session.add(
+            Transaction(
+                tenant_id=self.tenant_id,
+                type="receipt",
+                transaction_date=datetime.now(UTC),
+                external_id=None,
+                amount=entry.amount,
+                currency=original.currency,
+                description=f"Reverses receipt for voided payment {entry.id}",
+                customer_id=entry.customer_id,
+                reverses_id=original.id,
+                metadata_={"ledger_entry_id": str(entry.id), "voided": True},
+            )
+        )
+        await self.session.flush()
+        await self._recalculate_finance(datetime.now(UTC))
+
+    async def _recalculate_finance(self, occurred_at: datetime) -> None:
+        try:
+            from app.modules.finance.service import FinanceService, month_of_dt
+
+            await FinanceService(self.session, self.tenant_id).recalculate(
+                {month_of_dt(occurred_at)}
+            )
+        except Exception:  # noqa: BLE001 - never break a payment on a rollup
+            import logging
+
+            logging.getLogger("factory.finance").exception(
+                "Failed to recalculate finance after khata ledger post"
+            )
+
     def _payment_read(self, entry: LedgerEntry) -> PaymentRead:
         return PaymentRead(
             id=entry.id,
@@ -364,6 +472,8 @@ class KhataService:
             await self.repo.add_allocation(entry.id, order.id, amt)
         await self.session.flush()
 
+        await self._post_receipt_to_ledger(entry)
+
         await self._notify_payment(data.customer_id, data.amount, allocations)
 
         # Rebuild with fully-loaded relationships for the response.
@@ -458,6 +568,7 @@ class KhataService:
                 order.amount_paid = ZERO
             self._recompute_payment_status(order)
         await self.session.flush()
+        await self._reverse_receipt_in_ledger(entry)
         fresh = await self.repo.get_entry(entry_id)
         return self._payment_read(fresh)
 

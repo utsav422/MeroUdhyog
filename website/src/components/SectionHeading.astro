@@ -1,0 +1,50 @@
+---
+interface Props {
+  eyebrow?: string;
+  title: string;
+  sub?: string;
+  align?: "center" | "left";
+  invert?: boolean;
+}
+const { eyebrow, title, sub, align = "center", invert = false } = Astro.props;
+---
+
+<div class:list={["max-w-3xl", align === "center" && "mx-auto text-center", "mb-12 md:mb-16"]}>
+  {
+    eyebrow && (
+      <span
+        data-reveal
+        class:list={[
+          "mb-4 inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium uppercase tracking-[0.16em]",
+          invert
+            ? "border-white/20 bg-white/5 text-amber-soft"
+            : "border-forest-950/10 bg-forest-950/[0.04] text-forest-700",
+        ]}
+      >
+        <span class="size-1.5 rounded-full bg-amber-brand" />
+        {eyebrow}
+      </span>
+    )
+  }
+  <h2
+    data-reveal
+    class:list={[
+      "text-balance text-4xl leading-[1.05] sm:text-5xl md:text-[3.4rem]",
+      invert ? "text-white" : "text-forest-950",
+    ]}
+    set:html={title}
+  />
+  {
+    sub && (
+      <p
+        data-reveal
+        class:list={[
+          "mt-5 text-pretty text-lg leading-relaxed",
+          invert ? "text-forest-100/70" : "text-forest-950/65",
+        ]}
+      >
+        {sub}
+      </p>
+    )
+  }
+</div>

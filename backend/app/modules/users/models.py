@@ -57,6 +57,9 @@ class User(Base):
     is_superadmin: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="false"
     )
+    is_email_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     agent_lat: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=9, scale=6), nullable=True

@@ -1,0 +1,215 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const channels = [
+  {
+    label: "General enquiries",
+    value: "hello@meroudhyog.com",
+    href: "mailto:hello@meroudhyog.com",
+    note: "For anything — plans, partnerships, press.",
+    icon: "M3 6h18v12H3V6Zm0 0 9 7 9-7",
+  },
+  {
+    label: "Support",
+    value: "support@meroudhyog.com",
+    href: "mailto:support@meroudhyog.com",
+    note: "Already running a workspace? Reach us here.",
+    icon: "M12 3a9 9 0 0 0-9 9v5a3 3 0 0 0 3 3h1v-6H5v-3a7 7 0 0 1 14 0v3h-2v6h1a3 3 0 0 0 3-3v-5a9 9 0 0 0-9-9Z",
+  },
+  {
+    label: "Onboarding help",
+    value: "Book a walkthrough",
+    href: "mailto:hello@meroudhyog.com?subject=Onboarding%20walkthrough",
+    note: "Want us to help you set up? Just ask.",
+    icon: "M12 8v8m-4-4h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z",
+  },
+];
+---
+
+<BaseLayout
+  title="Contact — Mero Udhyog"
+  description="Talk to the Mero Udhyog team about plans, onboarding, support or partnerships. We answer every message."
+>
+  <section class="relative overflow-hidden pt-32 pb-16 md:pt-44 md:pb-20">
+    <div class="grid-backdrop absolute inset-0 mask-radial-t"></div>
+    <div class="glow -right-32 -top-16 size-[30rem] bg-amber-brand/12"></div>
+    <div class="glow -left-40 top-40 size-[30rem] bg-forest-300/35"></div>
+
+    <div class="container-brand relative">
+      <div class="grid gap-14 lg:grid-cols-[1fr_1.1fr] lg:gap-20">
+        <!-- Left: intro + channels -->
+        <div>
+          <span class="eyebrow text-forest-700">Contact</span>
+          <h1 class="display-lg mt-6 text-forest-950">Let's talk.</h1>
+          <p class="mt-7 max-w-md text-lg leading-relaxed text-forest-950/62">
+            Questions about plans, a walkthrough for your team, or help getting your data in? We
+            read every message and reply personally.
+          </p>
+
+          <div class="mt-10 space-y-4">
+            {
+              channels.map((c) => (
+                <a
+                  href={c.href}
+                  data-reveal
+                  data-motion="lift"
+                  class="tile group flex items-start gap-4 p-5"
+                >
+                  <span class="grid size-11 shrink-0 place-items-center rounded-2xl border border-forest-950/10 bg-canvas text-forest-800 transition-all duration-500 ease-expo group-hover:-rotate-6 group-hover:border-amber-brand/50 group-hover:bg-amber-brand/10">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d={c.icon} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <div class="min-w-0">
+                    <p class="eyebrow text-forest-950/35">{c.label}</p>
+                    <p class="mt-1 truncate text-[15px] font-semibold text-forest-950">{c.value}</p>
+                    <p class="mt-0.5 text-sm text-forest-950/55">{c.note}</p>
+                  </div>
+                </a>
+              ))
+            }
+          </div>
+
+          <div class="mt-8 flex items-center gap-3 rounded-2xl border border-forest-950/10 bg-white p-5">
+            <span class="size-2.5 animate-pulse rounded-full bg-forest-500"></span>
+            <p class="text-sm text-forest-950/60">
+              Typical reply within one working day · Sunday–Friday · Kathmandu time
+            </p>
+          </div>
+        </div>
+
+        <!-- Right: form -->
+        <div data-reveal class="tile relative overflow-hidden p-7 md:p-9">
+          <div class="glow -right-10 -top-10 size-44 bg-amber-brand/10"></div>
+          <div class="relative">
+            <h2 class="font-display text-3xl text-forest-950">Send us a message</h2>
+            <p class="mt-2 text-sm text-forest-950/55">
+              Prefer email? Write to
+              <a href="mailto:hello@meroudhyog.com" class="font-medium text-forest-700 underline">hello@meroudhyog.com</a>.
+            </p>
+
+            <form id="contact-form" class="mt-7 space-y-5" novalidate>
+              <div class="grid gap-5 sm:grid-cols-2">
+                <label class="block">
+                  <span class="mb-1.5 block text-sm font-medium text-forest-950/70">Your name</span>
+                  <input
+                    type="text" name="name" required autocomplete="name"
+                    class="w-full rounded-xl border border-forest-950/12 bg-canvas px-4 py-3 text-[15px] text-forest-950 outline-none transition-colors duration-300 placeholder:text-forest-950/35 focus:border-forest-700 focus:bg-white"
+                    placeholder="Ramesh Shrestha"
+                  />
+                </label>
+                <label class="block">
+                  <span class="mb-1.5 block text-sm font-medium text-forest-950/70">Business</span>
+                  <input
+                    type="text" name="business" autocomplete="organization"
+                    class="w-full rounded-xl border border-forest-950/12 bg-canvas px-4 py-3 text-[15px] text-forest-950 outline-none transition-colors duration-300 placeholder:text-forest-950/35 focus:border-forest-700 focus:bg-white"
+                    placeholder="Shrestha Traders"
+                  />
+                </label>
+              </div>
+
+              <div class="grid gap-5 sm:grid-cols-2">
+                <label class="block">
+                  <span class="mb-1.5 block text-sm font-medium text-forest-950/70">Email</span>
+                  <input
+                    type="email" name="email" required autocomplete="email"
+                    class="w-full rounded-xl border border-forest-950/12 bg-canvas px-4 py-3 text-[15px] text-forest-950 outline-none transition-colors duration-300 placeholder:text-forest-950/35 focus:border-forest-700 focus:bg-white"
+                    placeholder="you@business.com"
+                  />
+                </label>
+                <label class="block">
+                  <span class="mb-1.5 block text-sm font-medium text-forest-950/70">Phone <span class="text-forest-950/35">(optional)</span></span>
+                  <input
+                    type="tel" name="phone" autocomplete="tel"
+                    class="w-full rounded-xl border border-forest-950/12 bg-canvas px-4 py-3 text-[15px] text-forest-950 outline-none transition-colors duration-300 placeholder:text-forest-950/35 focus:border-forest-700 focus:bg-white"
+                    placeholder="98XXXXXXXX"
+                  />
+                </label>
+              </div>
+
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-medium text-forest-950/70">What can we help with?</span>
+                <select
+                  name="topic"
+                  class="w-full appearance-none rounded-xl border border-forest-950/12 bg-canvas px-4 py-3 text-[15px] text-forest-950 outline-none transition-colors duration-300 focus:border-forest-700 focus:bg-white"
+                >
+                  <option>Getting started / onboarding</option>
+                  <option>Plans & pricing</option>
+                  <option>Importing my data</option>
+                  <option>Support with my workspace</option>
+                  <option>Partnership / something else</option>
+                </select>
+              </label>
+
+              <label class="block">
+                <span class="mb-1.5 block text-sm font-medium text-forest-950/70">Message</span>
+                <textarea
+                  name="message" required rows="5"
+                  class="w-full resize-none rounded-xl border border-forest-950/12 bg-canvas px-4 py-3 text-[15px] text-forest-950 outline-none transition-colors duration-300 placeholder:text-forest-950/35 focus:border-forest-700 focus:bg-white"
+                  placeholder="Tell us a little about your business and what you need."
+                ></textarea>
+              </label>
+
+              <button
+                type="submit"
+                data-motion="scale"
+                class="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[15px] font-semibold"
+              >
+                Send message
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                  <path d="M3 7.5h9M8 3.5 12 7.5 8 11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+
+              <p id="form-status" class="hidden rounded-xl border border-forest-500/30 bg-forest-50 px-4 py-3 text-sm text-forest-700" role="status"></p>
+              <p class="text-center text-xs text-forest-950/40">
+                We'll only use your details to reply. No lists, no spam.
+              </p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const form = document.getElementById("contact-form") as HTMLFormElement | null;
+  const status = document.getElementById("form-status");
+
+  form?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+
+    const data = new FormData(form);
+    const name = String(data.get("name") ?? "");
+    const business = String(data.get("business") ?? "");
+    const email = String(data.get("email") ?? "");
+    const phone = String(data.get("phone") ?? "");
+    const topic = String(data.get("topic") ?? "");
+    const message = String(data.get("message") ?? "");
+
+    const body = [
+      `Name: ${name}`,
+      `Business: ${business}`,
+      `Email: ${email}`,
+      phone ? `Phone: ${phone}` : null,
+      `Topic: ${topic}`,
+      "",
+      message,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const mailto = `mailto:hello@meroudhyog.com?subject=${encodeURIComponent(
+      `[${topic}] ${name}`,
+    )}&body=${encodeURIComponent(body)}`;
+
+    window.location.href = mailto;
+
+    if (status) {
+      status.textContent = "Opening your email app… if nothing happens, write to hello@meroudhyog.com";
+      status.classList.remove("hidden");
+    }
+  });
+</script>

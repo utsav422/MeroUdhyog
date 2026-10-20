@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 56" role="img" aria-label="Mero Udhyog">
+  <rect x="4" y="8" width="40" height="40" rx="10" fill="#1b4332" stroke="#27675c" stroke-width="1.5"/>
+  <path d="M14 37V20.4a1 1 0 0 1 1.75-.67L21 25.2l4.26-4.6a1 1 0 0 1 1.47 0L31 25.2l4.25-4.6A1 1 0 0 1 37 21.3V37"
+    fill="none" stroke="#f7f5ef" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="33.5" cy="15" r="2.9" fill="#ffbf4d"/>
+  <text x="56" y="35" font-family="Georgia, 'Times New Roman', serif" font-size="25" fill="#ffffff" letter-spacing="-0.5">Mero Udhyog</text>
+</svg>

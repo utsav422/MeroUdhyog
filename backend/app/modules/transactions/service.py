@@ -16,7 +16,14 @@ from app.modules.transactions.repository import TransactionRepository
 from app.modules.transactions.schemas import TransactionCreate, TransactionRead, TransactionUpdate
 from app.shared.exceptions import ConflictError, ValidationError
 
-REVERSAL_TYPE = {"sale": "purchase", "purchase": "sale", "expense": "expense"}
+REVERSAL_TYPE = {
+    "sale": "purchase",
+    "purchase": "sale",
+    "expense": "expense",
+    # A receipt reverses to another receipt; the accounting module reads
+    # `reverses_id` to subtract it, so cash-in is correctly cancelled.
+    "receipt": "receipt",
+}
 
 
 class TransactionService:

@@ -1,0 +1,75 @@
+---
+import "@fontsource-variable/inter";
+import "@fontsource/instrument-serif/400.css";
+import "@fontsource/instrument-serif/400-italic.css";
+import "../styles/global.css";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "Mero Udhyog — Run your business on what happens next",
+  description = "Mero Udhyog brings your products, orders, deliveries, khata and customers into one workspace — with smart, statistics-based forecasts for Nepali factories and distributors.",
+} = Astro.props;
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Mero Udhyog",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  description,
+  url: "https://mero-udhyog.vercel.app",
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "NPR",
+  },
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content="/og-image.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content="/og-image.svg" />
+    <link rel="canonical" href={Astro.site?.toString()} />
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+  </head>
+  <body class="min-h-screen">
+    <div class="scroll-progress" data-scroll-progress></div>
+    <Nav />
+    <slot />
+    <Footer />
+    <script>
+      import { initMotion } from "../lib/motion";
+      import { initAnimations } from "../scripts/animations";
+
+      const boot = () => {
+        initMotion();
+        initAnimations();
+      };
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot, { once: true });
+      } else {
+        boot();
+      }
+    </script>
+  </body>
+</html>

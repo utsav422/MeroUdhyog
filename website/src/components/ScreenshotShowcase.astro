@@ -1,0 +1,117 @@
+---
+const slides = [
+  {
+    src: "/screenshots/dashboard.png",
+    title: "Your whole business, one dashboard",
+    caption: "Orders, payments, stock and activity — updated as your team works.",
+    tag: "Dashboard",
+  },
+  {
+    src: "/screenshots/orders.png",
+    title: "Orders from draft to delivered",
+    caption: "Track status, payment and reorders without losing the thread.",
+    tag: "Orders",
+  },
+  {
+    src: "/screenshots/products.png",
+    title: "A product table you can trust",
+    caption: "Variants, SKUs and stock levels in a clean, searchable table.",
+    tag: "Products",
+  },
+];
+---
+
+<section id="showcase" class="relative overflow-hidden bg-forest-950 py-24 md:py-32 text-white">
+  <div class="noise absolute inset-0"></div>
+  <div
+    class="absolute -left-40 top-1/3 size-[34rem] rounded-full bg-forest-800/50 blur-3xl"
+  >
+  </div>
+  <div
+    class="absolute -right-32 bottom-0 size-[26rem] rounded-full bg-amber-brand/10 blur-3xl"
+  >
+  </div>
+
+  <div class="container-brand relative">
+    <div class="mb-12 flex flex-col gap-6 md:mb-16 md:flex-row md:items-end md:justify-between">
+      <div class="max-w-2xl">
+        <span
+          data-reveal
+          class="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-amber-soft"
+        >
+          <span class="size-1.5 rounded-full bg-amber-brand"></span> See it in action
+        </span>
+        <h2 data-reveal class="text-balance text-4xl leading-[1.05] sm:text-5xl md:text-[3.4rem]">
+          Built for the way your team already works.
+        </h2>
+      </div>
+      <p data-reveal class="max-w-sm text-base leading-relaxed text-forest-100/65">
+        Real screens from the product — no mockups, no theatre. This is what your workspace
+        looks like on day one.
+      </p>
+    </div>
+
+    <!-- Embla: app screenshot carousel -->
+    <div data-shot class="relative">
+      <div class="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]" data-embla="screens">
+        <div class="flex">
+          {
+            slides.map((slide) => (
+              <div class="min-w-0 flex-[0_0_100%] p-3 sm:p-5" data-embla-slide>
+                <figure class="group relative overflow-hidden rounded-2xl border border-white/10 bg-forest-950/60 shadow-2xl">
+                  <div class="flex items-center gap-1.5 border-b border-white/10 bg-white/[0.04] px-4 py-3">
+                    <span class="size-2.5 rounded-full bg-white/20" />
+                    <span class="size-2.5 rounded-full bg-white/20" />
+                    <span class="size-2.5 rounded-full bg-white/20" />
+                    <span class="ml-3 rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/50">
+                      {slide.tag}
+                    </span>
+                  </div>
+                  <div class="overflow-hidden bg-white">
+                    <img
+                      src={slide.src}
+                      alt={slide.title}
+                      loading="lazy"
+                      width="1600"
+                      height="1000"
+                      class="h-auto w-full origin-center transition-transform duration-700 ease-brand group-hover:scale-[1.02]"
+                    />
+                  </div>
+                  <figcaption class="flex flex-col gap-1 border-t border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p class="text-sm font-semibold text-white">{slide.title}</p>
+                      <p class="mt-0.5 text-sm text-forest-100/55">{slide.caption}</p>
+                    </div>
+                    <span class="mt-2 shrink-0 rounded-full bg-amber-brand/15 px-3 py-1 text-xs font-semibold text-amber-soft sm:mt-0">
+                      {slide.tag}
+                    </span>
+                  </figcaption>
+                </figure>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="mt-6 flex items-center justify-center gap-4">
+        <button
+          class="grid size-11 place-items-center rounded-full border border-white/15 text-white/70 transition-all duration-300 hover:border-white/40 hover:text-white"
+          data-embla-prev="screens" aria-label="Previous screenshot">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M9.5 3 5 7.5 9.5 12" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </button>
+        <div class="flex items-center gap-2" data-embla-dots="screens"></div>
+        <button
+          class="grid size-11 place-items-center rounded-full border border-white/15 text-white/70 transition-all duration-300 hover:border-white/40 hover:text-white"
+          data-embla-next="screens" aria-label="Next screenshot">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M5.5 3 10 7.5 5.5 12" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>

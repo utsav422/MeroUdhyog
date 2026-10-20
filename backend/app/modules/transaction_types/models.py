@@ -18,6 +18,11 @@ DEFAULT_TRANSACTION_TYPES: list[tuple[str, str]] = [
     ("Sale", "sale"),
     ("Purchase", "purchase"),
     ("Expense", "expense"),
+    # Cash collected from a customer against an invoice (posted automatically
+    # when a khata payment is recorded). Kept out of the revenue bucket so a
+    # receipt never double-counts a sale — it only moves cash and clears the
+    # receivable.
+    ("Receipt", "receipt"),
 ]
 
 

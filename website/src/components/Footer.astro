@@ -1,0 +1,107 @@
+---
+const year = new Date().getFullYear();
+
+const columns = [
+  {
+    title: "Product",
+    links: [
+      { label: "Overview", href: "/#features" },
+      { label: "Showcase", href: "/#showcase" },
+      { label: "Predictions", href: "/#predictions" },
+      { label: "Pricing", href: "/#pricing" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "About", href: "/about/" },
+      { label: "Contact", href: "/contact/" },
+      { label: "Blog", href: "/blog/" },
+    ],
+  },
+  {
+    title: "Get started",
+    links: [
+      { label: "Create account", href: "https://mero-udhyog.vercel.app/register" },
+      { label: "Log in", href: "https://mero-udhyog.vercel.app/login" },
+    ],
+  },
+];
+---
+
+<footer class="relative overflow-hidden bg-forest-950 text-forest-100">
+  <div class="noise absolute inset-0"></div>
+  <div
+    class="absolute -top-32 left-1/2 h-64 w-[60rem] -translate-x-1/2 rounded-full bg-forest-800/40 blur-3xl"
+  >
+  </div>
+
+  <div class="container-brand relative py-16 md:py-20">
+    <div class="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+      <div data-reveal>
+        <div class="flex items-center gap-2.5">
+          <img
+            src="/logo-mark.svg"
+            alt=""
+            width="36"
+            height="36"
+            class="size-9"
+          />
+          <span class="text-base font-semibold tracking-tight text-white">Mero Udhyog</span>
+        </div>
+        <p class="mt-4 max-w-xs text-sm leading-relaxed text-forest-100/60">
+          The operating workspace for Nepali factories and distributors — products, orders,
+          deliveries and khata, in one place.
+        </p>
+        <p class="mt-6 text-xs uppercase tracking-[0.18em] text-forest-100/40">
+          Built for how Nepal actually sells
+        </p>
+      </div>
+
+      {
+        columns.map((col) => (
+          <div data-reveal>
+            <h3 class="font-sans text-xs font-semibold uppercase tracking-[0.18em] text-forest-100/50">
+              {col.title}
+            </h3>
+            <ul class="mt-4 space-y-2.5">
+              {col.links.map((link) => (
+                <li>
+                  <a
+                    href={link.href}
+                    class="link-underline text-sm text-forest-100/75 hover:text-white"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+
+    <div
+      class="mt-14 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-6 text-xs text-forest-100/45 sm:flex-row sm:items-center"
+    >
+      <p>© {year} Mero Udhyog. All rights reserved.</p>
+      <button
+        id="back-to-top"
+        data-motion="scale"
+        class="flex items-center gap-1.5 rounded-full border border-white/15 px-3.5 py-1.5 transition-colors hover:border-white/35 hover:text-white"
+      >
+        Back to top
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+          <path d="M5 9V1M5 1L1.5 4.5M5 1l3.5 3.5" stroke="currentColor" stroke-width="1.4"
+            stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById("back-to-top")?.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  });
+</script>

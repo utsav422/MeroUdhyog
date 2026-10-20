@@ -38,6 +38,7 @@ app.add_middleware(
 
 
 def _register_routers(application: FastAPI) -> None:
+    from app.modules.accounting.router import router as accounting_router
     from app.modules.audits.router import router as audits_router
     from app.modules.auth.router import router as auth_router
     from app.modules.categories.router import router as categories_router
@@ -60,6 +61,7 @@ def _register_routers(application: FastAPI) -> None:
     from app.modules.users.router import router as users_router
 
     application.include_router(auth_router, prefix=settings.API_V1_PREFIX)
+    application.include_router(accounting_router, prefix=settings.API_V1_PREFIX)
     application.include_router(tenants_router, prefix=settings.API_V1_PREFIX)
     application.include_router(users_router, prefix=settings.API_V1_PREFIX)
     application.include_router(audits_router, prefix=settings.API_V1_PREFIX)

@@ -1,0 +1,35 @@
+---
+const items = [
+  "No card required",
+  "Works on phone & desktop",
+  "Khata-ready ledger",
+  "Print bills with your logo",
+  "CSV / Excel import",
+  "Live delivery tracking",
+  "Built for Nepali businesses",
+  "Free to start",
+];
+---
+
+<section class="relative border-y border-forest-950/8 bg-white/60 py-5" aria-hidden="true">
+  <div class="mask-fade-x overflow-hidden" data-marquee-track>
+    <div class="flex w-max gap-3" data-marquee-inner>
+      {
+        [...items, ...items].map((item) => (
+          <span class="flex shrink-0 items-center gap-2 rounded-full border border-forest-950/10 bg-canvas px-4 py-2 text-sm font-medium text-forest-950/70">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path
+                d="M2.5 6.2 5 8.7l4.5-5"
+                stroke="#f59e0b"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            {item}
+          </span>
+        ))
+      }
+    </div>
+  </div>
+</section>

@@ -9,9 +9,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Factory OS",
+  title: "Mero Udhyog",
   description:
-    "Audit assistance and financial intelligence for small and medium factories.",
+    "Run your factory with clarity — orders, delivery, khata and payments in one tidy workspace.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

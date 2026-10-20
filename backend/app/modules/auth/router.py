@@ -1,15 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_id, get_db
 from app.core.security import generate_csrf_token
 from app.modules.auth.schemas import (
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     MeResponse,
+    MessageResponse,
     RegisterRequest,
+    ResendVerificationRequest,
+    ResetPasswordRequest,
+    TokenInfoResponse,
     TokenResponse,
+    VerifyEmailRequest,
 )
-from app.modules.auth.service import AuthService
+from app.modules.auth.service import (
+    PURPOSE_RESET,
+    PURPOSE_VERIFY,
+    AuthService,
+)
 
 settings = get_settings()
 
@@ -105,4 +116,70 @@ async def me(user_id=Depends(get_current_user_id), db=Depends(get_db)):
         full_name=user.full_name,
         role=user.role,
         is_superadmin=user.is_superadmin,
+        is_email_verified=user.is_email_verified,
+    )
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(data: ForgotPasswordRequest, db=Depends(get_db)):
+    service = AuthService(db)
+    await service.forgot_password(data.email)
+    return MessageResponse(
+        detail="If that email is registered, a reset link has been sent."
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(data: ResetPasswordRequest, db=Depends(get_db)):
+    service = AuthService(db)
+    await service.reset_password(data.token, data.new_password)
+    return MessageResponse(
+        detail="Password updated. You can now sign in with your new password."
+    )
+
+
+@router.get("/reset-password/validate", response_model=TokenInfoResponse)
+async def validate_reset_token(
+    token: str = Query(min_length=10, max_length=512), db=Depends(get_db)
+):
+    service = AuthService(db)
+    email = await service.email_token_info(token, PURPOSE_RESET)
+    return TokenInfoResponse(valid=email is not None, email=email)
+
+
+@router.post("/change-password", response_model=MessageResponse)
+async def change_password(
+    data: ChangePasswordRequest,
+    user_id=Depends(get_current_user_id),
+    db=Depends(get_db),
+):
+    service = AuthService(db)
+    await service.change_password(user_id, data.current_password, data.new_password)
+    return MessageResponse(
+        detail="Password changed. Please sign in again on your other devices."
+    )
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+async def verify_email(data: VerifyEmailRequest, db=Depends(get_db)):
+    service = AuthService(db)
+    await service.verify_email(data.token)
+    return MessageResponse(detail="Email verified successfully.")
+
+
+@router.get("/verify-email/validate", response_model=TokenInfoResponse)
+async def validate_verify_token(
+    token: str = Query(min_length=10, max_length=512), db=Depends(get_db)
+):
+    service = AuthService(db)
+    email = await service.email_token_info(token, PURPOSE_VERIFY)
+    return TokenInfoResponse(valid=email is not None, email=email)
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+async def resend_verification(data: ResendVerificationRequest, db=Depends(get_db)):
+    service = AuthService(db)
+    await service.resend_verification(data.email)
+    return MessageResponse(
+        detail="If that email needs verification, a new link has been sent."
     )

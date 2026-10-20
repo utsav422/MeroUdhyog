@@ -221,12 +221,12 @@ function BlockView({
       <div
         className={`overflow-x-auto rounded-lg border border-zinc-200 bg-green-50/70 ${ALIGN_CN[align] ?? ALIGN_CN.left}`}
       >
-        <div className="grid grid-cols-3 gap-2 px-3 py-1.5">
+        <div className="grid min-w-[300px] grid-cols-3 gap-2 px-3 py-1.5">
           <p className="text-xs font-semibold uppercase text-zinc-500">Amount Paid</p>
           <p className="text-xs font-semibold uppercase text-zinc-500">Method</p>
           <p className="text-xs font-semibold uppercase text-zinc-500">Collected</p>
         </div>
-        <div className="grid grid-cols-3 gap-2 border-t border-zinc-200 px-3 py-2.5">
+        <div className="grid min-w-[300px] grid-cols-3 gap-2 border-t border-zinc-200 px-3 py-2.5">
           <p className="text-base font-bold tabular-nums text-zinc-800">{formatMoney(data.total_amount)}</p>
           <p className="text-zinc-600">{data.method || '—'}</p>
           <p className="text-zinc-600">{data.date || '—'}</p>

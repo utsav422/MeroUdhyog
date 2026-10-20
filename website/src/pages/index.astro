@@ -1,0 +1,666 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Marquee from "../components/Marquee.astro";
+import ScreenshotShowcase from "../components/ScreenshotShowcase.astro";
+import LifestyleCarousel from "../components/LifestyleCarousel.astro";
+
+/** Split a headline into word spans for the GSAP hero reveal. */
+const words = (text: string) =>
+  text.split(" ").map((w) => `<span data-hero-word>${w}&nbsp;</span>`).join("");
+
+const bentoTiles = [
+  {
+    kicker: "Catalog",
+    title: "Products & stock",
+    body: "Variants, SKUs, units and a signed stock ledger. Every movement recorded — nothing silently overwritten.",
+    icon: "M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9ZM4 7.5 12 12m0 0 8-4.5M12 12v9",
+    size: "lg:col-span-3 lg:row-span-2",
+    visual: "stock",
+  },
+  {
+    kicker: "Sell",
+    title: "Orders & fulfilment",
+    body: "Draft → confirmed → delivered, with payment status and reorder chains that never lose history.",
+    icon: "M6 3h9l4 4v14H6V3Zm9 0v4h4M9 12h7M9 16h7",
+    size: "lg:col-span-3",
+    visual: null,
+  },
+  {
+    kicker: "Get paid",
+    title: "Khata & invoices",
+    body: "FIFO payment allocation, receipts with your numbering, PDF bills wearing your logo and PAN.",
+    icon: "M4 5.5A2.5 2.5 0 0 1 6.5 3H19v18H6.5A2.5 2.5 0 0 1 4 18.5v-13ZM8 8h7M8 12h7M8 16h4",
+    size: "lg:col-span-3",
+    visual: null,
+  },
+  {
+    kicker: "Deliver",
+    title: "Live deliveries",
+    body: "Assign routes and agents, watch GPS trails, close the loop with proof of delivery.",
+    icon: "M3 7h11v8H3V7Zm11 3h4l3 3v2h-7v-5ZM7 19a1.75 1.75 0 1 0 0-3.5A1.75 1.75 0 0 0 7 19Zm10 0a1.75 1.75 0 1 0 0-3.5A1.75 1.75 0 0 0 17 19Z",
+    size: "lg:col-span-2",
+    visual: "map",
+  },
+  {
+    kicker: "Relationships",
+    title: "Customer records",
+    body: "PAN, credit limits, negotiated prices and routes — the full relationship, not a phone list.",
+    icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8.5A6.5 6.5 0 0 1 12 14a6.5 6.5 0 0 1 7 6.5",
+    size: "lg:col-span-2",
+    visual: null,
+  },
+  {
+    kicker: "Look ahead",
+    title: "Predictions",
+    body: "Statistics over each customer's order gaps — who to call, who to message, who to leave alone.",
+    icon: "M4 19V5m0 14h16M7.5 15l3.5-4 3 2.5L20 8",
+    size: "lg:col-span-2",
+    visual: "spark",
+  },
+];
+
+const steps = [
+  {
+    n: "01",
+    title: "Add your products",
+    body: "Import from CSV or Excel, or enter them once. Variants, units and prices land in a clean catalog — your stock ledger starts counting from day one.",
+  },
+  {
+    n: "02",
+    title: "Run your business as usual",
+    body: "Take orders, print bills, send deliveries, collect khata payments. Nothing changes about how your team already works — except it stops living in five notebooks.",
+  },
+  {
+    n: "03",
+    title: "Get ahead of what's next",
+    body: "Every order feeds the forecast. You see who's due to reorder, what stock needs refilling, and where revenue is heading — before the question is asked.",
+  },
+];
+
+const faqs = [
+  {
+    q: "What is Mero Udhyog?",
+    a: "A web workspace for Nepali factories and distributors that combines products, orders, deliveries, customers and khata (credit ledger) in one place — with statistics-based forecasts of what's coming next.",
+  },
+  {
+    q: "Is it really free to start?",
+    a: "Yes. You can create a workspace, add your team and run your operations without a card. Paid tiers are coming later — early users keep their pricing.",
+  },
+  {
+    q: "Does it work on my phone?",
+    a: "It's built as a mobile-first web app with push notifications. Your delivery agents can update status and share live location from the field.",
+  },
+  {
+    q: "Can I import my existing Excel data?",
+    a: "Yes — CSV and Excel imports with row-level error reporting, so a bad line never poisons the whole file.",
+  },
+  {
+    q: "How does the khata differ from a spreadsheet?",
+    a: "Payments are allocated to orders FIFO, receipts get unique numbers, credit limits are enforced, and every bill can be printed with your logo, PAN and tax rate.",
+  },
+  {
+    q: "Are the predictions actually AI?",
+    a: "No — and we say so plainly. They're transparent statistics over the gaps between each customer's past orders. You can see why every recommendation exists.",
+  },
+  {
+    q: "Is my data private?",
+    a: "Every workspace is tenant-isolated at the database layer. Your customers, prices and ledgers are never visible to another business.",
+  },
+  {
+    q: "How do I get started?",
+    a: "Hit “Get started”, name your organisation, and you're in. Most teams have their first products entered within an afternoon.",
+  },
+];
+---
+
+<BaseLayout>
+  <!-- ============ HERO — product-first bento ============ -->
+  <section data-hero-zone class="relative overflow-hidden pt-28 pb-14 md:pt-36 md:pb-20">
+    <div class="grid-backdrop absolute inset-0 mask-radial-t"></div>
+    <div data-hero-orb class="glow -top-24 right-[6%] size-[30rem] bg-amber-brand/15"></div>
+    <div data-hero-orb class="glow -left-40 top-32 size-[34rem] bg-forest-300/40"></div>
+
+    <div class="container-brand relative">
+      <!-- top row: eyebrow + headline + sub + CTA -->
+      <div class="mx-auto max-w-4xl text-center">
+        <span
+          data-hero-eyebrow
+          class="mb-7 inline-flex items-center gap-2.5 rounded-full border border-forest-950/12 bg-white/70 py-1.5 pl-1.5 pr-4 text-[13px] font-medium text-forest-700 shadow-sm backdrop-blur"
+        >
+          <span class="grid size-6 place-items-center rounded-full bg-forest-800 text-[10px] font-bold text-amber-soft">MU</span>
+          Operating workspace for Nepali factories
+          <span class="size-1.5 animate-pulse rounded-full bg-amber-brand"></span>
+        </span>
+
+        <h1 class="display-xl mx-auto max-w-[16ch] text-forest-950" set:html={words("Run your business on what happens next.")} />
+
+        <p data-hero-sub class="mx-auto mt-8 max-w-xl text-lg leading-relaxed text-forest-950/60 md:text-xl">
+          Products, orders, deliveries, khata and customers in one workspace — then forecasts
+          that tell you who to call before they call you.
+        </p>
+
+        <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <a
+            data-hero-cta
+            data-motion="scale"
+            href="https://mero-udhyog.vercel.app/register"
+            class="btn-primary inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-medium"
+          >
+            Get started — free
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M3 7h8M7.5 3.5 11 7l-3.5 3.5" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </a>
+          <a
+            data-hero-cta
+            href="#showcase"
+            class="btn-ghost inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-medium text-forest-950/80"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M4.5 2.5v9l8-4.5-8-4.5Z" fill="currentColor"></path>
+            </svg>
+            See it in action
+          </a>
+        </div>
+        <p data-hero-cta class="mt-5 text-sm text-forest-950/45">
+          Free during beta · No card required · Set up in an afternoon
+        </p>
+      </div>
+
+      <!-- bento hero grid: real product surfaces -->
+      <div class="mt-16 grid gap-4 md:mt-20 md:grid-cols-12" data-hero-bento>
+        <!-- Tier-1 anchor: dashboard screenshot -->
+        <figure
+          data-hero-shot
+          class="tile group relative md:col-span-8 md:row-span-2"
+        >
+          <div class="flex items-center justify-between border-b border-forest-950/8 bg-canvas px-4 py-3">
+            <div class="flex items-center gap-1.5">
+              <span class="size-2.5 rounded-full bg-forest-950/12"></span>
+              <span class="size-2.5 rounded-full bg-forest-950/12"></span>
+              <span class="size-2.5 rounded-full bg-forest-950/12"></span>
+            </div>
+            <span class="rounded-md bg-forest-950/6 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-forest-950/45">Dashboard</span>
+          </div>
+          <div class="relative overflow-hidden bg-white">
+            <img
+              src="/screenshots/dashboard.png"
+              alt="Mero Udhyog dashboard showing revenue, orders and deliveries"
+              width="1600" height="1000"
+              class="w-full origin-top transition-transform duration-[1.2s] ease-expo group-hover:scale-[1.03]"
+            />
+          </div>
+          <figcaption class="flex items-center justify-between px-5 py-4">
+            <span class="text-sm font-medium text-forest-950/70">Your whole business, one view</span>
+            <span class="rounded-full bg-forest-800/8 px-3 py-1 text-xs font-semibold text-forest-700">Live</span>
+          </figcaption>
+        </figure>
+
+        <!-- Tier-2: forecast card -->
+        <div data-hero-shot class="tile relative flex flex-col justify-between bg-forest-800 p-6 text-white md:col-span-4">
+          <div class="noise absolute inset-0 opacity-40"></div>
+          <div class="relative">
+            <p class="eyebrow text-amber-soft">Forecast</p>
+            <p class="mt-3 font-display text-[2.75rem] leading-none text-white">
+              Rs 12.4<span class="text-white/40">L</span>
+            </p>
+            <p class="mt-1 text-sm text-forest-100/60">this month, trending</p>
+          </div>
+          <svg viewBox="0 0 240 80" class="relative mt-5 w-full" fill="none" aria-hidden="true">
+            <path d="M4 64 C 40 56, 70 58, 100 46 S 160 42, 196 26 236 20, 236 18" stroke="#ffbf4d" stroke-width="2.4" stroke-linecap="round"></path>
+            <path d="M4 64 C 40 56, 70 58, 100 46 S 160 42, 196 26 236 20, 236 18 L236 76 4 76Z" fill="#ffbf4d" opacity="0.12"></path>
+            <circle cx="236" cy="18" r="4" fill="#ffbf4d"></circle>
+          </svg>
+          <div class="relative mt-4 flex items-center gap-2 rounded-xl bg-white/8 px-3 py-2.5">
+            <span class="size-2 rounded-full bg-amber-brand"></span>
+            <span class="text-xs font-medium text-white/85">Predicted Rs 14.1L next month</span>
+          </div>
+        </div>
+
+        <!-- Tier-2: reorder due ticker -->
+        <div data-hero-shot class="tile relative overflow-hidden p-6 md:col-span-4">
+          <p class="eyebrow text-forest-950/45">Reorder due</p>
+          <ul class="mt-4 space-y-2.5" data-ticker>
+            <li class="flex items-center justify-between gap-3 rounded-xl bg-canvas px-3.5 py-2.5">
+              <span class="text-sm font-medium text-forest-950">Sagar Traders</span>
+              <span class="rounded-full bg-amber-brand/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-700">TODAY</span>
+            </li>
+            <li class="flex items-center justify-between gap-3 rounded-xl bg-canvas px-3.5 py-2.5">
+              <span class="text-sm font-medium text-forest-950">Everest Hardware</span>
+              <span class="rounded-full bg-forest-800/8 px-2.5 py-0.5 text-[11px] font-bold text-forest-700">2 DAYS</span>
+            </li>
+            <li class="flex items-center justify-between gap-3 rounded-xl bg-canvas px-3.5 py-2.5">
+              <span class="text-sm font-medium text-forest-950">Boudha Suppliers</span>
+              <span class="rounded-full bg-forest-800/8 px-2.5 py-0.5 text-[11px] font-bold text-forest-700">5 DAYS</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MARQUEE ============ -->
+  <Marquee />
+
+  <!-- ============ PROBLEM — editorial ============ -->
+  <section class="relative py-24 md:py-32">
+    <div class="container-brand">
+      <div class="grid gap-14 md:grid-cols-[1fr_1fr] md:gap-20">
+        <div class="md:sticky md:top-32 md:self-start">
+          <span class="eyebrow text-forest-700">The problem</span>
+          <h2 class="display-lg mt-5 text-forest-950">
+            A khata book, three Excels and forty phone calls.
+          </h2>
+          <p data-reveal class="mt-6 max-w-md text-lg leading-relaxed text-forest-950/60">
+            Then someone asks
+            <em class="font-display text-2xl not-italic text-forest-950" data-underline>
+              <span class="mark-underline">“how much did we sell last month?”</span>
+            </em>
+            — and the answer takes a week to assemble.
+          </p>
+        </div>
+
+        <div class="divide-y divide-forest-950/10 border-y border-forest-950/10">
+          {
+            [
+              { t: "Paper khata", d: "Credit lives in a notebook. Nobody trusts it after the first dispute." },
+              { t: "Excel stock lists", d: "Updated by whoever remembers. Usually the wrong person, usually late." },
+              { t: "Phone-call deliveries", d: "“Where's the van?” is a daily question with no answer." },
+              { t: "Reactive selling", d: "You find out a customer moved on only when the order stops coming." },
+            ].map((card) => (
+              <div data-reveal class="group flex items-start gap-5 py-7 transition-colors duration-500">
+                <span class="mt-1 grid size-9 shrink-0 place-items-center rounded-full border border-forest-950/12 text-forest-950/40 transition-all duration-500 group-hover:border-amber-brand/60 group-hover:text-amber-600">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M3 11 11 3M11 3H5M11 3v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                  </svg>
+                </span>
+                <div>
+                  <h3 class="font-sans text-lg font-semibold text-forest-950">{card.t}</h3>
+                  <p class="mt-1.5 text-[15px] leading-relaxed text-forest-950/55">{card.d}</p>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BENTO FEATURES ============ -->
+  <section id="features" class="relative overflow-hidden bg-white py-24 md:py-32">
+    <div class="glow -right-40 top-20 size-[28rem] bg-forest-200/60"></div>
+    <div class="container-brand relative">
+      <div class="mb-14 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+        <div class="max-w-2xl">
+          <span class="eyebrow text-forest-700">The workspace</span>
+          <h2 class="display-lg mt-5 text-forest-950">
+            Everything that runs your business, in one place.
+          </h2>
+        </div>
+        <p data-reveal class="max-w-sm text-base leading-relaxed text-forest-950/60">
+          Six modules sharing the same data — an order updates stock, stock updates delivery, and
+          delivery updates the khata. Automatically.
+        </p>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-6" data-bento>
+        {
+          bentoTiles.map((tile) => (
+            <article
+              class:list={["tile group flex flex-col p-7", tile.size]}
+              data-motion="lift"
+            >
+              <div class="pointer-events-none absolute -right-16 -top-16 size-44 rounded-full bg-amber-brand/0 transition-all duration-700 ease-expo group-hover:bg-amber-brand/10" />
+              <div class="relative flex items-start justify-between">
+                <div class="grid size-11 place-items-center rounded-2xl border border-forest-950/10 bg-white text-forest-800 transition-all duration-500 ease-expo group-hover:-rotate-6 group-hover:border-amber-brand/50 group-hover:bg-amber-brand/10">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d={tile.icon} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+                  </svg>
+                </div>
+                <span class="eyebrow text-forest-950/30">{tile.kicker}</span>
+              </div>
+
+              <h3 class="relative mt-6 font-display text-2xl text-forest-950">{tile.title}</h3>
+              <p class="relative mt-2.5 text-[15px] leading-relaxed text-forest-950/58">{tile.body}</p>
+
+              {tile.visual === "stock" && (
+                <div class="relative mt-6 space-y-3 rounded-2xl border border-forest-950/10 bg-canvas p-4">
+                  {
+                    [
+                      { sku: "SKU-1042", pct: 72, qty: "720 units" },
+                      { sku: "SKU-2210", pct: 34, qty: "180 units" },
+                      { sku: "SKU-3391", pct: 91, qty: "1,240 units" },
+                    ].map((row) => (
+                      <div class="flex items-center gap-3">
+                        <span class="rounded-md bg-forest-50 px-2 py-0.5 text-[11px] font-semibold text-forest-700">{row.sku}</span>
+                        <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-forest-950/10">
+                          <div class="h-full rounded-full bg-gradient-to-r from-forest-600 to-forest-800" style={`width:${row.pct}%`} />
+                        </div>
+                        <span class="w-16 text-right text-[11px] font-semibold text-forest-950/60">{row.qty}</span>
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+
+              {tile.visual === "map" && (
+                <div class="relative mt-6 overflow-hidden rounded-2xl border border-forest-950/10">
+                  <img
+                    src="https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=640&q=70&auto=format&fit=crop"
+                    alt="Delivery van on a route"
+                    loading="lazy"
+                    class="h-32 w-full object-cover transition-transform duration-[1.2s] ease-expo group-hover:scale-105"
+                  />
+                  <span class="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-forest-950/70 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur">
+                    <span class="size-1.5 animate-pulse rounded-full bg-amber-brand"></span> On route · 3 stops left
+                  </span>
+                </div>
+              )}
+
+              {tile.visual === "spark" && (
+                <svg viewBox="0 0 240 60" class="relative mt-6 w-full" fill="none" aria-hidden="true">
+                  <path d="M4 48 C 50 44, 80 30, 120 32 S 190 16, 236 8" stroke="#1b4332" stroke-width="2.2" stroke-linecap="round"></path>
+                  <path d="M120 32 C 170 24, 210 12, 236 8" stroke="#f59e0b" stroke-width="2.2" stroke-dasharray="4 5" stroke-linecap="round"></path>
+                  <circle cx="236" cy="8" r="4" fill="#f59e0b"></circle>
+                </svg>
+              )}
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREENSHOT CAROUSEL ============ -->
+  <ScreenshotShowcase />
+
+  <!-- ============ LIFESTYLE CAROUSEL ============ -->
+  <LifestyleCarousel />
+
+  <!-- ============ PREDICTIONS (dark) ============ -->
+  <section id="predictions" class="relative overflow-hidden bg-forest-950 py-24 text-white md:py-32">
+    <div class="dotted-dark absolute inset-0 opacity-40"></div>
+    <div class="glow -right-40 -top-20 size-[36rem] bg-forest-700/45"></div>
+    <div class="glow -left-24 bottom-10 size-[26rem] bg-amber-brand/12"></div>
+
+    <div class="container-brand relative">
+      <div class="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
+        <div>
+          <span class="eyebrow text-amber-soft">Predictions</span>
+          <h2 class="display-lg mt-5 text-white">
+            Know who to call<br />before they call you.
+          </h2>
+          <p data-reveal class="mt-6 max-w-xl text-lg leading-relaxed text-forest-100/65">
+            Every customer-product pair gets a transparent score built from the gaps between their
+            past orders. No black box — just
+            <strong class="font-semibold text-white">smart statistics</strong> you can argue with.
+          </p>
+
+          <ul class="mt-9 space-y-5">
+            {
+              [
+                { t: "Next predicted date", d: "When each customer is statistically likely to reorder." },
+                { t: "Interest score 0–100", d: "Recency, frequency and consistency, weighted and explained." },
+                { t: "Call, message or wait", d: "A plain recommendation for every pair — so your team stops guessing." },
+              ].map((item) => (
+                <li data-reveal class="flex gap-4">
+                  <span class="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-amber-brand/15 text-amber-soft">
+                    <svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                      <path d="M2.5 6.2 5 8.7l4.5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <div>
+                    <p class="font-semibold text-white">{item.t}</p>
+                    <p class="mt-0.5 text-sm leading-relaxed text-forest-100/55">{item.d}</p>
+                  </div>
+                </li>
+              ))
+            }
+          </ul>
+
+          <div data-reveal class="mt-9 flex flex-wrap gap-2">
+            {
+              ["On track", "Due soon", "Overdue", "Needs data"].map((chip, i) => (
+                <span
+                  class:list={[
+                    "rounded-full px-3.5 py-1.5 text-xs font-semibold",
+                    i === 0 && "bg-forest-400/20 text-forest-200",
+                    i === 1 && "bg-amber-brand/20 text-amber-soft",
+                    i === 2 && "bg-red-400/20 text-red-200",
+                    i === 3 && "bg-white/10 text-white/60",
+                  ]}
+                >
+                  {chip}
+                </span>
+              ))
+            }
+          </div>
+        </div>
+
+        <!-- Actual vs predicted chart -->
+        <div data-reveal-mask class="relative">
+          <div class="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_40px_90px_-50px_rgba(0,0,0,0.9)] backdrop-blur-sm md:p-8">
+            <div class="mb-5 flex items-center justify-between">
+              <div>
+                <p class="eyebrow text-white/40">Sagar Traders · Product A</p>
+                <p class="mt-2 font-display text-2xl text-white">Next order forecast</p>
+              </div>
+              <span class="rounded-full bg-amber-brand/15 px-3 py-1.5 text-xs font-semibold text-amber-soft">Score 87</span>
+            </div>
+
+            <svg data-chart viewBox="0 0 400 210" class="w-full" fill="none" aria-hidden="true">
+              <g stroke="rgba(255,255,255,0.08)" stroke-width="1">
+                <line x1="0" y1="40" x2="400" y2="40"></line>
+                <line x1="0" y1="90" x2="400" y2="90"></line>
+                <line x1="0" y1="140" x2="400" y2="140"></line>
+                <line x1="0" y1="190" x2="400" y2="190"></line>
+              </g>
+              <path data-chart-line d="M10 165 C 55 150, 85 158, 120 132 S 190 128, 225 104" stroke="#ffbf4d" stroke-width="3" stroke-linecap="round"></path>
+              <path data-chart-line d="M225 104 C 265 92, 305 84, 350 58 S 385 44, 395 40" stroke="#8bbfb0" stroke-width="3" stroke-linecap="round"></path>
+              <circle data-chart-dot cx="10" cy="165" r="5" fill="#ffbf4d"></circle>
+              <circle data-chart-dot cx="120" cy="132" r="5" fill="#ffbf4d"></circle>
+              <circle data-chart-dot cx="225" cy="104" r="6" fill="#fff"></circle>
+              <circle data-chart-dot cx="350" cy="58" r="5" fill="#8bbfb0"></circle>
+              <circle data-chart-dot cx="395" cy="40" r="5" fill="#8bbfb0"></circle>
+              <g font-size="11" fill="rgba(255,255,255,0.5)" font-family="Inter, sans-serif">
+                <text x="10" y="200">May</text>
+                <text x="112" y="200">Jun</text>
+                <text x="214" y="200">Jul</text>
+                <text x="316" y="200">Aug</text>
+                <text x="372" y="200">Sep</text>
+              </g>
+            </svg>
+
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5">
+              <div>
+                <p class="text-xs text-white/45">Recommended action</p>
+                <p class="mt-0.5 text-sm font-semibold text-white">
+                  Call before <span class="text-amber-soft">14 Sep</span> — they usually reorder.
+                </p>
+              </div>
+              <span class="rounded-full bg-amber-brand px-3.5 py-1.5 text-xs font-bold text-forest-950">CALL</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOW IT WORKS (pinned stepper) ============ -->
+  <section data-stepper class="relative overflow-hidden bg-canvas py-24 md:py-32">
+    <div class="container-brand">
+      <div class="mx-auto mb-14 max-w-2xl text-center">
+        <span class="eyebrow text-forest-700">How it works</span>
+        <h2 class="display-lg mt-5 text-forest-950">Three steps. No consultants, no migration horror.</h2>
+        <p data-reveal class="mt-5 text-lg text-forest-950/60">
+          Most teams are fully running inside a single afternoon.
+        </p>
+      </div>
+
+      <div class="relative mx-auto max-w-4xl">
+        <div class="mb-10 h-1 w-full overflow-hidden rounded-full bg-forest-950/10">
+          <div data-step-progress class="h-full w-full origin-left scale-x-[0.34] rounded-full bg-gradient-to-r from-forest-700 to-amber-brand"></div>
+        </div>
+
+        <div class="grid gap-5 md:grid-cols-3">
+          {
+            steps.map((step) => (
+              <article data-step class="tile relative p-7">
+                <span class="font-display text-6xl leading-none text-forest-800/20">{step.n}</span>
+                <h3 class="mt-4 font-display text-2xl text-forest-950">{step.title}</h3>
+                <p class="mt-3 text-[15px] leading-relaxed text-forest-950/60">{step.body}</p>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TESTIMONIAL + PRICING TEASER ============ -->
+  <section id="pricing" class="relative py-24 md:py-32">
+    <div class="container-brand">
+      <div class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <figure data-reveal class="tile relative overflow-hidden p-8 md:p-10">
+          <div class="glow -right-10 -top-10 size-44 bg-amber-brand/10"></div>
+          <div class="relative">
+            <div class="flex gap-1 text-amber-brand" aria-label="5 out of 5 stars">
+              {
+                Array.from({ length: 5 }).map(() => (
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M8 1.5l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.3l-3.8 2 .7-4.3-3.1-3 4.3-.6L8 1.5z" />
+                  </svg>
+                ))
+              }
+            </div>
+            <blockquote class="mt-6 font-display text-2xl leading-snug text-forest-950 md:text-[2rem]">
+              “We didn't change how we sell. We just stopped losing track of it. The khata alone paid
+              for the time it took to set up.”
+            </blockquote>
+            <figcaption class="mt-7 flex items-center gap-3.5">
+              <img
+                src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=160&h=160&q=75&auto=format&fit=crop"
+                alt="Business owner reviewing figures with team"
+                width="52" height="52" loading="lazy"
+                class="size-13 rounded-full object-cover"
+              />
+              <div>
+                <p class="text-sm font-semibold text-forest-950">Distribution owner</p>
+                <p class="text-sm text-forest-950/55">Wholesale · Nepal</p>
+              </div>
+            </figcaption>
+          </div>
+        </figure>
+
+        <div data-reveal class="tile relative flex flex-col justify-between overflow-hidden bg-forest-800 p-8 text-white md:p-10">
+          <div class="noise absolute inset-0 opacity-40"></div>
+          <div class="glow -right-16 -top-16 size-52 bg-amber-brand/20"></div>
+          <div class="relative">
+            <span class="eyebrow text-amber-soft">Pricing</span>
+            <h3 class="mt-5 font-display text-4xl leading-tight text-white">Paid plans are coming soon.</h3>
+            <p class="mt-4 text-[15px] leading-relaxed text-forest-100/75">
+              Mero Udhyog is <strong class="font-semibold text-white">free during beta</strong> — full
+              product, no card, no seat limits we'll retroactively enforce. Business-tier pricing
+              lands later; early workspaces keep beta terms.
+            </p>
+          </div>
+          <div class="relative mt-8">
+            <a
+              data-motion="pulse"
+              href="https://mero-udhyog.vercel.app/register"
+              class="flex items-center justify-between gap-3 rounded-2xl bg-amber-brand px-6 py-4 text-[15px] font-semibold text-forest-950 transition-transform duration-300 hover:-translate-y-0.5"
+            >
+              Claim your free workspace
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                <path d="M3 7.5h9M8 3.5 12 7.5 8 11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </a>
+            <p class="mt-3 text-center text-xs text-forest-100/55">Questions about plans? <a href="/contact" class="underline hover:text-white">Talk to us</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section id="faq" class="relative bg-white py-24 md:py-32">
+    <div class="container-brand">
+      <div class="grid gap-12 md:grid-cols-[0.8fr_1.2fr] md:gap-20">
+        <div class="md:sticky md:top-32 md:self-start">
+          <span class="eyebrow text-forest-700">FAQ</span>
+          <h2 class="display-md mt-5 text-forest-950">Fair questions, straight answers.</h2>
+          <p class="mt-5 text-base leading-relaxed text-forest-950/60">
+            Everything here comes straight from how the product actually works — no marketing gloss.
+          </p>
+        </div>
+
+        <div class="divide-y divide-forest-950/10 border-y border-forest-950/10">
+          {
+            faqs.map((f, i) => (
+              <details data-motion-accordion open={i === 0} class="group py-5">
+                <summary class="flex cursor-pointer list-none items-start justify-between gap-6 [&::-webkit-details-marker]:hidden">
+                  <span class="font-sans text-[17px] font-semibold text-forest-950">{f.q}</span>
+                  <span class="mt-1 grid size-7 shrink-0 place-items-center rounded-full border border-forest-950/15 text-forest-950/60 transition-all duration-400 ease-brand group-open:rotate-45 group-open:border-amber-brand/60 group-open:text-amber-600">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                      <path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                    </svg>
+                  </span>
+                </summary>
+                <div class="accordion-body" style="height: auto;">
+                  <p class="max-w-2xl pt-4 pr-10 text-[15px] leading-relaxed text-forest-950/65">{f.a}</p>
+                </div>
+              </details>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FINAL CTA ============ -->
+  <section class="bg-canvas px-4 pb-24 pt-16 md:pb-32">
+    <div
+      data-cta-panel
+      class="container-brand relative overflow-hidden rounded-[2rem] bg-forest-800 px-7 py-16 text-center text-white md:rounded-[2.5rem] md:py-24"
+    >
+      <div class="noise absolute inset-0 opacity-40"></div>
+      <div class="glow -left-24 -top-24 size-72 bg-amber-brand/18"></div>
+      <div class="glow -bottom-32 -right-16 size-80 bg-forest-600/40"></div>
+
+      <div class="relative mx-auto max-w-3xl">
+        <h2 data-cta-rise class="display-lg text-balance text-white">
+          Bring your business into Mero Udhyog.
+        </h2>
+        <p data-cta-rise class="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-forest-100/75">
+          Products, orders, deliveries and khata — one workspace, forecasting what's next.
+          Free to start, no card required.
+        </p>
+        <div data-cta-rise class="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <a
+            data-motion="scale"
+            href="https://mero-udhyog.vercel.app/register"
+            class="inline-flex items-center gap-2 rounded-full bg-amber-brand px-7 py-3.5 text-[15px] font-semibold text-forest-950 transition-transform duration-300"
+          >
+            Get started — free
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M3 7h8M7.5 3.5 11 7l-3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </a>
+          <a
+            data-motion="scale"
+            href="/contact"
+            class="inline-flex items-center gap-2 rounded-full border border-white/25 px-7 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-white/10"
+          >
+            Talk to us
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import { initCarousels } from "../lib/carousel";
+  initCarousels();
+</script>

@@ -1,0 +1,102 @@
+---
+const slides = [
+  {
+    src: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1600&q=75&auto=format&fit=crop",
+    alt: "Factory floor with workers and machinery",
+    quote: "We stopped guessing what sold last week.",
+    who: "Production lead, Kathmandu",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1553413077-190dd305871c?w=1600&q=75&auto=format&fit=crop",
+    alt: "Warehouse shelves stacked with stock boxes",
+    quote: "Stock counts went from a weekend job to a glance.",
+    who: "Warehouse manager, Biratnagar",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1600&q=75&auto=format&fit=crop",
+    alt: "Delivery worker carrying packages",
+    quote: "Our delivery team finally knows where to go first.",
+    who: "Distribution owner, Pokhara",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=1600&q=75&auto=format&fit=crop",
+    alt: "Street scene in Kathmandu, Nepal",
+    quote: "Khata, bills and payments — one place, no arguments.",
+    who: "Retail trader, Kathmandu",
+  },
+];
+---
+
+<section class="relative overflow-hidden bg-forest-900 py-24 md:py-32">
+  <div class="noise absolute inset-0"></div>
+  <div class="container-brand relative">
+    <div class="mx-auto mb-12 max-w-2xl text-center md:mb-16">
+      <span
+        data-reveal
+        class="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-medium uppercase tracking-[0.16em] text-amber-soft"
+      >
+        <span class="size-1.5 rounded-full bg-amber-brand"></span> On the ground
+      </span>
+      <h2 data-reveal class="text-balance text-4xl leading-[1.05] text-white sm:text-5xl md:text-[3.4rem]">
+        Made for real factories, real routes, real <em class="text-amber-soft">khata</em>.
+      </h2>
+    </div>
+
+    <div data-shot class="relative">
+      <div
+        class="overflow-hidden rounded-3xl border border-white/10 shadow-[0_40px_90px_-40px_rgba(0,0,0,0.7)]"
+        data-embla="life"
+      >
+        <div class="flex">
+          {
+            slides.map((slide) => (
+              <div class="min-w-0 flex-[0_0_100%]" data-embla-slide>
+                <figure class="relative aspect-[16/9] overflow-hidden md:aspect-[21/9]">
+                  <img
+                    src={slide.src}
+                    alt={slide.alt}
+                    loading="lazy"
+                    class="absolute inset-0 size-full object-cover"
+                  />
+                  <div class="absolute inset-0 bg-gradient-to-t from-forest-950 via-forest-950/45 to-transparent" />
+                  <div class="absolute inset-0 flex items-end">
+                    <figcaption class="w-full p-7 md:p-12">
+                      <blockquote
+                        class="max-w-2xl font-display text-2xl leading-snug text-white md:text-4xl"
+                      >
+                        “{slide.quote}”
+                      </blockquote>
+                      <p class="mt-4 text-sm font-medium uppercase tracking-[0.16em] text-amber-soft">
+                        {slide.who}
+                      </p>
+                    </figcaption>
+                  </div>
+                </figure>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="mt-6 flex items-center justify-center gap-4">
+        <button
+          class="grid size-11 place-items-center rounded-full border border-white/15 text-white/70 transition-all duration-300 hover:border-white/40 hover:text-white"
+          data-embla-prev="life" aria-label="Previous story">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M9.5 3 5 7.5 9.5 12" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </button>
+        <div class="flex items-center gap-2" data-embla-dots="life"></div>
+        <button
+          class="grid size-11 place-items-center rounded-full border border-white/15 text-white/70 transition-all duration-300 hover:border-white/40 hover:text-white"
+          data-embla-next="life" aria-label="Next story">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M5.5 3 10 7.5 5.5 12" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>

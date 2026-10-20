@@ -1,0 +1,181 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const values = [
+  {
+    t: "Simple beats clever",
+    d: "A factory owner shouldn't need training to see last month's sales. Every screen earns its place or it doesn't ship.",
+    icon: "M4 12h5l2 5 4-13 2 8h3",
+  },
+  {
+    t: "Nepali-first, not translated",
+    d: "Khata, PAN, routes, lakh — Mero Udhyog is built around how Nepali businesses actually keep books, not retrofitted from a Western template.",
+    icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 0c2.5 2.4 4 5.6 4 9s-1.5 6.6-4 9m0-18c-2.5 2.4-4 5.6-4 9s1.5 6.6 4 9M3.5 9h17M3.5 15h17",
+  },
+  {
+    t: "Honest by default",
+    d: "Our forecasts are transparent statistics, not an “AI” sticker. You can see exactly why every recommendation exists — we'd rather earn trust than borrow it.",
+    icon: "M12 3 4 6.5v6c0 4.5 3.4 7.7 8 8.5 4.6-.8 8-4 8-8.5v-6L12 3Zm-1.5 9 2 2 4-4",
+  },
+  {
+    t: "Your data stays yours",
+    d: "Every workspace is isolated at the database layer. Your customers, prices and ledgers are never visible to another business — ever.",
+    icon: "M7 10V8a5 5 0 0 1 10 0v2m-11 0h12v10H6V10Z",
+  },
+];
+
+const team = [
+  { name: "Product & Engineering", role: "Builds and runs the platform", img: "photo-1504384308090-c894fdcc538d" },
+  { name: "Customer Success", role: "Onboards factories and distributors", img: "photo-1573497019940-1c28c88b4f3e" },
+  { name: "Field Ops", role: "Works with teams on the ground", img: "photo-1552664730-d307ca884978" },
+];
+---
+
+<BaseLayout
+  title="About — Mero Udhyog"
+  description="Why Mero Udhyog exists: an honest operating workspace for Nepali factories and distributors, built around khata, routes and PAN — with transparent forecasts."
+>
+  <!-- Hero -->
+  <section class="relative overflow-hidden pt-32 pb-16 md:pt-44 md:pb-20">
+    <div class="grid-backdrop absolute inset-0 mask-radial-t"></div>
+    <div class="glow -right-32 -top-16 size-[30rem] bg-amber-brand/12"></div>
+    <div class="glow -left-32 top-40 size-[30rem] bg-forest-300/35"></div>
+
+    <div class="container-brand relative">
+      <span class="eyebrow text-forest-700">About us</span>
+      <h1 class="display-lg mt-6 max-w-4xl text-forest-950">
+        We built the tool we watched Nepali factories do without.
+      </h1>
+      <div class="mt-8 grid gap-10 md:grid-cols-2 md:gap-16">
+        <p class="text-lg leading-relaxed text-forest-950/65">
+          Mero Udhyog started from a simple observation: the businesses keeping Nepal's supply
+          chains moving were running on paper khata, scattered spreadsheets and
+          <span class="mark-underline" data-underline>a lot of memory</span>. The software market
+          had nothing built for them.
+        </p>
+        <p class="text-lg leading-relaxed text-forest-950/65">
+          So we built the operating workspace they described to us — one place for products,
+          orders, deliveries, customers and credit, with forecasts that show what's coming next
+          instead of just reporting what already happened.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats band -->
+  <section class="border-y border-forest-950/8 bg-white py-14">
+    <div class="container-brand grid grid-cols-2 gap-8 md:grid-cols-4">
+      {
+        [
+          { v: "6", l: "connected modules" },
+          { v: "8", l: "roles, owner to delivery" },
+          { v: "0", l: "rupees to start" },
+          { v: "1", l: "workspace for everything" },
+        ].map((s) => (
+          <div data-reveal class="text-center md:text-left">
+            <p class="font-display text-5xl text-forest-800 md:text-6xl">{s.v}</p>
+            <p class="mt-2 text-sm text-forest-950/55">{s.l}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Mission -->
+  <section class="py-24 md:py-32">
+    <div class="container-brand">
+      <div class="grid gap-14 lg:grid-cols-[1fr_1fr] lg:gap-20">
+        <div class="md:sticky md:top-32 md:self-start">
+          <span class="eyebrow text-forest-700">Our mission</span>
+          <h2 class="display-md mt-5 text-forest-950">
+            Give every small factory the clarity big companies pay consultants for.
+          </h2>
+          <p data-reveal class="mt-6 max-w-md text-lg leading-relaxed text-forest-950/60">
+            Not audit software. Not an ERP that needs a six-month rollout. Just a workspace that
+            makes the next right decision obvious — today.
+          </p>
+        </div>
+
+        <div class="space-y-5">
+          {
+            values.map((v) => (
+              <article data-reveal class="tile group flex items-start gap-5 p-6" data-motion="lift">
+                <span class="grid size-12 shrink-0 place-items-center rounded-2xl border border-forest-950/10 bg-canvas text-forest-800 transition-all duration-500 ease-expo group-hover:-rotate-6 group-hover:border-amber-brand/50 group-hover:bg-amber-brand/10">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d={v.icon} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 class="font-display text-2xl text-forest-950">{v.t}</h3>
+                  <p class="mt-2 text-[15px] leading-relaxed text-forest-950/58">{v.d}</p>
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Team / how we work -->
+  <section class="bg-white py-24 md:py-32">
+    <div class="container-brand">
+      <div class="mb-14 max-w-2xl">
+        <span class="eyebrow text-forest-700">How we work</span>
+        <h2 class="display-md mt-5 text-forest-950">Small team, close to the ground.</h2>
+        <p data-reveal class="mt-5 text-lg text-forest-950/60">
+          We ship in the open and talk to the people using Mero Udhyog every week. Nothing ships
+          that a factory owner hasn't seen first.
+        </p>
+      </div>
+
+      <div class="grid gap-5 md:grid-cols-3" data-stagger-group>
+        {
+          team.map((m) => (
+            <article class="tile group overflow-hidden">
+              <div class="aspect-[4/3] overflow-hidden">
+                <img
+                  src={`https://images.unsplash.com/${m.img}?w=640&q=75&auto=format&fit=crop`}
+                  alt={m.name}
+                  loading="lazy"
+                  class="size-full object-cover transition-transform duration-[1.2s] ease-expo group-hover:scale-105"
+                />
+              </div>
+              <div class="p-6">
+                <h3 class="font-display text-2xl text-forest-950">{m.name}</h3>
+                <p class="mt-1.5 text-sm text-forest-950/55">{m.role}</p>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="bg-canvas px-4 py-16 md:py-24">
+    <div
+      data-cta-panel
+      class="container-brand relative overflow-hidden rounded-[2rem] bg-forest-800 px-7 py-16 text-center text-white md:rounded-[2.5rem] md:py-24"
+    >
+      <div class="noise absolute inset-0 opacity-40"></div>
+      <div class="glow -left-24 -top-24 size-72 bg-amber-brand/18"></div>
+      <div class="glow -bottom-32 -right-16 size-80 bg-forest-600/40"></div>
+      <div class="relative mx-auto max-w-3xl">
+        <h2 data-cta-rise class="display-lg text-balance text-white">See it on your own numbers.</h2>
+        <p data-cta-rise class="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-forest-100/75">
+          Free to start, no card required. Add your products, run your business as usual, and watch
+          the picture fill in.
+        </p>
+        <div data-cta-rise class="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <a href="https://mero-udhyog.vercel.app/register" data-motion="scale" class="inline-flex items-center gap-2 rounded-full bg-amber-brand px-7 py-3.5 text-[15px] font-semibold text-forest-950 transition-transform duration-300">
+            Get started — free
+          </a>
+          <a href="/contact" data-motion="scale" class="inline-flex items-center gap-2 rounded-full border border-white/25 px-7 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-white/10">
+            Talk to us
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

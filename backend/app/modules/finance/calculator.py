@@ -23,7 +23,7 @@ from typing import NamedTuple
 ZERO = Decimal("0.00")
 
 # reverse(type) = the ledger type a reversal of `type` is recorded as.
-REVERSAL_TYPE = {"sale": "purchase", "purchase": "sale", "expense": "expense"}
+REVERSAL_TYPE = {"sale": "purchase", "purchase": "sale", "expense": "expense", "receipt": "receipt"}
 # Original bucket for a reversal row, given its own recorded type.
 _BUCKET_FOR_REVERSAL = {v: k for k, v in REVERSAL_TYPE.items()}
 
@@ -93,7 +93,10 @@ def fold(rows: list[LedgerRow]) -> list[MonthTotals]:
         count_key = {"sale": "sale_count", "purchase": "purchase_count"}.get(
             row.type, "expense_count"
         )
-        counts[key][count_key] = counts[key].get(count_key, 0) + 1
+        # Receipts move cash and clear receivables; they are not a P&L event,
+        # so they never land in the revenue/cogs/expense buckets or counts.
+        if bucket in ("sale", "purchase", "expense"):
+            counts[key][count_key] = counts[key].get(count_key, 0) + 1
 
     totals: list[MonthTotals] = []
     for key in sorted(buckets):

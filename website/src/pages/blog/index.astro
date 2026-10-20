@@ -1,0 +1,141 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const posts = (await getCollection("blog")).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+
+const [featured, ...rest] = posts;
+
+const fmt = (d: Date) =>
+  d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+---
+
+<BaseLayout
+  title="Blog & Resources — Mero Udhyog"
+  description="Practical writing for Nepali factory and distribution owners: digitising khata, delivery tracking, stock control and using predictions well."
+>
+  <section class="relative overflow-hidden pt-32 pb-14 md:pt-44 md:pb-16">
+    <div class="grid-backdrop absolute inset-0 mask-radial-t"></div>
+    <div class="glow -right-32 -top-16 size-[28rem] bg-amber-brand/12"></div>
+    <div class="container-brand relative">
+      <span class="eyebrow text-forest-700">Blog & Resources</span>
+      <h1 class="display-lg mt-6 max-w-3xl text-forest-950">
+        Writing for people who run the business.
+      </h1>
+      <p class="mt-7 max-w-xl text-lg leading-relaxed text-forest-950/60">
+        No jargon, no filler. Practical notes on digitising khata, controlling stock, tracking
+        deliveries and using forecasts — written for owners, not analysts.
+      </p>
+    </div>
+  </section>
+
+  <!-- Featured post -->
+  {
+    featured && (
+      <section class="pb-6">
+        <div class="container-brand">
+          <a
+            href={`/blog/${featured.id}/`}
+            data-reveal
+            class="tile group grid overflow-hidden md:grid-cols-2"
+          >
+            <div class="relative aspect-[16/10] overflow-hidden md:aspect-auto md:min-h-[22rem]">
+              <img
+                src={featured.data.cover}
+                alt={featured.data.title}
+                loading="eager"
+                class="size-full object-cover transition-transform duration-[1.2s] ease-expo group-hover:scale-105"
+              />
+              <span class="absolute left-4 top-4 rounded-full bg-forest-950/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white backdrop-blur">
+                Featured
+              </span>
+            </div>
+            <div class="flex flex-col justify-center p-7 md:p-10">
+              <div class="flex items-center gap-3 text-xs font-medium text-forest-950/45">
+                <span class="rounded-full bg-amber-brand/15 px-2.5 py-0.5 font-semibold text-amber-700">{featured.data.tag}</span>
+                <time datetime={featured.data.date.toISOString()}>{fmt(featured.data.date)}</time>
+                <span>·</span>
+                <span>{featured.data.readingTime}</span>
+              </div>
+              <h2 class="mt-4 font-display text-3xl leading-tight text-forest-950 md:text-4xl">
+                {featured.data.title}
+              </h2>
+              <p class="mt-4 text-[15px] leading-relaxed text-forest-950/60">
+                {featured.data.description}
+              </p>
+              <span class="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-forest-800">
+                Read article
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M3 7h8M7.5 3.5 11 7l-3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+            </div>
+          </a>
+        </div>
+      </section>
+    )
+  }
+
+  <!-- Post grid -->
+  <section class="pb-24 md:pb-32">
+    <div class="container-brand">
+      <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3" data-stagger-group>
+        {
+          rest.map((post) => (
+            <a
+              href={`/blog/${post.id}/`}
+              class="tile group flex flex-col overflow-hidden"
+              data-motion="lift"
+            >
+              <div class="aspect-[16/10] overflow-hidden">
+                <img
+                  src={post.data.cover}
+                  alt={post.data.title}
+                  loading="lazy"
+                  class="size-full object-cover transition-transform duration-[1.2s] ease-expo group-hover:scale-105"
+                />
+              </div>
+              <div class="flex flex-1 flex-col p-6">
+                <div class="flex items-center gap-2.5 text-xs font-medium text-forest-950/45">
+                  <span class="rounded-full bg-forest-800/8 px-2.5 py-0.5 font-semibold text-forest-700">{post.data.tag}</span>
+                  <span>{post.data.readingTime}</span>
+                </div>
+                <h3 class="mt-4 font-display text-2xl leading-tight text-forest-950">{post.data.title}</h3>
+                <p class="mt-3 flex-1 text-sm leading-relaxed text-forest-950/58">{post.data.description}</p>
+                <time datetime={post.data.date.toISOString()} class="mt-5 text-xs text-forest-950/40">
+                  {fmt(post.data.date)}
+                </time>
+              </div>
+            </a>
+          ))
+        }
+      </div>
+
+      {
+        posts.length === 0 && (
+          <p class="text-forest-950/55">New articles are on the way — check back soon.</p>
+        )
+      }
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="bg-canvas px-4 pb-24">
+    <div class="container-brand relative overflow-hidden rounded-[2rem] bg-forest-800 px-7 py-14 text-center text-white md:rounded-[2.5rem]">
+      <div class="noise absolute inset-0 opacity-40"></div>
+      <div class="glow -left-24 -top-24 size-72 bg-amber-brand/18"></div>
+      <div class="relative mx-auto max-w-2xl">
+        <h2 class="display-md text-white">Put it into practice.</h2>
+        <p class="mt-5 text-lg text-forest-100/75">
+          Start with your products and your orders. Everything in this blog gets easier once your
+          data lives in one place.
+        </p>
+        <a href="https://mero-udhyog.vercel.app/register" data-motion="scale" class="mt-8 inline-flex items-center gap-2 rounded-full bg-amber-brand px-7 py-3.5 text-[15px] font-semibold text-forest-950 transition-transform duration-300">
+          Get started — free
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

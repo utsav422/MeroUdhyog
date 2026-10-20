@@ -1,0 +1,192 @@
+---
+import { getCollection, render } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("blog");
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+
+const fmt = (d: Date) =>
+  d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+const related = (await getCollection("blog"))
+  .filter((p) => p.id !== post.id)
+  .slice(0, 2);
+---
+
+<BaseLayout title={`${post.data.title} — Mero Udhyog`} description={post.data.description}>
+  <article>
+    <!-- Header -->
+    <header class="relative overflow-hidden pt-32 pb-10 md:pt-40">
+      <div class="grid-backdrop absolute inset-0 mask-radial-t"></div>
+      <div class="container-brand relative max-w-3xl">
+        <a href="/blog" class="link-underline inline-flex items-center gap-1.5 text-sm font-medium text-forest-950/55 hover:text-forest-950">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+            <path d="M10 6.5H3M6 3 2.5 6.5 6 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          All articles
+        </a>
+        <div class="mt-6 flex items-center gap-3 text-xs font-medium text-forest-950/45">
+          <span class="rounded-full bg-amber-brand/15 px-2.5 py-0.5 font-semibold text-amber-700">{post.data.tag}</span>
+          <time datetime={post.data.date.toISOString()}>{fmt(post.data.date)}</time>
+          <span>·</span>
+          <span>{post.data.readingTime}</span>
+        </div>
+        <h1 class="display-md mt-5 text-forest-950">{post.data.title}</h1>
+        <p class="mt-6 text-lg leading-relaxed text-forest-950/62">{post.data.description}</p>
+      </div>
+    </header>
+
+    <!-- Cover -->
+    <div class="container-brand max-w-4xl">
+      <div data-reveal-mask class="overflow-hidden rounded-3xl border border-forest-950/10">
+        <img src={post.data.cover} alt={post.data.title} class="w-full" />
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="container-brand mt-14 max-w-3xl">
+      <div class="prose-article">
+        <Content />
+      </div>
+
+      <div class="mt-14 flex items-center gap-4 rounded-3xl border border-forest-950/10 bg-white p-6">
+        <span class="grid size-12 shrink-0 place-items-center rounded-full bg-forest-800 font-display text-lg text-amber-soft">MU</span>
+        <div>
+          <p class="text-sm font-semibold text-forest-950">Written by {post.data.author}</p>
+          <p class="text-sm text-forest-950/55">The team building Mero Udhyog for Nepali factories.</p>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- Related -->
+  {
+    related.length > 0 && (
+      <section class="container-brand mt-20 max-w-4xl pb-24">
+        <h2 class="eyebrow mb-6 text-forest-700">Keep reading</h2>
+        <div class="grid gap-5 md:grid-cols-2">
+          {related.map((r) => (
+            <a href={`/blog/${r.id}/`} class="tile group flex flex-col overflow-hidden" data-motion="lift">
+              <div class="aspect-[16/9] overflow-hidden">
+                <img src={r.data.cover} alt={r.data.title} loading="lazy" class="size-full object-cover transition-transform duration-[1.2s] ease-expo group-hover:scale-105" />
+              </div>
+              <div class="p-6">
+                <span class="rounded-full bg-forest-800/8 px-2.5 py-0.5 text-xs font-semibold text-forest-700">{r.data.tag}</span>
+                <h3 class="mt-3 font-display text-xl leading-tight text-forest-950">{r.data.title}</h3>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  <!-- CTA -->
+  <section class="bg-canvas px-4 pb-24">
+    <div class="container-brand relative overflow-hidden rounded-[2rem] bg-forest-800 px-7 py-14 text-center text-white md:rounded-[2.5rem]">
+      <div class="noise absolute inset-0 opacity-40"></div>
+      <div class="glow -left-24 -top-24 size-72 bg-amber-brand/18"></div>
+      <div class="relative mx-auto max-w-2xl">
+        <h2 class="display-md text-white">Ready to try it on your own numbers?</h2>
+        <a href="https://mero-udhyog.vercel.app/register" data-motion="scale" class="mt-8 inline-flex items-center gap-2 rounded-full bg-amber-brand px-7 py-3.5 text-[15px] font-semibold text-forest-950 transition-transform duration-300">
+          Get started — free
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style is:global>
+  .prose-article {
+    font-size: 1.0625rem;
+    line-height: 1.8;
+    color: color-mix(in srgb, var(--color-forest-950) 78%, transparent);
+  }
+  .prose-article > * + * {
+    margin-top: 1.5rem;
+  }
+  .prose-article h2 {
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    line-height: 1.15;
+    color: var(--color-forest-950);
+    margin-top: 3rem;
+  }
+  .prose-article h3 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    color: var(--color-forest-950);
+    margin-top: 2.25rem;
+  }
+  .prose-article strong {
+    color: var(--color-forest-950);
+    font-weight: 600;
+  }
+  .prose-article a {
+    color: var(--color-forest-700);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .prose-article ul,
+  .prose-article ol {
+    padding-left: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .prose-article ul {
+    list-style: none;
+  }
+  .prose-article ul li {
+    position: relative;
+    padding-left: 1.25rem;
+  }
+  .prose-article ul li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.7em;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--color-amber-brand);
+  }
+  .prose-article ol {
+    list-style: decimal;
+  }
+  .prose-article blockquote {
+    border-left: 3px solid var(--color-amber-brand);
+    padding-left: 1.25rem;
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    line-height: 1.4;
+    color: var(--color-forest-950);
+  }
+  .prose-article table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+  .prose-article th,
+  .prose-article td {
+    border: 1px solid color-mix(in srgb, var(--color-forest-950) 12%, transparent);
+    padding: 0.7rem 0.9rem;
+    text-align: left;
+  }
+  .prose-article th {
+    background: color-mix(in srgb, var(--color-forest-800) 7%, transparent);
+    font-weight: 600;
+    color: var(--color-forest-950);
+  }
+  .prose-article code {
+    background: color-mix(in srgb, var(--color-forest-800) 8%, transparent);
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.35rem;
+    font-size: 0.9em;
+  }
+</style>

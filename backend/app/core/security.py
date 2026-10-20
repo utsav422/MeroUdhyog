@@ -26,6 +26,19 @@ def hash_refresh_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def generate_email_token() -> str:
+    """Opaque, URL-safe single-use token for password reset / email verify."""
+    import secrets
+
+    return secrets.token_urlsafe(48)
+
+
+def hash_email_token(token: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def generate_csrf_token() -> str:
     import secrets
 

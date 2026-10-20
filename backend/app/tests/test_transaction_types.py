@@ -24,7 +24,7 @@ async def test_register_seeds_default_transaction_types(client):
     r = await client.get("/api/v1/transaction-types")
     assert r.status_code == 200
     codes = {t["code"] for t in r.json()}
-    assert codes == {"sale", "purchase", "expense"}
+    assert codes == {"sale", "purchase", "expense", "receipt"}
 
 
 @pytest.mark.asyncio

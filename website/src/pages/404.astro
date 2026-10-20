@@ -1,0 +1,22 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Page not found — Mero Udhyog" description="This page doesn't exist.">
+  <section class="grid min-h-[70vh] place-items-center px-6 pt-32 text-center">
+    <div>
+      <p class="font-display text-8xl text-forest-800/25">404</p>
+      <h1 class="mt-4 text-4xl text-forest-950">This page wandered off route.</h1>
+      <p class="mx-auto mt-4 max-w-md text-forest-950/60">
+        The link you followed doesn't exist — but your workspace does.
+      </p>
+      <div class="mt-8 flex justify-center gap-3">
+        <a href="/" class="btn-primary rounded-full px-6 py-3 text-sm font-medium">Back home</a>
+        <a
+          href="https://mero-udhyog.vercel.app/register"
+          class="btn-ghost rounded-full px-6 py-3 text-sm font-medium text-forest-950/80">Get started</a
+        >
+      </div>
+    </div>
+  </section>
+</BaseLayout>

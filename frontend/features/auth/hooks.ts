@@ -10,6 +10,7 @@ export type MeResponse = {
   full_name: string;
   role: string;
   is_superadmin: boolean;
+  is_email_verified: boolean;
 };
 
 export type TenantRead = {

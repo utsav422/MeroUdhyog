@@ -241,7 +241,7 @@ export default function OrderForm({
             </Text>
             <Text size="xs" c="dimmed">{items.length} items</Text>
           </div>
-          <div className="max-h-80 overflow-y-auto rounded-xl border border-zinc-200 bg-white">
+          <div className="max-h-80 overflow-x-auto overflow-y-auto rounded-xl border border-zinc-200 bg-white">
             <Table verticalSpacing="sm" horizontalSpacing="sm">
               <Table.Thead>
                 <Table.Tr className="text-zinc-400">
