@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.modules.accounting.posting import PostingService
 from app.modules.customers.models import Customer
 from app.modules.deliveries.models import Delivery, DeliveryLocation
 from app.modules.deliveries.repository import DeliveryRepository
@@ -370,9 +371,13 @@ class DeliveryService:
             amount=order.total_amount,
             description=f"Auto: order {order.order_ref} delivered",
             customer_id=order.customer_id,
+            metadata_={"order_id": str(order.id), "delivery_id": str(delivery.id)},
         )
         self.session.add(sale)
         await self.session.flush()
+        await PostingService(
+            self.session, self.tenant_id, self.user_id
+        ).post_transaction(sale)
         await self.finance_service.recalculate({month_of_dt(sale.transaction_date)})
 
     async def add_location(

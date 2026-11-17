@@ -17,6 +17,7 @@ class TransactionCreate(BaseModel):
     unit_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     amount: Decimal = Field(ge=0, decimal_places=2)
     tax_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    tds_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     discount_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     currency: str = Field(default="USD", min_length=3, max_length=3)
     description: str | None = None
@@ -32,6 +33,7 @@ class TransactionUpdate(BaseModel):
     unit_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     tax_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    tds_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     discount_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     description: str | None = None
@@ -50,6 +52,7 @@ class TransactionRead(BaseModel):
     unit_price: Decimal | None
     amount: Decimal
     tax_amount: Decimal | None
+    tds_amount: Decimal | None
     discount_amount: Decimal | None
     currency: str
     description: str | None

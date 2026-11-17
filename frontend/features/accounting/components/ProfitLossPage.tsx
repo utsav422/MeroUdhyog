@@ -1,18 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { SimpleGrid } from '@mantine/core';
+import { Badge, SimpleGrid } from '@mantine/core';
 import { Bank, Coins, TrendUp, Percent } from '@phosphor-icons/react';
 import { PageHeader, KPICard, ErrorState, LoadingState } from '@/components/shared';
 import { downloadCsv } from '@/lib/exportCsv';
-import { useProfitLoss } from '../api';
+import { useAccountingSettings, useProfitLoss } from '../api';
 import StatementShell, { type DateFilters, EMPTY_STATEMENT_DATES, toIsoDate } from './StatementShell';
 import { AmountRow, StatementSection, useMoney } from './StatementRows';
 
 export default function ProfitLossPage() {
   const [dates, setDates] = useState<DateFilters>(EMPTY_STATEMENT_DATES);
   const filters = { date_from: toIsoDate(dates.date_from), date_to: toIsoDate(dates.date_to) };
-  const query = useProfitLoss(filters);
+  const settingsQuery = useAccountingSettings();
+  const engine = settingsQuery.data?.report_engine ?? 'legacy';
+  const query = useProfitLoss(filters, engine);
   const money = useMoney('NPR');
   const data = query.data;
 
@@ -31,6 +33,11 @@ export default function ProfitLossPage() {
       <PageHeader
         title="Profit & Loss"
         subtitle="Revenue, cost of goods sold and expenses for the period — cost of making versus selling price."
+        actions={
+          <Badge variant="light" color={engine === 'gl' ? 'green' : 'gray'}>
+            {engine === 'gl' ? 'General ledger' : 'Legacy engine'}
+          </Badge>
+        }
       />
 
       {data && (
@@ -122,7 +129,7 @@ export default function ProfitLossPage() {
             <p className="mt-4 text-xs text-[var(--muted)]">
               Gross margin {Number(data?.gross_margin_pct ?? 0).toFixed(1)}% · Net margin{' '}
               {Number(data?.net_margin_pct ?? 0).toFixed(1)}% · COGS basis:{' '}
-              {data?.cogs_basis === 'cost_price' ? 'variant cost price' : 'purchases'}
+              {data?.cogs_basis === 'cost_price' ? 'variant cost price' : data?.cogs_basis === 'gl' ? 'general ledger' : 'purchases'}
             </p>
           </>
         )}

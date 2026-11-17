@@ -55,6 +55,7 @@ class Transaction(Base):
     unit_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     tax_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    tds_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     currency: Mapped[str] = mapped_column(
         String(3), nullable=False, server_default=text("'USD'")

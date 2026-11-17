@@ -11,6 +11,7 @@ export type MeResponse = {
   role: string;
   is_superadmin: boolean;
   is_email_verified: boolean;
+  permissions: string[];
 };
 
 export type TenantRead = {

@@ -143,8 +143,11 @@ class ProductService:
             InventoryMovement.product_name,
             InventoryMovement.variant_name,
             InventoryMovement.quantity,
+            InventoryMovement.unit_cost,
+            InventoryMovement.total_cost,
             InventoryMovement.reason,
             InventoryMovement.order_id,
+            InventoryMovement.transaction_id,
             InventoryMovement.created_at,
             running.label("running_balance"),
         ]
@@ -177,8 +180,11 @@ class ProductService:
                 product_name=row.product_name,
                 variant_name=row.variant_name,
                 quantity=row.quantity,
+                unit_cost=row.unit_cost,
+                total_cost=row.total_cost,
                 reason=row.reason,
                 order_id=row.order_id,
+                transaction_id=row.transaction_id,
                 created_at=row.created_at,
                 running_balance=int(row.running_balance),
             )
@@ -351,6 +357,14 @@ class ProductService:
         product: Product,
         data: VariantCreate,
     ) -> ProductVariant:
+        opening_cost = next(
+            (
+                price.cost_price
+                for price in data.prices
+                if price.cost_price is not None
+            ),
+            None,
+        )
         variant = ProductVariant(
             tenant_id=self.tenant_id,
             product_id=product.id,
@@ -362,6 +376,7 @@ class ProductService:
             unit=data.unit,
             images=data.images,
             stock_quantity=data.stock_quantity,
+            average_cost=opening_cost or 0,
             low_stock_threshold=data.low_stock_threshold,
             sort_order=data.sort_order,
         )
@@ -375,6 +390,10 @@ class ProductService:
                     product_name=product.name,
                     variant_name=created.name,
                     quantity=created.stock_quantity,
+                    unit_cost=opening_cost,
+                    total_cost=(
+                        (opening_cost or 0) * created.stock_quantity
+                    ),
                     reason="stock_in",
                 )
             )

@@ -109,6 +109,10 @@ class ProductVariant(Base):
     stock_quantity: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )
+    # Moving weighted-average unit cost maintained from stock receipts.
+    average_cost: Mapped[Decimal] = mapped_column(
+        Numeric(14, 4), nullable=False, server_default=text("0")
+    )
     low_stock_threshold: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("5")
     )
@@ -189,6 +193,7 @@ class InventoryMovement(Base):
         Index("ix_inventory_movements_tenant_id", "tenant_id"),
         Index("ix_inventory_movements_variant_id", "variant_id"),
         Index("ix_inventory_movements_created_at", "created_at"),
+        Index("ix_inventory_movements_transaction_id", "transaction_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -217,12 +222,19 @@ class InventoryMovement(Base):
     product_name: Mapped[str] = mapped_column(String(200), nullable=False)
     variant_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 4), nullable=True)
+    total_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     reason: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'order'")
     )
     order_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    transaction_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("transactions.id", ondelete="SET NULL"),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(

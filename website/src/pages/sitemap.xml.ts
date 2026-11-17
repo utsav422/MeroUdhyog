@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { getCollection } from "astro:content";
 
 export const GET: APIRoute = async ({ site }) => {
-  const url = site?.toString() ?? "https://mero-udhyog.vercel.app";
+  const url = site?.toString() ?? "https://meroudhyog.com";
 
   const staticPages = ["/", "/about/", "/blog/", "/contact/"];
   const posts = await getCollection("blog");

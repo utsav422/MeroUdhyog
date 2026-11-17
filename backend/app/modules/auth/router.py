@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_id, get_db
+from app.core.permissions import effective_permissions
 from app.core.security import generate_csrf_token
 from app.modules.auth.schemas import (
     ChangePasswordRequest,
@@ -117,6 +118,9 @@ async def me(user_id=Depends(get_current_user_id), db=Depends(get_db)):
         role=user.role,
         is_superadmin=user.is_superadmin,
         is_email_verified=user.is_email_verified,
+        permissions=sorted(
+            permission.value for permission in await effective_permissions(db, user_id)
+        ),
     )
 
 

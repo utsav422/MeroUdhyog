@@ -36,6 +36,7 @@ const SessionContext = createContext<{
   email: string;
   full_name: string;
   role: string;
+  permissions: string[];
 } | null>(null);
 
 export function SessionProvider({
@@ -48,6 +49,7 @@ export function SessionProvider({
     email: string;
     full_name: string;
     role: string;
+    permissions: string[];
   } | null;
   children: React.ReactNode;
 }) {

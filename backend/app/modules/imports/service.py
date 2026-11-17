@@ -26,11 +26,14 @@ ALLOWED_TYPES = {"sale", "purchase", "expense"}
 
 
 class ImportService:
-    def __init__(self, session: AsyncSession, tenant_id: UUID):
+    def __init__(
+        self, session: AsyncSession, tenant_id: UUID, user_id: UUID | None = None
+    ):
         self.session = session
         self.tenant_id = tenant_id
+        self.user_id = user_id
         self.repo = ImportRepository(session, tenant_id)
-        self.transaction_service = TransactionService(session, tenant_id)
+        self.transaction_service = TransactionService(session, tenant_id, user_id)
         self.customer_service = CustomerService(session, tenant_id)
         self.finance_service = FinanceService(session, tenant_id)
 
@@ -133,7 +136,8 @@ class ImportService:
             customer_id=customer_id,
             product_id=product_id,
         )
-        await self.transaction_service.repo.create(transaction)
+        created = await self.transaction_service.repo.create(transaction)
+        await self.transaction_service.posting.post_transaction(created)
 
 
 def _classify_error(exc: Exception) -> tuple[str | None, str]:

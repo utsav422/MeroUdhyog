@@ -1,18 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { SimpleGrid } from '@mantine/core';
+import { Badge, SimpleGrid } from '@mantine/core';
 import { ArrowsLeftRight, Bank, TrendDown, TrendUp } from '@phosphor-icons/react';
 import { PageHeader, KPICard, ErrorState, LoadingState } from '@/components/shared';
 import { downloadCsv } from '@/lib/exportCsv';
-import { useCashFlow } from '../api';
+import { useAccountingSettings, useCashFlow } from '../api';
 import StatementShell, { type DateFilters, EMPTY_STATEMENT_DATES, toIsoDate } from './StatementShell';
 import { AmountRow, StatementSection, useMoney } from './StatementRows';
 
 export default function CashFlowPage() {
   const [dates, setDates] = useState<DateFilters>(EMPTY_STATEMENT_DATES);
   const filters = { date_from: toIsoDate(dates.date_from), date_to: toIsoDate(dates.date_to) };
-  const query = useCashFlow(filters);
+  const settingsQuery = useAccountingSettings();
+  const engine = settingsQuery.data?.report_engine ?? 'legacy';
+  const query = useCashFlow(filters, engine);
   const money = useMoney('NPR');
   const data = query.data;
 
@@ -36,6 +38,11 @@ export default function CashFlowPage() {
       <PageHeader
         title="Cash Flow Statement"
         subtitle="Cash actually collected and paid out in the period, split into operating, investing and financing activities."
+        actions={
+          <Badge variant="light" color={engine === 'gl' ? 'green' : 'gray'}>
+            {engine === 'gl' ? 'General ledger' : 'Legacy engine'}
+          </Badge>
+        }
       />
 
       {data && (

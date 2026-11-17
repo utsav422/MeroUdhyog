@@ -6,7 +6,7 @@ import type { Column } from '@/components/shared';
 import { Badge } from '@mantine/core';
 import { CheckCircle, WarningCircle } from '@phosphor-icons/react';
 import { downloadCsv } from '@/lib/exportCsv';
-import { useTrialBalance } from '../api';
+import { useAccountingSettings, useTrialBalance } from '../api';
 import type { TrialBalance, TrialBalanceRow } from '../api';
 import StatementShell, { type DateFilters, EMPTY_STATEMENT_DATES, toIsoDate } from './StatementShell';
 import { useMoney } from './StatementRows';
@@ -22,7 +22,9 @@ const ACCOUNT_TYPE_TONE: Record<string, string> = {
 export default function TrialBalancePage() {
   const [dates, setDates] = useState<DateFilters>(EMPTY_STATEMENT_DATES);
   const filters = { date_from: toIsoDate(dates.date_from), date_to: toIsoDate(dates.date_to) };
-  const query = useTrialBalance(filters);
+  const settingsQuery = useAccountingSettings();
+  const engine = settingsQuery.data?.report_engine ?? 'legacy';
+  const query = useTrialBalance(filters, engine);
   const currency = 'NPR';
   const money = useMoney(currency);
   const data: TrialBalance | undefined = query.data;
@@ -81,6 +83,11 @@ export default function TrialBalancePage() {
       <PageHeader
         title="Trial Balance"
         subtitle="Every ledger account with its net debit or credit, so the books can be proven to balance."
+        actions={
+          <Badge variant="light" color={engine === 'gl' ? 'green' : 'gray'}>
+            {engine === 'gl' ? 'General ledger' : 'Legacy engine'}
+          </Badge>
+        }
       />
 
       <StatementShell

@@ -16,6 +16,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select, update
 
+from app.modules.accounting.posting import PostingService
 from app.modules.customers.credit import (
     credit_available,
     credit_used_for,
@@ -255,21 +256,23 @@ class KhataService:
         if existing:
             return
 
-        self.session.add(
-            Transaction(
-                tenant_id=self.tenant_id,
-                type="receipt",
-                transaction_date=entry.collected_at,
-                external_id=external_id,
-                amount=entry.amount,
-                currency="NPR",
-                description=f"Payment received ({entry.method})"
-                + (f" · receipt {entry.receipt_number}" if entry.receipt_number else ""),
-                customer_id=entry.customer_id,
-                metadata_={"ledger_entry_id": str(entry.id), "method": entry.method},
-            )
+        receipt = Transaction(
+            tenant_id=self.tenant_id,
+            type="receipt",
+            transaction_date=entry.collected_at,
+            external_id=external_id,
+            amount=entry.amount,
+            currency="NPR",
+            description=f"Payment received ({entry.method})"
+            + (f" · receipt {entry.receipt_number}" if entry.receipt_number else ""),
+            customer_id=entry.customer_id,
+            metadata_={"ledger_entry_id": str(entry.id), "method": entry.method},
         )
+        self.session.add(receipt)
         await self.session.flush()
+        await PostingService(
+            self.session, self.tenant_id, self.user_id
+        ).post_transaction(receipt)
         await self._recalculate_finance(entry.collected_at)
 
     async def _reverse_receipt_in_ledger(self, entry: LedgerEntry) -> None:
@@ -304,21 +307,23 @@ class KhataService:
         if already:
             return
 
-        self.session.add(
-            Transaction(
-                tenant_id=self.tenant_id,
-                type="receipt",
-                transaction_date=datetime.now(UTC),
-                external_id=None,
-                amount=entry.amount,
-                currency=original.currency,
-                description=f"Reverses receipt for voided payment {entry.id}",
-                customer_id=entry.customer_id,
-                reverses_id=original.id,
-                metadata_={"ledger_entry_id": str(entry.id), "voided": True},
-            )
+        reversal = Transaction(
+            tenant_id=self.tenant_id,
+            type="receipt",
+            transaction_date=datetime.now(UTC),
+            external_id=None,
+            amount=entry.amount,
+            currency=original.currency,
+            description=f"Reverses receipt for voided payment {entry.id}",
+            customer_id=entry.customer_id,
+            reverses_id=original.id,
+            metadata_={"ledger_entry_id": str(entry.id), "voided": True},
         )
+        self.session.add(reversal)
         await self.session.flush()
+        await PostingService(
+            self.session, self.tenant_id, self.user_id
+        ).post_transaction(reversal)
         await self._recalculate_finance(datetime.now(UTC))
 
     async def _recalculate_finance(self, occurred_at: datetime) -> None:

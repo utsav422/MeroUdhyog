@@ -42,6 +42,7 @@ include = ["app*"]
 asyncio_mode = "auto"
 testpaths = ["app/tests"]
 python_files = "test_*.py"
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100

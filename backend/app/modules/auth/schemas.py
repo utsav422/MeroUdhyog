@@ -35,6 +35,7 @@ class MeResponse(BaseModel):
     role: str
     is_superadmin: bool
     is_email_verified: bool = False
+    permissions: list[str] = Field(default_factory=list)
 
 
 class ForgotPasswordRequest(BaseModel):

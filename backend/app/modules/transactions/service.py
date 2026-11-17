@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.accounting.posting import PostingService
 from app.modules.customers.models import Customer
 from app.modules.finance.service import FinanceService, month_of_dt
 from app.modules.products.models import Product
@@ -27,11 +28,15 @@ REVERSAL_TYPE = {
 
 
 class TransactionService:
-    def __init__(self, session: AsyncSession, tenant_id: UUID):
+    def __init__(
+        self, session: AsyncSession, tenant_id: UUID, user_id: UUID | None = None
+    ):
         self.session = session
         self.tenant_id = tenant_id
+        self.user_id = user_id
         self.repo = TransactionRepository(session, tenant_id)
         self.finance_service = FinanceService(session, tenant_id)
+        self.posting = PostingService(session, tenant_id, user_id)
 
     async def list(
         self,
@@ -111,6 +116,7 @@ class TransactionService:
             unit_price=data.unit_price,
             amount=data.amount,
             tax_amount=data.tax_amount,
+            tds_amount=data.tds_amount,
             discount_amount=data.discount_amount,
             currency=data.currency,
             description=data.description,
@@ -119,6 +125,7 @@ class TransactionService:
             metadata_=data.metadata_,
         )
         created = await self.repo.create(transaction)
+        await self.posting.post_transaction(created)
         await self.finance_service.recalculate({month_of_dt(created.transaction_date)})
         return TransactionRead.model_validate(created)
 
@@ -131,6 +138,10 @@ class TransactionService:
         for field, value in updates.items():
             setattr(transaction, field, value)
         updated = await self.repo.update(transaction)
+        if updated.is_active is False:
+            await self.posting.void_for_transaction(updated.id)
+        else:
+            await self.posting.repost_transaction(updated)
         months = {old_month}
         if "transaction_date" in updates:
             months.add(month_of_dt(updated.transaction_date))
@@ -140,6 +151,7 @@ class TransactionService:
     async def delete(self, transaction_id: UUID) -> None:
         transaction = await self.repo.get(transaction_id)
         month = month_of_dt(transaction.transaction_date)
+        await self.posting.void_for_transaction(transaction_id)
         await self.repo.delete(transaction)
         await self.finance_service.recalculate({month})
 
@@ -155,6 +167,7 @@ class TransactionService:
             unit_price=transaction.unit_price,
             amount=transaction.amount,
             tax_amount=transaction.tax_amount,
+            tds_amount=transaction.tds_amount,
             discount_amount=transaction.discount_amount,
             currency=transaction.currency,
             description=f"Reverses {transaction.id}",
@@ -163,6 +176,7 @@ class TransactionService:
             reverses_id=transaction.id,
         )
         created = await self.repo.create(reversal)
+        await self.posting.post_transaction(created)
         months = {month_of_dt(transaction.transaction_date)}
         if created.transaction_date:
             months.add(month_of_dt(created.transaction_date))
@@ -190,4 +204,6 @@ class TransactionService:
             customer_id=row.get("customer_id"),
             product_id=row.get("product_id"),
         )
-        return await self.repo.create(transaction)
+        created = await self.repo.create(transaction)
+        await self.posting.post_transaction(created)
+        return created

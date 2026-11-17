@@ -88,7 +88,9 @@ All animations respect `prefers-reduced-motion` (they set final states instead).
 
 ## Deploy
 
-Vercel → framework preset **Astro**, root directory `website`. Or any static host serving `dist/`.
+Production runs on the Contabo VPS behind Nginx at `https://meroudhyog.com`.
+Build with `npm ci && npm run build` and serve `dist/` as a static root. See
+`../docs/deployment/README.md` for the full Nginx and TLS setup.
 
 ## Adding a blog post
 

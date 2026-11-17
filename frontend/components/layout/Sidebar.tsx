@@ -28,6 +28,15 @@ import {
   ChartLineUp,
   Buildings,
   Money,
+  BookOpenText,
+  UserList,
+  Receipt,
+  ArrowsClockwise,
+  Bank,
+  Archive,
+  CalendarCheck,
+  SlidersHorizontal,
+  Files,
   X,
 } from '@phosphor-icons/react';
 import { useSession } from '@/lib/providers';
@@ -37,11 +46,15 @@ type NavItem = {
   label: string;
   icon: React.ReactNode;
   ownerOnly?: boolean;
+  permission?: string;
+  anyPermission?: string[];
 };
 
 type NavGroup = {
   label: string;
   items: NavItem[];
+  permission?: string;
+  anyPermission?: string[];
 };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -148,11 +161,33 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Accounting',
+    permission: 'view_all',
     items: [
       {
         href: '/accounting',
         label: 'Overview',
         icon: <Calculator size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/day-book',
+        label: 'Day Book',
+        icon: <BookOpenText size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/journal-entry',
+        label: 'Voucher Entry',
+        icon: <Notebook size={18} weight="duotone" />,
+        permission: 'manage_transactions',
+      },
+      {
+        href: '/accounting/ledger',
+        label: 'Account Ledger',
+        icon: <BookBookmark size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/party-statement',
+        label: 'Party Statement',
+        icon: <UserList size={18} weight="duotone" />,
       },
       {
         href: '/accounting/trial-balance',
@@ -173,6 +208,61 @@ const NAV_GROUPS: NavGroup[] = [
         href: '/accounting/cash-flow',
         label: 'Cash Flow',
         icon: <Money size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/aging',
+        label: 'Receivables Aging',
+        icon: <CalendarBlank size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/tax-summary',
+        label: 'Tax Summary',
+        icon: <Receipt size={18} weight="duotone" />,
+      },
+    ],
+  },
+  {
+    label: 'Accounting Controls',
+    permission: 'view_all',
+    items: [
+      {
+        href: '/accounting/accounts',
+        label: 'Chart of Accounts',
+        icon: <Files size={18} weight="duotone" />,
+        permission: 'manage_accounting',
+      },
+      {
+        href: '/accounting/reconciliation',
+        label: 'Reconciliation',
+        icon: <ArrowsClockwise size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/bank',
+        label: 'Bank Reconciliation',
+        icon: <Bank size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/inventory',
+        label: 'Inventory Reconciliation',
+        icon: <Archive size={18} weight="duotone" />,
+      },
+      {
+        href: '/accounting/periods',
+        label: 'Periods',
+        icon: <CalendarCheck size={18} weight="duotone" />,
+        anyPermission: ['manage_accounting', 'close_period'],
+      },
+      {
+        href: '/accounting/audit-log',
+        label: 'Audit Trail',
+        icon: <ShieldCheck size={18} weight="duotone" />,
+        permission: 'view_audit',
+      },
+      {
+        href: '/accounting/settings',
+        label: 'Accounting Settings',
+        icon: <SlidersHorizontal size={18} weight="duotone" />,
+        anyPermission: ['manage_accounting', 'manage_settings'],
       },
     ],
   },
@@ -211,6 +301,14 @@ export default function Sidebar({
   const session = useSession();
   const isDeliveryAgent = session?.role === 'delivery';
   const isOwner = session?.role === 'owner';
+  const held = new Set(session?.permissions ?? []);
+
+  const canSee = (permission?: string, anyPermission?: string[]) => {
+    if (isOwner) return true;
+    if (permission && !held.has(permission)) return false;
+    if (anyPermission && !anyPermission.some((p) => held.has(p))) return false;
+    return true;
+  };
 
   const navGroups: NavGroup[] = isDeliveryAgent
     ? [
@@ -225,7 +323,7 @@ export default function Sidebar({
           ],
         },
       ]
-    : NAV_GROUPS.map((group) => {
+    : NAV_GROUPS.filter((group) => canSee(group.permission, group.anyPermission)).map((group) => {
         const deliveryMapItem: NavItem = {
           href: '/deliveries/portal',
           label: 'Delivery Map',
@@ -235,7 +333,11 @@ export default function Sidebar({
           group.label === 'Main' ? [...group.items, deliveryMapItem] : group.items;
         return {
           ...group,
-          items: items.filter((item) => !item.ownerOnly || isOwner),
+          items: items.filter(
+            (item) =>
+              (!item.ownerOnly || isOwner) &&
+              canSee(item.permission ?? group.permission, item.anyPermission ?? group.anyPermission),
+          ),
         };
       });
 

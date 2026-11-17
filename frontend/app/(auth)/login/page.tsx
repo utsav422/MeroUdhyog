@@ -61,7 +61,7 @@ export default function LoginPage() {
           </Link>
           <div className="mt-3">
             <a
-              href="https://mero-udhyog-6jp1.vercel.app/"
+              href="https://meroudhyog.com"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 font-medium text-brand-600 hover:text-brand-700"

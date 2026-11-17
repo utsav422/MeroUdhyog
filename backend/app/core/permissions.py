@@ -25,6 +25,10 @@ class Permissions(StrEnum):
     MANAGE_BILL_TEMPLATE = "manage_bill_template"
     # Admin-only editable invoice/receipt documents (never touches the ledger).
     MANAGE_INVOICES = "manage_invoices"
+    # Accounting-specific permissions.
+    MANAGE_ACCOUNTING = "manage_accounting"
+    CLOSE_PERIOD = "close_period"
+    VIEW_AUDIT = "view_audit"
 
 
 ROLE_PERMISSIONS: dict[str, set[Permissions]] = {
@@ -41,6 +45,9 @@ ROLE_PERMISSIONS: dict[str, set[Permissions]] = {
         Permissions.MANAGE_AUDITS,
         Permissions.UPDATE_DELIVERY_STATUS,
         Permissions.MANAGE_INVOICES,
+        Permissions.MANAGE_ACCOUNTING,
+        Permissions.CLOSE_PERIOD,
+        Permissions.VIEW_AUDIT,
     },
     "manager": {
         Permissions.VIEW_ALL,
@@ -55,6 +62,8 @@ ROLE_PERMISSIONS: dict[str, set[Permissions]] = {
         Permissions.MANAGE_TRANSACTIONS,
         Permissions.MANAGE_AUDITS,
         Permissions.VIEW_ASSIGNED_DELIVERIES,
+        Permissions.MANAGE_ACCOUNTING,
+        Permissions.VIEW_AUDIT,
     },
     "collector": {
         Permissions.MANAGE_KHATA,
@@ -91,9 +100,7 @@ def require_any_permission(*permissions: Permissions) -> Callable:
         user_id=Depends(get_current_user_id),
         db=Depends(get_db),
     ) -> None:
-        user = (
-            await db.execute(select(User).where(User.id == user_id))
-        ).scalar_one_or_none()
+        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
         if user.is_superadmin or user.role == "owner":
@@ -105,11 +112,23 @@ def require_any_permission(*permissions: Permissions) -> Callable:
     return dependency
 
 
+async def effective_permissions(db, user_id: UUID) -> set[Permissions]:
+    """Return every permission the user currently holds.
+
+    Owner and superadmin accounts implicitly hold all permissions. Other users
+    inherit the permissions configured on their tenant role.
+    """
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user is None:
+        return set()
+    if user.is_superadmin or user.role == "owner":
+        return set(Permissions)
+    return await _role_permissions(db, user.tenant_id, user.role)
+
+
 async def has_permission(db, user_id: UUID, permission: Permissions) -> bool:
     """Return whether the given user holds the permission (or is owner/superadmin)."""
-    user = (
-        await db.execute(select(User).where(User.id == user_id))
-    ).scalar_one_or_none()
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if user is None:
         return False
     if user.is_superadmin or user.role == "owner":
@@ -127,11 +146,7 @@ async def _role_permissions(db, tenant_id: UUID, role: str) -> set[Permissions]:
     from app.modules.roles.models import Role
 
     row = (
-        await db.execute(
-            select(Role).where(
-                Role.tenant_id == tenant_id, Role.code == role
-            )
-        )
+        await db.execute(select(Role).where(Role.tenant_id == tenant_id, Role.code == role))
     ).scalar_one_or_none()
     if row is not None and row.permissions:
         result: set[Permissions] = set()
@@ -141,5 +156,9 @@ async def _role_permissions(db, tenant_id: UUID, role: str) -> set[Permissions]:
             except ValueError:
                 # Unknown/legacy permission string — ignore rather than crash.
                 continue
+        if row.is_system:
+            # System roles gain new permissions as the product adds them,
+            # without requiring a data migration for every tenant.
+            result |= ROLE_PERMISSIONS.get(role, set())
         return result
     return ROLE_PERMISSIONS.get(role, set())

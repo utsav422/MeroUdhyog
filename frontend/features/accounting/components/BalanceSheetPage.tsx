@@ -27,8 +27,9 @@ const OPENING_FIELDS: { key: keyof AccountingSettings; label: string }[] = [
 export default function BalanceSheetPage() {
   const [asOf, setAsOf] = useState<DateFilters>(EMPTY_STATEMENT_DATES);
   const iso = toIsoDate(asOf.date_to) ?? '';
-  const query = useBalanceSheet(iso);
   const settingsQuery = useAccountingSettings();
+  const engine = settingsQuery.data?.report_engine ?? 'legacy';
+  const query = useBalanceSheet(iso, engine);
   const updateSettings = useUpdateAccountingSettings();
   const money = useMoney('NPR');
   const data = query.data;
@@ -70,9 +71,14 @@ export default function BalanceSheetPage() {
         title="Balance Sheet"
         subtitle="Assets, liabilities and equity as of a date. Set opening balances so the sheet opens from a known position."
         actions={
-          <Button variant="light" color="brand" leftSection={<Gear size={16} />} onClick={openDrawer}>
-            Opening balances
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="light" color={engine === 'gl' ? 'green' : 'gray'}>
+              {engine === 'gl' ? 'General ledger' : 'Legacy engine'}
+            </Badge>
+            <Button variant="light" color="brand" leftSection={<Gear size={16} />} onClick={openDrawer}>
+              Opening balances
+            </Button>
+          </div>
         }
       />
 

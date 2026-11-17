@@ -3,7 +3,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
-from app.core.dependencies import get_current_tenant_id, get_db
+from app.core.dependencies import (
+    get_current_tenant_id,
+    get_current_user_id,
+    get_db,
+)
 from app.core.paginator import pagination_params
 from app.core.permissions import Permissions, require_permission
 from app.modules.transactions.schemas import TransactionCreate, TransactionRead, TransactionUpdate
@@ -12,8 +16,8 @@ from app.modules.transactions.service import TransactionService
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 
-async def _service(db, tenant_id) -> TransactionService:
-    return TransactionService(db, tenant_id)
+async def _service(db, tenant_id, user_id=None) -> TransactionService:
+    return TransactionService(db, tenant_id, user_id)
 
 
 @router.get("", response_model=list[TransactionRead])
@@ -38,9 +42,10 @@ async def create_transaction(
     data: TransactionCreate,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.MANAGE_TRANSACTIONS)),
 ):
-    service = await _service(db, tenant_id)
+    service = await _service(db, tenant_id, user_id)
     return await service.create(data)
 
 
@@ -60,9 +65,10 @@ async def update_transaction(
     data: TransactionUpdate,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.MANAGE_TRANSACTIONS)),
 ):
-    service = await _service(db, tenant_id)
+    service = await _service(db, tenant_id, user_id)
     return await service.update(transaction_id, data)
 
 
@@ -71,9 +77,10 @@ async def delete_transaction(
     transaction_id: UUID,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.MANAGE_TRANSACTIONS)),
 ):
-    service = await _service(db, tenant_id)
+    service = await _service(db, tenant_id, user_id)
     await service.delete(transaction_id)
 
 
@@ -82,7 +89,8 @@ async def reverse_transaction(
     transaction_id: UUID,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.MANAGE_TRANSACTIONS)),
 ):
-    service = await _service(db, tenant_id)
+    service = await _service(db, tenant_id, user_id)
     return await service.reverse(transaction_id)

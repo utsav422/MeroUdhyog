@@ -58,6 +58,7 @@ export default function DashboardLayout({
         email: me.data.email,
         full_name: me.data.full_name,
         role: me.data.role,
+        permissions: me.data.permissions ?? [],
       }
     : null;
 

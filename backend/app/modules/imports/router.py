@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 
-from app.core.dependencies import get_current_tenant_id, get_db
+from app.core.dependencies import get_current_tenant_id, get_current_user_id, get_db
 from app.core.paginator import pagination_params
 from app.core.permissions import Permissions, require_permission
 from app.modules.imports.schemas import ImportBatchRead, ImportRequest, ImportRowErrorRead
@@ -11,8 +11,8 @@ from app.modules.imports.service import ImportService
 router = APIRouter(prefix="/imports", tags=["imports"])
 
 
-async def _service(db, tenant_id) -> ImportService:
-    return ImportService(db, tenant_id)
+async def _service(db, tenant_id, user_id=None) -> ImportService:
+    return ImportService(db, tenant_id, user_id)
 
 
 @router.post("", response_model=ImportBatchRead, status_code=status.HTTP_201_CREATED)
@@ -20,9 +20,10 @@ async def submit_import(
     data: ImportRequest,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.IMPORT_DATA)),
 ):
-    service = await _service(db, tenant_id)
+    service = await _service(db, tenant_id, user_id)
     batch = await service.submit(data)
     return ImportBatchRead.model_validate(batch)
 
@@ -32,9 +33,10 @@ async def upload_import_file(
     file: UploadFile,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.IMPORT_DATA)),
 ):
-    service = await _service(db, tenant_id)
+    service = await _service(db, tenant_id, user_id)
     try:
         batch = await service.upload(file.filename or "upload.csv", await file.read())
     except ValueError as exc:

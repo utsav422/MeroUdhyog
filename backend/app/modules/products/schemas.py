@@ -93,6 +93,7 @@ class VariantRead(BaseModel):
     sort_order: int
     is_active: bool
     stock_quantity: int
+    average_cost: Decimal
     low_stock_threshold: int
     prices: list[VariantPriceRead] = Field(default_factory=list)
 
@@ -132,8 +133,11 @@ class StockMovementRead(BaseModel):
     product_name: str
     variant_name: str | None
     quantity: int
+    unit_cost: Decimal | None = None
+    total_cost: Decimal | None = None
     reason: str
     order_id: UUID | None
+    transaction_id: UUID | None = None
     created_at: datetime
     # Stock level of the variant AFTER this movement applied (whole history,
     # not just the current page/filter). Mirrors ProductVariant.stock_quantity

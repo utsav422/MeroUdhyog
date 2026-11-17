@@ -15,6 +15,7 @@ from app.core.security import (
     hash_refresh_token,
     verify_password,
 )
+from app.modules.accounting.coa import seed_default_accounts
 from app.modules.auth.models import EmailToken, RefreshToken
 from app.modules.auth.schemas import LoginRequest, RegisterRequest
 from app.modules.roles.seed import seed_default_roles
@@ -58,6 +59,7 @@ class AuthService:
 
         await seed_default_transaction_types(self.session, tenant.id)
         await seed_default_roles(self.session, tenant.id)
+        await seed_default_accounts(self.session, tenant.id)
 
         # Welcome + verification email (console mailer in dev).
         await self._send_verification_email(user)
