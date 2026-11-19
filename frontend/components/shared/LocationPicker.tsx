@@ -70,11 +70,13 @@ export default function LocationPicker({
   onChange,
   label = 'Location',
   placeholder = 'Search address or drop a pin',
+  autoLocate = true,
 }: {
   value: LatLng;
   onChange: (v: LatLng) => void;
   label?: string;
   placeholder?: string;
+  autoLocate?: boolean;
 }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<InstanceType<LeafletModule['Map']> | null>(null);
@@ -188,7 +190,7 @@ export default function LocationPicker({
   }, [value]);
 
   useEffect(() => {
-    if (!mapReady) return;
+    if (!mapReady || !autoLocate) return;
     if (value) return;
     // auto-zoom to the user's current location on first load (only once)
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
@@ -209,7 +211,7 @@ export default function LocationPicker({
     return () => {
       cancelled = true;
     };
-  }, [mapReady, value]);
+  }, [mapReady, value, autoLocate]);
 
   async function handleSearch(q: string) {
     setQuery(q);

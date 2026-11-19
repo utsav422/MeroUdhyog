@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
@@ -20,6 +20,7 @@ export default function DashboardLayout({
   const me = useMe();
   const tenant = useTenant(!!me.data);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (me.isError) {
@@ -31,6 +32,7 @@ export default function DashboardLayout({
   }, [me.isError, me.error, router]);
 
   useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
     const id = window.setTimeout(() => setSidebarOpen(false), 0);
     return () => window.clearTimeout(id);
   }, [pathname]);
@@ -58,25 +60,31 @@ export default function DashboardLayout({
         email: me.data.email,
         full_name: me.data.full_name,
         role: me.data.role,
+        avatar_url: me.data.avatar_url ?? null,
         permissions: me.data.permissions ?? [],
       }
     : null;
 
   return (
     <SessionProvider value={session}>
-      <div className="flex min-h-screen bg-[var(--background)]">
+      <div className="flex h-dvh overflow-hidden bg-[var(--background)]">
         <Sidebar
           tenantName={tenant.data?.name ?? 'Workspace'}
           mobileOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
         />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <Topbar
             fullName={session?.full_name ?? ''}
             email={session?.email ?? ''}
             onOpenSidebar={() => setSidebarOpen(true)}
           />
-          <main className="flex-1 px-6 pb-28 pt-6 lg:px-8 lg:pb-6">{children}</main>
+          <main
+            ref={mainRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-28 pt-6 lg:px-8 lg:pb-6"
+          >
+            {children}
+          </main>
         </div>
       </div>
       <MobileBottomNav onOpenSidebar={() => setSidebarOpen(true)} />

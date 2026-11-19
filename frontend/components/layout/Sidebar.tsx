@@ -266,26 +266,26 @@ const NAV_GROUPS: NavGroup[] = [
       },
     ],
   },
-  {
-    label: 'Operations',
-    items: [
-      {
-        href: '/finance',
-        label: 'Finance',
-        icon: <Wallet size={18} weight="duotone" />,
-      },
-      {
-        href: '/imports',
-        label: 'Imports',
-        icon: <FileArrowUp size={18} weight="duotone" />,
-      },
-      {
-        href: '/audits',
-        label: 'Audits',
-        icon: <ShieldCheck size={18} weight="duotone" />,
-      },
-    ],
-  },
+  // {
+  //   label: 'Operations',
+  //   items: [
+  //     {
+  //       href: '/finance',
+  //       label: 'Finance',
+  //       icon: <Wallet size={18} weight="duotone" />,
+  //     },
+  //     {
+  //       href: '/imports',
+  //       label: 'Imports',
+  //       icon: <FileArrowUp size={18} weight="duotone" />,
+  //     },
+  //     {
+  //       href: '/audits',
+  //       label: 'Audits',
+  //       icon: <ShieldCheck size={18} weight="duotone" />,
+  //     },
+  //   ],
+  // },
 ];
 
 export default function Sidebar({
@@ -356,7 +356,7 @@ export default function Sidebar({
 
   return (
     <>
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200/70 bg-white px-4 py-5 lg:flex">
+      <aside className="hidden h-full w-64 shrink-0 flex-col overflow-hidden border-r border-zinc-200/70 bg-white px-4 py-5 lg:flex">
         <SidebarInner tenantName={tenantName} navGroups={navGroups} isActive={active} />
       </aside>
 
@@ -373,7 +373,7 @@ export default function Sidebar({
           }`}
         />
         <div
-          className={`absolute inset-y-0 left-0 flex w-1/2 min-w-[250px] max-w-[340px] flex-col overflow-y-auto border-r border-zinc-200/70 bg-white px-4 py-5 pb-10 shadow-2xl transition-transform duration-300 ease-out ${
+          className={`absolute inset-y-0 left-0 flex w-1/2 min-w-[250px] max-w-[340px] flex-col overflow-hidden border-r border-zinc-200/70 bg-white px-4 py-5 pb-10 shadow-2xl transition-transform duration-300 ease-out ${
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -402,8 +402,8 @@ function SidebarInner({
   isActive: (item: NavItem) => boolean;
 }) {
   return (
-    <>
-      <div className="mb-6 flex items-center gap-2.5 px-2">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-6 flex shrink-0 items-center gap-2.5 px-2">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white">
           <Factory size={20} weight="duotone" />
         </div>
@@ -413,7 +413,7 @@ function SidebarInner({
         </div>
       </div>
 
-      <div className="mb-6 flex items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2.5">
+      <div className="mb-6 flex shrink-0 items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2.5">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
           <SquareHalf size={16} weight="fill" />
         </div>
@@ -425,7 +425,7 @@ function SidebarInner({
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-6">
+      <nav className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain pr-1">
         {navGroups.map((group) => (
           <div key={group.label}>
             <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
@@ -456,7 +456,7 @@ function SidebarInner({
         ))}
       </nav>
 
-      <div className="mt-6 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 p-4 text-white">
+      <div className="mt-6 shrink-0 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 p-4 text-white">
         <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
           <Sparkle size={13} weight="fill" className="text-brand-200" />
           Pro plan
@@ -471,6 +471,6 @@ function SidebarInner({
           Upgrade
         </button>
       </div>
-    </>
+    </div>
   );
 }

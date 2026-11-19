@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Avatar, Group, Indicator, Menu, Text } from '@mantine/core';
 import { Bell, List, MagnifyingGlass, SignOut, UserCircle } from '@phosphor-icons/react';
-import { apiClient } from '@/lib/api-client';
+import { apiAssetUrl, apiClient } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/providers';
 import { useUnreadCount } from '@/features/notifications/api';
@@ -22,6 +22,7 @@ const TITLES: Record<string, string> = {
   '/deliveries': 'Deliveries',
   '/customers': 'Customers',
   '/staff': 'Staff',
+  '/profile': 'Profile',
 };
 
 export default function Topbar({
@@ -83,9 +84,10 @@ export default function Topbar({
     .slice(0, 2)
     .join('')
     .toUpperCase();
+  const avatarSrc = apiAssetUrl(session?.avatar_url);
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-zinc-200/70 bg-[var(--background)]/90 px-6 py-3.5 backdrop-blur">
+    <header className="sticky top-0 z-30 flex shrink-0 items-center justify-between gap-4 border-b border-zinc-200/70 bg-[var(--background)]/90 px-6 py-3.5 backdrop-blur">
       <div className="flex items-center gap-3">
         {onOpenSidebar && (
           <button
@@ -170,7 +172,7 @@ export default function Topbar({
         <Menu shadow="md" width={220} position="bottom-end">
           <Menu.Target>
             <button type="button" className="flex items-center gap-2">
-              <Avatar color="brand" radius="xl" size={36}>
+              <Avatar color="brand" radius="xl" size={36} src={avatarSrc}>
                 {initials || 'U'}
               </Avatar>
             </button>
@@ -185,7 +187,12 @@ export default function Topbar({
               </Text>
             </div>
             <Menu.Divider />
-            <Menu.Item leftSection={<UserCircle size={16} />}>Profile</Menu.Item>
+            <Menu.Item
+              leftSection={<UserCircle size={16} />}
+              onClick={() => router.push('/profile')}
+            >
+              Profile
+            </Menu.Item>
             <Menu.Item
               color="red"
               leftSection={<SignOut size={16} />}

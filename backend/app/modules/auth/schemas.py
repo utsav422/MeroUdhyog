@@ -45,6 +45,7 @@ class MeResponse(BaseModel):
     role: str
     is_superadmin: bool
     is_email_verified: bool = False
+    avatar_url: str | None = None
     permissions: list[str] = Field(default_factory=list)
 
 

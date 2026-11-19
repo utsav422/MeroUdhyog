@@ -4,8 +4,15 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 
-const API_URL =
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
+
+export function apiAssetUrl(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  if (/^https?:\/\//.test(path) || path.startsWith('data:')) return path;
+  const base = API_BASE_URL.replace(/\/$/, '');
+  return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -73,7 +80,7 @@ function toApiClientError(error: unknown): ApiClientError {
 }
 
 const client: AxiosInstance = axios.create({
-  baseURL: API_URL,
+  baseURL: API_BASE_URL,
   withCredentials: true,
 });
 

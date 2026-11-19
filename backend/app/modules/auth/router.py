@@ -115,6 +115,7 @@ async def me(user_id=Depends(get_current_user_id), db=Depends(get_db)):
     from sqlalchemy import select
 
     from app.modules.users.models import User
+    from app.modules.users.service import avatar_url_for
 
     row = await db.execute(select(User).where(User.id == user_id))
     user = row.scalar_one_or_none()
@@ -128,6 +129,7 @@ async def me(user_id=Depends(get_current_user_id), db=Depends(get_db)):
         role=user.role,
         is_superadmin=user.is_superadmin,
         is_email_verified=user.is_email_verified,
+        avatar_url=avatar_url_for(user),
         permissions=sorted(
             permission.value for permission in await effective_permissions(db, user_id)
         ),

@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    LargeBinary,
     Numeric,
     String,
     UniqueConstraint,
@@ -68,6 +69,19 @@ class User(Base):
         Numeric(precision=9, scale=6), nullable=True
     )
     agent_location_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    latitude: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=9, scale=6), nullable=True
+    )
+    longitude: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=9, scale=6), nullable=True
+    )
+    avatar_mime: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    avatar_data: Mapped[bytes | None] = mapped_column(
+        LargeBinary, nullable=True, deferred=True
+    )
+    avatar_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
