@@ -1,4 +1,4 @@
-"""FastAdmin auto-generated admin UI wired to Factory OS SQLAlchemy models.
+"""FastAdmin auto-generated admin UI wired to Mero Udhyog SQLAlchemy models.
 
 FastAdmin reads all ADMIN_* settings from environment variables at import time
 (via `os.getenv` in `fastadmin.settings`). We therefore (a) load `.env` into the
@@ -17,6 +17,11 @@ os.environ.setdefault("ADMIN_USER_MODEL", "User")
 os.environ.setdefault("ADMIN_USER_MODEL_USERNAME_FIELD", "email")
 os.environ.setdefault("ADMIN_SECRET_KEY", "dev-fastadmin-secret-key-factory-os")
 os.environ.setdefault("ADMIN_SESSION_COOKIE_SECURE", "false")
+os.environ.setdefault("ADMIN_SITE_NAME", "Mero Udhyog Admin")
+os.environ.setdefault("ADMIN_SITE_FAVICON", "/brand/favicon.svg")
+os.environ.setdefault("ADMIN_SITE_SIGN_IN_LOGO", "/brand/logo-lockup.svg")
+os.environ.setdefault("ADMIN_SITE_HEADER_LOGO", "/brand/logo-lockup-dark.svg")
+os.environ.setdefault("ADMIN_PRIMARY_COLOR", "#27675c")
 
 from collections.abc import Sequence  # noqa: E402
 

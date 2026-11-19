@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.email import send_email
+from app.core.email_templates import password_reset_email, verification_email
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -64,7 +65,13 @@ class AuthService:
         # Welcome + verification email (console mailer in dev).
         await self._send_verification_email(user)
 
-        return await self._issue_tokens(user.id, tenant.id)
+        if settings.REQUIRE_EMAIL_VERIFICATION:
+            return {"verification_required": True, "email": user.email}
+
+        tokens = await self._issue_tokens(user.id, tenant.id)
+        tokens["verification_required"] = False
+        tokens["email"] = user.email
+        return tokens
 
     async def _superadmin_exists(self) -> bool:
         row = await self.session.execute(
@@ -73,9 +80,7 @@ class AuthService:
         return row.scalar_one_or_none() is not None
 
     async def login(self, data: LoginRequest) -> dict:
-        user_row = await self.session.execute(
-            select(User).where(User.email == data.email)
-        )
+        user_row = await self.session.execute(select(User).where(User.email == data.email))
         user = user_row.scalar_one_or_none()
         if not user or not verify_password(data.password, user.hashed_password):
             raise UnauthorizedError("Invalid email or password")
@@ -101,8 +106,7 @@ class AuthService:
             user_id=user_id,
             tenant_id=tenant_id,
             token=refresh_token,
-            expires_at=datetime.now(UTC)
-            + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            expires_at=datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
 
         return {
@@ -118,21 +122,20 @@ class AuthService:
             select(RefreshToken).where(RefreshToken.token_hash == token_hash)
         )
         rt = row.scalar_one_or_none()
-        if (
-            not rt
-            or rt.revoked_at is not None
-            or rt.expires_at < datetime.now(UTC)
-        ):
+        if not rt or rt.revoked_at is not None or rt.expires_at < datetime.now(UTC):
             raise UnauthorizedError("Invalid refresh token")
 
         rt.revoked_at = datetime.now(UTC)
 
-        user_row = await self.session.execute(
-            select(User).where(User.id == rt.user_id)
-        )
+        user_row = await self.session.execute(select(User).where(User.id == rt.user_id))
         user = user_row.scalar_one_or_none()
         if not user or not user.is_active:
             raise UnauthorizedError("User account is disabled")
+
+        if settings.REQUIRE_EMAIL_VERIFICATION and not user.is_email_verified:
+            raise UnauthorizedError(
+                "Email not verified. Check your inbox for the verification link."
+            )
 
         return await self._issue_tokens(user.id, user.tenant_id)
 
@@ -172,9 +175,7 @@ class AuthService:
         row = await self.session.execute(select(User).where(User.id == user_id))
         return row.scalar_one_or_none()
 
-    async def _issue_email_token(
-        self, user: User, purpose: str, ttl: timedelta
-    ) -> str:
+    async def _issue_email_token(self, user: User, purpose: str, ttl: timedelta) -> str:
         """Revoke any outstanding tokens of the same purpose, then issue one."""
         now = datetime.now(UTC)
         old_rows = await self.session.execute(
@@ -231,16 +232,16 @@ class AuthService:
             user, PURPOSE_VERIFY, timedelta(hours=settings.VERIFY_TOKEN_EXPIRE_HOURS)
         )
         link = f"{settings.FRONTEND_URL}/verify-email?token={raw}"
+        text, html = verification_email(
+            full_name=user.full_name,
+            link=link,
+            expires_hours=settings.VERIFY_TOKEN_EXPIRE_HOURS,
+        )
         send_email(
             to=user.email,
             subject="Verify your Mero Udhyog email",
-            text=(
-                f"Namaste {user.full_name},\n\n"
-                "Welcome to Mero Udhyog! Please confirm your email address by "
-                f"opening the link below:\n\n{link}\n\n"
-                f"This link expires in {settings.VERIFY_TOKEN_EXPIRE_HOURS} hours.\n\n"
-                "If you didn't create this account you can ignore this email."
-            ),
+            text=text,
+            html=html,
         )
 
     async def forgot_password(self, email: str) -> None:
@@ -253,16 +254,16 @@ class AuthService:
             user, PURPOSE_RESET, timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES)
         )
         link = f"{settings.FRONTEND_URL}/reset-password?token={raw}"
+        text, html = password_reset_email(
+            full_name=user.full_name,
+            link=link,
+            expires_minutes=settings.RESET_TOKEN_EXPIRE_MINUTES,
+        )
         send_email(
             to=user.email,
             subject="Reset your Mero Udhyog password",
-            text=(
-                f"Namaste {user.full_name},\n\n"
-                "We received a request to reset your Mero Udhyog password. Open "
-                f"the link below to choose a new one:\n\n{link}\n\n"
-                f"This link expires in {settings.RESET_TOKEN_EXPIRE_MINUTES} minutes. "
-                "If you didn't request this, you can safely ignore this email."
-            ),
+            text=text,
+            html=html,
         )
 
     async def reset_password(self, raw_token: str, new_password: str) -> None:

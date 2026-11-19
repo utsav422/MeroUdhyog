@@ -12,4 +12,4 @@ async def test_health(client):
 async def test_root(client):
     response = await client.get("/")
     assert response.status_code == 200
-    assert "Factory OS API" in response.json()["message"]
+    assert "Mero Udhyog API" in response.json()["message"]

@@ -22,6 +22,16 @@ class TokenResponse(BaseModel):
     tenant_id: str
 
 
+class RegisterResponse(BaseModel):
+    verification_required: bool = False
+    email: str
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    user_id: str | None = None
+    tenant_id: str | None = None
+
+
 class RefreshResponse(BaseModel):
     access_token: str
     refresh_token: str

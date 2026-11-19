@@ -56,7 +56,13 @@ export default function RegisterPage() {
         full_name: fullName,
         password,
       }),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      if (result.verification_required) {
+        router.push(
+          `/verify-email?sent=1&email=${encodeURIComponent(result.email)}`,
+        );
+        return;
+      }
       await queryClient.invalidateQueries();
       router.push('/dashboard');
       router.refresh();

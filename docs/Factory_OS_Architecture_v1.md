@@ -1,6 +1,7 @@
-# Factory OS — Architecture v1
+# Mero Udhyog — Architecture v1
 
-Detailed architecture reference for the Factory OS multi-tenant SaaS platform.
+Detailed architecture reference for the Mero Udhyog multi-tenant SaaS platform by
+Factoryze Tech.
 This is the companion to `FACTORY_OS_FULL_DOCUMENTATION.md` (product/scope/phase
 plan) — this document covers schema, ERD, indexes, tenant isolation, auth/RBAC,
 API design, and the testing strategy for the MVP.

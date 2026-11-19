@@ -554,7 +554,7 @@ def _render_document(
 
     story.append(Spacer(1, 16))
     gen = ParagraphStyle("Gen", parent=small, fontName="Helvetica", fontSize=7.5)
-    story.append(Paragraph("This is a computer-generated document issued by FactoryCRM.", gen))
+    story.append(Paragraph("This is a computer-generated document issued by Factoryze Tech.", gen))
     _build(page, story, watermark)
     return stream.getvalue()
 

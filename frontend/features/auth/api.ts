@@ -8,6 +8,16 @@ export type TokenResponse = {
   tenant_id: string;
 };
 
+export type RegisterResponse = {
+  verification_required: boolean;
+  email: string;
+  access_token?: string | null;
+  refresh_token?: string | null;
+  token_type?: string;
+  user_id?: string | null;
+  tenant_id?: string | null;
+};
+
 export type RegisterPayload = {
   tenant_name: string;
   tenant_slug: string;
@@ -32,7 +42,7 @@ export type TokenInfoResponse = {
 
 export const authApi = {
   register: (payload: RegisterPayload) =>
-    apiClient.post<TokenResponse>('/auth/register', payload),
+    apiClient.post<RegisterResponse>('/auth/register', payload),
 
   login: (payload: LoginPayload) =>
     apiClient.post<TokenResponse>('/auth/login', payload),

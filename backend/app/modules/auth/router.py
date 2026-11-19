@@ -11,6 +11,7 @@ from app.modules.auth.schemas import (
     MeResponse,
     MessageResponse,
     RegisterRequest,
+    RegisterResponse,
     ResendVerificationRequest,
     ResetPasswordRequest,
     TokenInfoResponse,
@@ -69,11 +70,20 @@ async def _token_payload(tokens: dict, response: Response) -> TokenResponse:
     )
 
 
-@router.post("/register", response_model=TokenResponse, status_code=201)
+@router.post("/register", response_model=RegisterResponse, status_code=201)
 async def register(data: RegisterRequest, response: Response, db=Depends(get_db)):
     service = AuthService(db)
-    tokens = await service.register(data)
-    return await _token_payload(tokens, response)
+    result = await service.register(data)
+
+    if result.get("verification_required"):
+        return RegisterResponse(verification_required=True, email=result["email"])
+
+    tokens = await _token_payload(result, response)
+    return RegisterResponse(
+        verification_required=False,
+        email=result["email"],
+        **tokens.model_dump(),
+    )
 
 
 @router.post("/login", response_model=TokenResponse)

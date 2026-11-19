@@ -16,19 +16,69 @@ const {
   description = "Mero Udhyog brings your products, orders, deliveries, khata and customers into one workspace — with smart, statistics-based forecasts for Nepali factories and distributors.",
 } = Astro.props;
 
+const siteUrl = Astro.site ?? new URL("https://meroudhyog.com");
+const canonical = new URL(Astro.url.pathname, siteUrl).toString();
+const ogImage = new URL("/og-image.svg", siteUrl).toString();
+const organizationId = new URL("/#organization", siteUrl).toString();
+
 const structuredData = {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: "Mero Udhyog",
-  applicationCategory: "BusinessApplication",
-  operatingSystem: "Web",
-  description,
-  url: "https://meroudhyog.com",
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "NPR",
-  },
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": organizationId,
+      name: "Factoryze Tech",
+      url: siteUrl.toString(),
+      email: "info.meroudhyog@gmail.com",
+      telephone: "+977-9840934837",
+      address: [
+        {
+          "@type": "PostalAddress",
+          streetAddress: "Pepsicola",
+          addressLocality: "Kathmandu",
+          addressCountry: "NP",
+        },
+        {
+          "@type": "PostalAddress",
+          streetAddress: "Itahari",
+          addressLocality: "Sunsari",
+          addressCountry: "NP",
+        },
+      ],
+      contactPoint: [
+        {
+          "@type": "ContactPoint",
+          contactType: "customer support",
+          email: "info@meroudhyog.com",
+          telephone: "+977-9840934837",
+          areaServed: "NP",
+          availableLanguage: ["en", "ne"],
+        },
+        {
+          "@type": "ContactPoint",
+          contactType: "sales",
+          email: "info.meroudhyog@gmail.com",
+          telephone: "+977-9840934837",
+          areaServed: "NP",
+          availableLanguage: ["en", "ne"],
+        },
+      ],
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "Mero Udhyog",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      description,
+      url: siteUrl.toString(),
+      publisher: { "@id": organizationId },
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "NPR",
+      },
+    },
+  ],
 };
 ---
 
@@ -40,15 +90,19 @@ const structuredData = {
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    <meta name="author" content="Factoryze Tech" />
+    <meta name="theme-color" content="#12362a" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Mero Udhyog" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content="/og-image.svg" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content="/og-image.svg" />
-    <link rel="canonical" href={Astro.site?.toString()} />
+    <meta name="twitter:image" content={ogImage} />
+    <link rel="canonical" href={canonical} />
     <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
   </head>
   <body class="min-h-screen">

@@ -1,8 +1,12 @@
-# Factory OS
+# Factoryze Tech
 
-A multi-tenant SaaS platform for small and medium-sized factories. Turns raw
-historical factory data (sales, purchases, expenses) into reliable, explainable
-financial and audit intelligence.
+Mero Udhyog — a multi-tenant SaaS platform for small and medium-sized factories.
+Turns raw historical factory data (sales, purchases, expenses) into reliable,
+explainable financial and audit intelligence.
+
+Factoryze Tech · Head office: Pepsicola, Kathmandu · Branch: Itahari, Sunsari ·
+Support: info@meroudhyog.com · General: info.meroudhyog@gmail.com ·
+Phone: +977 9840934837
 
 **Positioning**: Audit assistance and financial intelligence — not a replacement
 for a licensed auditor/accountant.
@@ -12,7 +16,7 @@ for a licensed auditor/accountant.
 ## Repository structure
 
 ```
-factory-os/
+factoryze-tech/
 ├── backend/     # FastAPI + SQLAlchemy + Alembic + PostgreSQL
 ├── frontend/    # Next.js + TypeScript + Tailwind (App Router)
 ├── docs/        # architecture, product, roadmap, ADRs

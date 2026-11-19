@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 import os
 
 os.environ.setdefault("APP_ENV", "test")
@@ -5,6 +7,10 @@ os.environ.setdefault("DEBUG", "false")
 os.environ.setdefault(
     "DATABASE_URL", "postgresql://postgres:cagtu@localhost:5432/fastapi_test"
 )
+os.environ.setdefault("REQUIRE_EMAIL_VERIFICATION", "false")
+os.environ.setdefault("MAIL_TEST_RECIPIENT", "")
+os.environ.setdefault("SMTP_HOST", "")
+os.environ.setdefault("SMTP_USER", "")
 
 import pytest
 from httpx import ASGITransport, AsyncClient

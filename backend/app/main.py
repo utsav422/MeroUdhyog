@@ -1,9 +1,12 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.admin import ADMIN_PATH, admin_app, register_models
+from app.admin_ui import router as admin_ui_router
 from app.core.config import get_settings
 from app.core.database import close_db, init_db
 from app.core.logging import setup_logging
@@ -19,6 +22,8 @@ async def lifespan(app: FastAPI):
 
 
 settings = get_settings()
+
+BRAND_DIR = Path(__file__).resolve().parent / "static" / "brand"
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -42,6 +47,7 @@ def _register_routers(application: FastAPI) -> None:
     from app.modules.audits.router import router as audits_router
     from app.modules.auth.router import router as auth_router
     from app.modules.categories.router import router as categories_router
+    from app.modules.contact.router import router as contact_router
     from app.modules.customer_prices.router import router as customer_prices_router
     from app.modules.customers.router import router as customers_router
     from app.modules.deliveries.router import router as deliveries_router
@@ -61,6 +67,7 @@ def _register_routers(application: FastAPI) -> None:
     from app.modules.users.router import router as users_router
 
     application.include_router(auth_router, prefix=settings.API_V1_PREFIX)
+    application.include_router(contact_router, prefix=settings.API_V1_PREFIX)
     application.include_router(accounting_router, prefix=settings.API_V1_PREFIX)
     application.include_router(tenants_router, prefix=settings.API_V1_PREFIX)
     application.include_router(users_router, prefix=settings.API_V1_PREFIX)
@@ -85,6 +92,8 @@ def _register_routers(application: FastAPI) -> None:
 
 _register_routers(app)
 
+app.include_router(admin_ui_router)
+app.mount("/brand", StaticFiles(directory=BRAND_DIR), name="brand")
 app.mount(ADMIN_PATH, admin_app)
 
 
@@ -95,4 +104,4 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return {"message": "Factory OS API", "version": "0.1.0"}
+    return {"message": "Mero Udhyog API", "version": "0.1.0"}

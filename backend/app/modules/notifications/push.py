@@ -146,8 +146,8 @@ def _decode_der_signature(der: bytes) -> tuple[int, int]:
 
 
 def _hkdf(ikm: bytes, salt: bytes, info: bytes, length: int) -> bytes:
-    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
     from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
     return HKDF(algorithm=hashes.SHA256(), length=length, salt=salt, info=info).derive(ikm)
 
@@ -239,7 +239,7 @@ async def push_to_users(
     if keys is None or not user_ids:
         return
     settings = get_settings()
-    subject = settings.VAPID_SUBJECT.strip() or "mailto:admin@example.com"
+    subject = settings.VAPID_SUBJECT.strip() or "mailto:info@meroudhyog.com"
 
     subs = (
         await session.execute(

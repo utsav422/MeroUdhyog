@@ -1,1 +1,1 @@
-"""Factory OS backend application package."""
+"""Factoryze Tech backend application package."""

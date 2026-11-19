@@ -1,4 +1,4 @@
-/* Factory OS service worker — handles Web Push and notification clicks. */
+/* Mero Udhyog service worker — handles Web Push and notification clicks. */
 self.addEventListener('push', (event) => {
   let payload = {};
   try {
@@ -6,12 +6,12 @@ self.addEventListener('push', (event) => {
   } catch {
     payload = {};
   }
-  const title = payload.title || 'Factory OS';
+  const title = payload.title || 'Mero Udhyog';
   const url = payload.url || '/';
   const options = {
     body: payload.body || '',
     data: { url },
-    tag: 'factory-os',
+    tag: 'meroudhyog',
     renotify: true,
     requireInteraction: true,
   };

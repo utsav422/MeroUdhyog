@@ -1,25 +1,50 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 
+const company = {
+  name: "Factoryze Tech",
+  phone: "+977 9840934837",
+  phoneHref: "tel:+9779840934837",
+  supportEmail: "info@meroudhyog.com",
+  generalEmail: "info.meroudhyog@gmail.com",
+  offices: [
+    { label: "Head office", lines: ["Pepsicola, Kathmandu", "Nepal"] },
+    { label: "Branch office", lines: ["Itahari, Sunsari", "Nepal"] },
+  ],
+};
+
+const defaultApiBase = import.meta.env.DEV
+  ? "http://localhost:8000/api/v1"
+  : "https://api.meroudhyog.com/api/v1";
+const apiBase = (import.meta.env.PUBLIC_API_URL ?? defaultApiBase).replace(/\/+$/, "");
+const contactApiUrl = `${apiBase}/contact`;
+
 const channels = [
   {
     label: "General enquiries",
-    value: "hello@meroudhyog.com",
-    href: "mailto:hello@meroudhyog.com",
+    value: company.generalEmail,
+    href: `mailto:${company.generalEmail}`,
     note: "For anything — plans, partnerships, press.",
     icon: "M3 6h18v12H3V6Zm0 0 9 7 9-7",
   },
   {
     label: "Support",
-    value: "support@meroudhyog.com",
-    href: "mailto:support@meroudhyog.com",
+    value: company.supportEmail,
+    href: `mailto:${company.supportEmail}`,
     note: "Already running a workspace? Reach us here.",
     icon: "M12 3a9 9 0 0 0-9 9v5a3 3 0 0 0 3 3h1v-6H5v-3a7 7 0 0 1 14 0v3h-2v6h1a3 3 0 0 0 3-3v-5a9 9 0 0 0-9-9Z",
   },
   {
+    label: "Call us",
+    value: company.phone,
+    href: company.phoneHref,
+    note: "Sunday–Friday · Nepal time.",
+    icon: "M6.5 3.5 9 3l1.5 4-2 1.5a12 12 0 0 0 7 7L17 13.5l4 1.5-.5 2.5a2 2 0 0 1-2.2 1.6A16.5 16.5 0 0 1 4.9 5.7 2 2 0 0 1 6.5 3.5Z",
+  },
+  {
     label: "Onboarding help",
     value: "Book a walkthrough",
-    href: "mailto:hello@meroudhyog.com?subject=Onboarding%20walkthrough",
+    href: `mailto:${company.generalEmail}?subject=Onboarding%20walkthrough`,
     note: "Want us to help you set up? Just ask.",
     icon: "M12 8v8m-4-4h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z",
   },
@@ -27,8 +52,8 @@ const channels = [
 ---
 
 <BaseLayout
-  title="Contact — Mero Udhyog"
-  description="Talk to the Mero Udhyog team about plans, onboarding, support or partnerships. We answer every message."
+  title="Contact — Mero Udhyog by Factoryze Tech"
+  description="Talk to the Mero Udhyog team at Factoryze Tech about plans, onboarding, support or partnerships. Head office in Pepsicola, Kathmandu; branch office in Itahari, Sunsari."
 >
   <section class="relative overflow-hidden pt-32 pb-16 md:pt-44 md:pb-20">
     <div class="grid-backdrop absolute inset-0 mask-radial-t"></div>
@@ -70,7 +95,23 @@ const channels = [
             }
           </div>
 
-          <div class="mt-8 flex items-center gap-3 rounded-2xl border border-forest-950/10 bg-white p-5">
+          <div class="mt-8 grid gap-4 sm:grid-cols-2">
+            {
+              company.offices.map((office) => (
+                <div class="rounded-2xl border border-forest-950/10 bg-white p-5">
+                  <p class="eyebrow text-forest-950/35">{office.label}</p>
+                  <p class="mt-2 text-[15px] font-semibold text-forest-950">
+                    {company.name}
+                  </p>
+                  {office.lines.map((line) => (
+                    <p class="mt-0.5 text-sm text-forest-950/55">{line}</p>
+                  ))}
+                </div>
+              ))
+            }
+          </div>
+
+          <div class="mt-4 flex items-center gap-3 rounded-2xl border border-forest-950/10 bg-white p-5">
             <span class="size-2.5 animate-pulse rounded-full bg-forest-500"></span>
             <p class="text-sm text-forest-950/60">
               Typical reply within one working day · Sunday–Friday · Kathmandu time
@@ -85,10 +126,10 @@ const channels = [
             <h2 class="font-display text-3xl text-forest-950">Send us a message</h2>
             <p class="mt-2 text-sm text-forest-950/55">
               Prefer email? Write to
-              <a href="mailto:hello@meroudhyog.com" class="font-medium text-forest-700 underline">hello@meroudhyog.com</a>.
+              <a href="mailto:info.meroudhyog@gmail.com" class="font-medium text-forest-700 underline">info.meroudhyog@gmail.com</a>.
             </p>
 
-            <form id="contact-form" class="mt-7 space-y-5" novalidate>
+            <form id="contact-form" class="mt-7 space-y-5" data-api-url={contactApiUrl} novalidate>
               <div class="grid gap-5 sm:grid-cols-2">
                 <label class="block">
                   <span class="mb-1.5 block text-sm font-medium text-forest-950/70">Your name</span>
@@ -150,10 +191,17 @@ const channels = [
                 ></textarea>
               </label>
 
+              <div class="hidden" aria-hidden="true">
+                <label>
+                  Website
+                  <input type="text" name="website" tabindex="-1" autocomplete="off" />
+                </label>
+              </div>
+
               <button
                 type="submit"
                 data-motion="scale"
-                class="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[15px] font-semibold"
+                class="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[15px] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Send message
                 <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
@@ -176,40 +224,64 @@ const channels = [
 <script>
   const form = document.getElementById("contact-form") as HTMLFormElement | null;
   const status = document.getElementById("form-status");
+  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
 
-  form?.addEventListener("submit", (e) => {
-    e.preventDefault();
+  const showStatus = (message: string, state: "success" | "error") => {
+    if (!status) return;
+    status.textContent = message;
+    status.className =
+      state === "success"
+        ? "rounded-xl border border-forest-500/30 bg-forest-50 px-4 py-3 text-sm text-forest-700"
+        : "rounded-xl border border-red-500/30 bg-red-50 px-4 py-3 text-sm text-red-700";
+  };
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
     if (!form.reportValidity()) return;
 
     const data = new FormData(form);
-    const name = String(data.get("name") ?? "");
-    const business = String(data.get("business") ?? "");
-    const email = String(data.get("email") ?? "");
-    const phone = String(data.get("phone") ?? "");
-    const topic = String(data.get("topic") ?? "");
-    const message = String(data.get("message") ?? "");
+    const payload = {
+      name: String(data.get("name") ?? ""),
+      business: String(data.get("business") ?? ""),
+      email: String(data.get("email") ?? ""),
+      phone: String(data.get("phone") ?? ""),
+      topic: String(data.get("topic") ?? ""),
+      message: String(data.get("message") ?? ""),
+      website: String(data.get("website") ?? ""),
+    };
 
-    const body = [
-      `Name: ${name}`,
-      `Business: ${business}`,
-      `Email: ${email}`,
-      phone ? `Phone: ${phone}` : null,
-      `Topic: ${topic}`,
-      "",
-      message,
-    ]
-      .filter(Boolean)
-      .join("\n");
+    const originalLabel = submitButton?.innerHTML ?? "";
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = "Sending…";
+    }
 
-    const mailto = `mailto:hello@meroudhyog.com?subject=${encodeURIComponent(
-      `[${topic}] ${name}`,
-    )}&body=${encodeURIComponent(body)}`;
+    try {
+      const response = await fetch(form.dataset.apiUrl ?? "/api/v1/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    window.location.href = mailto;
+      if (!response.ok) {
+        throw new Error(`Contact request failed with ${response.status}`);
+      }
 
-    if (status) {
-      status.textContent = "Opening your email app… if nothing happens, write to hello@meroudhyog.com";
-      status.classList.remove("hidden");
+      form.reset();
+      showStatus(
+        `Thanks, ${payload.name}. Your message was sent — we'll reply to ${payload.email} within one working day.`,
+        "success",
+      );
+    } catch {
+      showStatus(
+        "Sorry, we couldn't send that. Please email info.meroudhyog@gmail.com or call +977 9840934837.",
+        "error",
+      );
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalLabel;
+      }
     }
   });
 </script>

@@ -1,5 +1,9 @@
 # Production deployment (Contabo / Ubuntu)
 
+Operator: **Factoryze Tech** — head office in Pepsicola, Kathmandu; branch office
+in Itahari, Sunsari. Support: `info@meroudhyog.com`; general enquiries:
+`info.meroudhyog@gmail.com`; phone: `+977 9840934837`.
+
 This guide targets the live Contabo layout:
 
 - `meroudhyog.com` + `www.meroudhyog.com` → Astro marketing website (static)
@@ -67,7 +71,7 @@ sudo -u factory nano .env
 Production values to set:
 
 ```dotenv
-APP_NAME="Factory OS"
+APP_NAME="Mero Udhyog"
 APP_ENV="production"
 DEBUG=false
 
@@ -78,26 +82,42 @@ DATABASE_MAX_OVERFLOW=10
 SECRET_KEY="<openssl rand -hex 32>"
 CSRF_SECRET_KEY="<openssl rand -hex 32>"
 
-CORS_ORIGINS='["https://app.meroudhyog.com", "https://meroudhyog.com", "https://www.meroudhyog.com"]'
+CORS_ORIGINS='["https://meroudhyog.com", "https://www.meroudhyog.com", "https://app.meroudhyog.com", "https://api.meroudhyog.com"]'
 COOKIE_SECURE=true
 FRONTEND_URL="https://app.meroudhyog.com"
 
-# Set real SMTP values for password-reset and verification emails.
-# If SMTP_HOST is empty, those links are only printed to the API logs.
-SMTP_HOST=""
+# Send auth emails from info@meroudhyog.com.
+# Use the SMTP host/port from your mailbox provider (Google Workspace,
+# Zoho, Hostinger, Brevo, etc.). Port 587 + STARTTLS is the usual setup.
+# With the current Gmail alias setup, SMTP_USER is the real Gmail account.
+SMTP_HOST="smtp.gmail.com"
 SMTP_PORT=587
-SMTP_USER=""
-SMTP_PASSWORD=""
+SMTP_USER="info.meroudhyog@gmail.com"
+SMTP_PASSWORD="<mailbox app password>"
 SMTP_USE_TLS=true
-MAIL_FROM="Mero Udhyog <no-reply@meroudhyog.com>"
+MAIL_FROM="Mero Udhyog <info@meroudhyog.com>"
+
+# Public website contact form submissions are delivered here.
+CONTACT_EMAIL="info.meroudhyog@gmail.com"
+
+# Leave empty in production. Set a test inbox only while validating delivery.
+MAIL_TEST_RECIPIENT=""
+
+# Block login until the email address is verified.
+REQUIRE_EMAIL_VERIFICATION=true
 
 ADMIN_SECRET_KEY="<openssl rand -hex 32>"
 ADMIN_SESSION_COOKIE_SECURE=true
+ADMIN_SITE_NAME="Mero Udhyog Admin"
+ADMIN_SITE_FAVICON="/brand/favicon.svg"
+ADMIN_SITE_SIGN_IN_LOGO="/brand/logo-lockup.svg"
+ADMIN_SITE_HEADER_LOGO="/brand/logo-lockup-dark.svg"
+ADMIN_PRIMARY_COLOR="#27675c"
 
 # Optional web push
 VAPID_PUBLIC_KEY=""
 VAPID_PRIVATE_KEY=""
-VAPID_SUBJECT="mailto:hello@meroudhyog.com"
+VAPID_SUBJECT="mailto:info@meroudhyog.com"
 ```
 
 Generate secrets with:
@@ -113,6 +133,34 @@ Rules:
 - Use `COOKIE_SECURE=true` only with HTTPS.
 - Never commit `.env`. The root `.gitignore` ignores `.env`; `frontend/.gitignore` ignores `.env*`.
 - If a `.env` was ever committed, rotate every secret and remove it from git history.
+
+For mail from `info@meroudhyog.com`, the mailbox must exist with the provider
+whose SMTP host you configure. Add the provider's SPF record and DKIM keys to
+DNS, and publish a DMARC record, otherwise Gmail may spam-folder the messages.
+Start with `MAIL_TEST_RECIPIENT` set to your test inbox, verify the full
+register → receive link → verify → login flow, then remove the redirect before
+going live. If `SMTP_HOST` is empty, links are only written to the API logs.
+
+### Gmail alias sending (current testing setup)
+
+`info@meroudhyog.com` is forwarded to `info.meroudhyog@gmail.com`; forwarding
+alone cannot send. For testing, add `info@meroudhyog.com` as a **Send mail as**
+alias in Gmail and verify it (the code arrives through the existing forward).
+Then use the Gmail account's app password:
+
+```env
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=587
+SMTP_USER="info.meroudhyog@gmail.com"   # real Gmail account, not info@
+SMTP_PASSWORD="<Google app password>"
+SMTP_USE_TLS=true
+MAIL_FROM="Mero Udhyog <info@meroudhyog.com>"
+```
+
+Gmail may show "via gmail.com", applies daily sending limits, and does not
+provide clean custom-domain DKIM. Keep the alias for testing, but move to an
+authenticated transactional provider before relying on this for production
+password resets and verification.
 
 ## 5. Install backend and migrate
 
@@ -147,11 +195,14 @@ Set:
 ```dotenv
 NEXT_PUBLIC_API_URL=/api/v1
 BACKEND_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_SITE_URL=https://app.meroudhyog.com
 ```
 
 `BACKEND_URL` is used by the Next.js rewrites in `next.config.ts`. Set it
-**before** `npm run build`. `NEXT_PUBLIC_API_URL` is also baked in at build
-time, so rebuild whenever either value changes.
+**before** `npm run build`. `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SITE_URL`
+are also baked in at build time, so rebuild whenever any of these values
+changes. `NEXT_PUBLIC_SITE_URL` is the canonical origin used by the SEO
+metadata, `robots.txt`, and `sitemap.xml`.
 
 Keep `NEXT_PUBLIC_API_URL=/api/v1` so the browser calls `app.meroudhyog.com/api/*`
 and Next.js proxies to the API server-side. This keeps the auth and CSRF
@@ -163,7 +214,7 @@ setup for cross-site requests.
 both services are on the same VPS. The public API remains available at
 `https://api.meroudhyog.com` for direct clients.
 
-Do not copy the local `frontend/.env`; it points at Render.
+Do not copy the local `frontend/.env`; it points at a local backend.
 
 Build:
 
@@ -178,13 +229,19 @@ machine and copy `.next`.
 
 ### Marketing website
 
-The Astro site is fully static:
+The Astro site is fully static. The contact form posts directly to the public
+API, so bake the API origin into the build:
 
 ```bash
 cd /opt/factorycrm/website
+sudo -u factory sh -c 'printf "%s\n" "PUBLIC_API_URL=https://api.meroudhyog.com/api/v1" > .env.production'
 sudo -u factory npm ci
 sudo -u factory npm run build
 ```
+
+`PUBLIC_API_URL` is a public browser value, not a secret. Rebuild the site if
+the API origin changes. The API must allow the website origin in
+`CORS_ORIGINS`, which the production example above already does.
 
 Output is written to `/opt/factorycrm/website/dist`. Nginx serves it directly;
 no Node process is required for the website.
@@ -195,7 +252,7 @@ Create `/etc/systemd/system/factorycrm-api.service`:
 
 ```ini
 [Unit]
-Description=FactoryCRM API
+Description=Mero Udhyog API
 After=network.target postgresql.service
 Requires=postgresql.service
 
@@ -223,7 +280,7 @@ Create `/etc/systemd/system/factorycrm-web.service`:
 
 ```ini
 [Unit]
-Description=FactoryCRM Web
+Description=Mero Udhyog Web
 After=network.target factorycrm-api.service
 Wants=factorycrm-api.service
 

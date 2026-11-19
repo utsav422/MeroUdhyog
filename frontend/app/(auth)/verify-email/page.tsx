@@ -14,9 +14,10 @@ import { FormAlert } from '@/features/auth/components/fields';
 function VerifyInner() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token') ?? '';
+  const sent = searchParams.get('sent') === '1';
   const started = useRef(false);
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(searchParams.get('email') ?? '');
 
   const verify = useMutation({
     mutationFn: () => authApi.verifyEmail(token),
@@ -44,38 +45,46 @@ function VerifyInner() {
           </Link>
         }
       >
-        {resend.isSuccess ? (
-          <FormAlert variant="success">
-            If that email needs verification, a new link has been sent.
-          </FormAlert>
-        ) : (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              resend.mutate();
-            }}
-            className="space-y-4"
-          >
-            <TextInput
-              label="Email"
-              placeholder="you@factory.com"
-              type="email"
-              required
-              leftSection={<EnvelopeSimple size={18} />}
-              value={email}
-              onChange={(e) => setEmail(e.currentTarget.value)}
-            />
-            <Button
-              type="submit"
-              fullWidth
-              size="md"
-              color="brand"
-              loading={resend.isPending}
+        <div className="space-y-4">
+          {sent && !resend.isSuccess && (
+            <FormAlert variant="success">
+              We sent a verification link to {email || 'your email'}. Open it to
+              finish setting up your workspace. Check spam if you do not see it.
+            </FormAlert>
+          )}
+          {resend.isSuccess ? (
+            <FormAlert variant="success">
+              If that email needs verification, a new link has been sent.
+            </FormAlert>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                resend.mutate();
+              }}
+              className="space-y-4"
             >
-              Resend verification link
-            </Button>
-          </form>
-        )}
+              <TextInput
+                label="Email"
+                placeholder="you@factory.com"
+                type="email"
+                required
+                leftSection={<EnvelopeSimple size={18} />}
+                value={email}
+                onChange={(e) => setEmail(e.currentTarget.value)}
+              />
+              <Button
+                type="submit"
+                fullWidth
+                size="md"
+                color="brand"
+                loading={resend.isPending}
+              >
+                Resend verification link
+              </Button>
+            </form>
+          )}
+        </div>
       </AuthCard>
     );
   }

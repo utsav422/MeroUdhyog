@@ -1,6 +1,6 @@
 # Mero Udhyog — Marketing Website
 
-Standalone descriptive website for **Mero Udhyog**, the operating workspace for Nepali factories and distributors (products, orders, deliveries, khata, predictions).
+Standalone descriptive website for **Mero Udhyog**, the operating workspace for Nepali factories and distributors (products, orders, deliveries, khata, predictions). Mero Udhyog is a product of **Factoryze Tech**, headquartered in Pepsicola, Kathmandu with a branch office in Itahari, Sunsari.
 
 Fully decoupled from the main app (`../frontend`). Static output — deploy anywhere.
 
@@ -21,6 +21,26 @@ npm run build      # static output in dist/
 npm run preview
 ```
 
+The contact form posts to `POST {PUBLIC_API_URL}/contact`. During
+`npm run dev` it defaults to `http://localhost:8000/api/v1`, so start the
+local API on port 8000:
+
+```bash
+cd ../backend
+./.venv/bin/uvicorn app.main:app --reload --port 8000
+```
+
+Override the API origin in `website/.env` if needed:
+
+```dotenv
+PUBLIC_API_URL="http://localhost:8000/api/v1"
+```
+
+Production builds default to `https://api.meroudhyog.com/api/v1`; set
+`PUBLIC_API_URL` explicitly in `.env.production` when deploying. The backend
+delivers submissions to `CONTACT_EMAIL`, which defaults to
+`info.meroudhyog@gmail.com`.
+
 > **Node note:** `npm run check` (`astro check`) needs Node ≥ 22 because the Astro language server ships ESM-only. On Node 20 run it via `npx -y node@22 ./node_modules/astro/astro.js check`. Build/dev work on Node 20.
 
 ## Structure
@@ -39,7 +59,7 @@ src/
 └── pages/
     ├── index.astro               Landing (product-first bento hero)
     ├── about.astro               About / mission / values
-    ├── contact.astro             Contact channels + mailto form
+    ├── contact.astro             Contact channels + API-backed message form
     ├── blog/index.astro          Blog index (featured + grid)
     ├── blog/[slug].astro         Article page (MDX via content collection)
     ├── 404.astro

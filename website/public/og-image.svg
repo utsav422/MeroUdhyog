@@ -12,4 +12,5 @@
   <text x="96" y="480" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="30" fill="#8bbfb0">Products · Orders · Deliveries · Khata · Predictions</text>
   <rect x="96" y="520" width="270" height="60" rx="30" fill="#f59e0b"/>
   <text x="231" y="558" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="24" fill="#0d1b16" text-anchor="middle" font-weight="600">Free to start</text>
+  <text x="1104" y="560" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="24" fill="#8bbfb0" text-anchor="end">A product of Factoryze Tech</text>
 </svg>

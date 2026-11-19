@@ -315,7 +315,7 @@ export default function BillDocument({
       </div>
 
       <div className="mt-4 pt-2 text-center text-[10px] text-zinc-400">
-        This is a computer-generated document issued by FactoryCRM.
+        This is a computer-generated document issued by Factoryze Tech.
       </div>
     </div>
   );

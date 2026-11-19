@@ -73,9 +73,10 @@ export function AuthShell({ children }: { children: ReactNode }) {
             </ul>
           </div>
 
-          <p className="text-xs text-white/50">
-            © {new Date().getFullYear()} Mero Udhyog. All rights reserved.
-          </p>
+          <div className="space-y-1 text-xs text-white/50">
+            <p>Mero Udhyog is a product of Factoryze Tech.</p>
+            <p>© {new Date().getFullYear()} Factoryze Tech. All rights reserved.</p>
+          </div>
         </div>
       </aside>
 

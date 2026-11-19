@@ -1,6 +1,6 @@
-# Factory OS — Backend
+# Factoryze Tech — Backend
 
-FastAPI backend for the Factory OS multi-tenant SaaS platform.
+FastAPI backend for Mero Udhyog, the multi-tenant SaaS platform by Factoryze Tech.
 
 ## Stack
 

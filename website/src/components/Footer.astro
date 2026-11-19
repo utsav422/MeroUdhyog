@@ -1,5 +1,12 @@
 ---
 const year = new Date().getFullYear();
+const company = {
+  name: "Factoryze Tech",
+  phone: "+977 9840934837",
+  phoneHref: "tel:+9779840934837",
+  supportEmail: "info@meroudhyog.com",
+  generalEmail: "info.meroudhyog@gmail.com",
+};
 
 const columns = [
   {
@@ -51,8 +58,28 @@ const columns = [
         </div>
         <p class="mt-4 max-w-xs text-sm leading-relaxed text-forest-100/60">
           The operating workspace for Nepali factories and distributors — products, orders,
-          deliveries and khata, in one place.
+          deliveries and khata, in one place. Mero Udhyog is a product of {company.name}.
         </p>
+        <div class="mt-5 space-y-1.5 text-sm text-forest-100/60">
+          <p>Head office: Pepsicola, Kathmandu · Branch: Itahari, Sunsari</p>
+          <p>
+            <a href={company.phoneHref} class="transition-colors hover:text-white">
+              {company.phone}
+            </a>
+          </p>
+          <p>
+            <a href={`mailto:${company.supportEmail}`} class="transition-colors hover:text-white">
+              {company.supportEmail}
+            </a>
+            <span class="text-forest-100/35"> · support</span>
+          </p>
+          <p>
+            <a href={`mailto:${company.generalEmail}`} class="transition-colors hover:text-white">
+              {company.generalEmail}
+            </a>
+            <span class="text-forest-100/35"> · general</span>
+          </p>
+        </div>
         <p class="mt-6 text-xs uppercase tracking-[0.18em] text-forest-100/40">
           Built for how Nepal actually sells
         </p>
@@ -84,7 +111,7 @@ const columns = [
     <div
       class="mt-14 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-6 text-xs text-forest-100/45 sm:flex-row sm:items-center"
     >
-      <p>© {year} Mero Udhyog. All rights reserved.</p>
+      <p>© {year} {company.name}. All rights reserved.</p>
       <button
         id="back-to-top"
         data-motion="scale"

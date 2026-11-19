@@ -11,7 +11,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    APP_NAME: str = "Factory OS"
+    APP_NAME: str = "Mero Udhyog"
     APP_ENV: str = "development"
     DEBUG: bool = True
 
@@ -26,7 +26,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    CORS_ORIGINS: list[str] = ["*"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:4321",
+        "https://meroudhyog.com",
+        "https://www.meroudhyog.com",
+        "https://app.meroudhyog.com",
+        "https://api.meroudhyog.com",
+    ]
     CSRF_SECRET_KEY: str = "csrf-secret-change-me"
 
     COOKIE_SECURE: bool = False
@@ -49,7 +56,14 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_USE_TLS: bool = True
-    MAIL_FROM: str = "Mero Udhyog <no-reply@meroudhyog.com>"
+    MAIL_FROM: str = "Mero Udhyog <info@meroudhyog.com>"
+
+    # Recipient for messages submitted through the public website contact form.
+    CONTACT_EMAIL: str = "info.meroudhyog@gmail.com"
+
+    # Testing only: when set, every outgoing email is delivered to this
+    # address instead of the real recipient. Leave empty in production.
+    MAIL_TEST_RECIPIENT: str = ""
 
     # How long password-reset and email-verification links stay valid.
     RESET_TOKEN_EXPIRE_MINUTES: int = 60
@@ -66,7 +80,7 @@ class Settings(BaseSettings):
     # in-app notification center.
     VAPID_PUBLIC_KEY: str = ""
     VAPID_PRIVATE_KEY: str = ""
-    VAPID_SUBJECT: str = "mailto:admin@example.com"
+    VAPID_SUBJECT: str = "mailto:info@meroudhyog.com"
 
 
 @lru_cache
