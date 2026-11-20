@@ -23,7 +23,7 @@ import { useCustomerPrices } from '../../customers/api';
 import type { CustomerPrice } from '../../customers/api';
 import { defaultVariantPrice, useProducts } from '../../products/api';
 import type { Variant } from '../../products/api';
-import DualDateInput from './DualDateInput';
+import NepaliDateField from './NepaliDateField';
 
 type Line = {
   product_id: string;
@@ -224,7 +224,13 @@ export default function DirectDeliveryModal({
   const enteredTime = enteredAt.slice(11, 16) || '09:00';
 
   return (
-    <Modal opened={opened} onClose={close} title={`Add past delivery · ${customerName}`} size="xl" centered>
+    <Modal
+      opened={opened}
+      onClose={close}
+      title={`Add past delivery · ${customerName}`}
+      size="min(1180px, 96vw)"
+      centered
+    >
       <Stack gap="md">
         {error && (
           <div className="rounded-xl bg-danger-50 px-4 py-2.5 text-sm font-medium text-danger-700">
@@ -232,24 +238,32 @@ export default function DirectDeliveryModal({
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <DualDateInput
-            label="Recorded on"
+        <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
+          <NepaliDateField
+            label="Recorded date"
             value={enteredDate}
             onChange={(date) => setEnteredAt(date ? `${date}T${enteredTime}` : '')}
+            extra={
+              <TextInput
+                label="Time"
+                type="time"
+                value={enteredTime}
+                onChange={(e) => enteredDate && setEnteredAt(`${enteredDate}T${e.currentTarget.value}`)}
+              />
+            }
           />
-          <TextInput
-            label="Recorded time"
-            type="time"
-            value={enteredTime}
-            onChange={(e) => enteredDate && setEnteredAt(`${enteredDate}T${e.currentTarget.value}`)}
-          />
-          <DualDateInput
-            label="Delivered on"
+        </div>
+
+        <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
+          <NepaliDateField
+            label="Delivered date"
             required
             value={deliveredDate}
             onChange={setDeliveredDate}
           />
+        </div>
+
+        <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-4">
           <TextInput
             label="Delivery address"
             placeholder="Defaults to customer address"
@@ -384,7 +398,7 @@ export default function DirectDeliveryModal({
                 onChange={(v) => setPaymentMethod(v ?? 'cash')}
               />
               <div className="sm:col-span-2">
-                <DualDateInput
+                <NepaliDateField
                   label="Payment date"
                   value={paymentDate}
                   onChange={setPaymentDate}

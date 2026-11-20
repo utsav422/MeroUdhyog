@@ -19,7 +19,7 @@ import { formatMoney } from '@/lib/format';
 import { PAYMENT_METHODS } from '../constants';
 import { useRecordPayment } from '../api';
 import type { KhataOrder } from '../api';
-import DualDateInput from './DualDateInput';
+import NepaliDateField from './NepaliDateField';
 
 type AllocationRow = { order_id: string; amount: string };
 
@@ -162,7 +162,7 @@ export default function RecordPaymentModal({
   };
 
   return (
-    <Modal opened={opened} onClose={close} title="Record payment" size="lg" centered>
+    <Modal opened={opened} onClose={close} title="Record payment" size="min(960px, 96vw)" centered>
       <Stack gap="md">
         {error && (
           <div className="rounded-xl bg-danger-50 px-4 py-2.5 text-sm font-medium text-danger-700">
@@ -197,19 +197,19 @@ export default function RecordPaymentModal({
             onChange={(e) => setPayerBillNo(e.currentTarget.value)}
             maxLength={40}
           />
-          <div className="sm:col-span-2">
-            <DualDateInput
-              label="Collection date"
-              value={collectedDate}
-              onChange={setCollectedDate}
-            />
-          </div>
           <div className="flex items-end">
             <Checkbox
               label="Generate a printable receipt"
               checked={generateReceipt}
               onChange={(e) => setGenerateReceipt(e.currentTarget.checked)}
               mb={4}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <NepaliDateField
+              label="Collection date"
+              value={collectedDate}
+              onChange={setCollectedDate}
             />
           </div>
         </div>
