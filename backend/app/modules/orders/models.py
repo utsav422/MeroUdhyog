@@ -70,6 +70,11 @@ class Order(Base):
     )
     reorder_attempt: Mapped[int | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="draft")
+    # How the order entered the system: the normal order workflow, or a
+    # direct/backdated delivery recorded from a customer's khata.
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'order'")
+    )
     payment_status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="unpaid")
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), nullable=False, server_default=text("0")

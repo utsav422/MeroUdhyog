@@ -87,10 +87,15 @@ class OrderRepository:
         await self.session.flush()
 
     async def next_order_ref(self) -> str:
+        # Order by the ref itself, not created_at: a backdated khata delivery
+        # must never reuse the number of an order created later.
         result = await self.session.execute(
             select(Order.order_ref)
-            .where(Order.tenant_id == self.tenant_id)
-            .order_by(Order.created_at.desc())
+            .where(
+                Order.tenant_id == self.tenant_id,
+                Order.order_ref.like("ORD-%"),
+            )
+            .order_by(Order.order_ref.desc())
             .limit(1)
         )
         last = result.scalar_one_or_none()

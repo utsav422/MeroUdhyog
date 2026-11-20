@@ -62,6 +62,7 @@ class OrderRead(BaseModel):
     route_id: UUID | None
     route_name: str | None = None
     status: str
+    source: str = "order"
     payment_status: str
     total_amount: Decimal
     amount_paid: Decimal

@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from datetime import datetime
 
 import pytest
 from sqlalchemy import select
@@ -110,7 +111,15 @@ async def _deliver_order(order_id):
         await session.commit()
 
 
-async def _pay(client, customer_id, amount, method="cash", allocations=None, generate_receipt=True, payer_bill_no=None):
+async def _pay(
+    client,
+    customer_id,
+    amount,
+    method="cash",
+    allocations=None,
+    generate_receipt=True,
+    payer_bill_no=None,
+):
     payload = {
         "customer_id": customer_id,
         "amount": amount,
@@ -533,3 +542,94 @@ async def test_customer_ledger_credit_when_paid_ahead(client):
     assert len(detail["ledger"]) == 3  # 2 invoices + 2 payments, of which one is voided
     assert detail["ledger"][-1]["balance"] == detail["outstanding"]
     assert detail["ledger"][-1]["balance_side"] == "cr"
+
+
+@pytest.mark.asyncio
+async def test_direct_delivery_is_fully_integrated(client):
+    from app.core.database import get_session
+    from app.modules.deliveries.models import Delivery
+    from app.modules.products.models import ProductVariant
+    from app.modules.transactions.models import Transaction
+
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "Chutney")
+    customer = await _create_customer(client)
+    variant_id = product["variants"][0]["id"]
+
+    payload = {
+        "items": [
+            {
+                "product_id": product["id"],
+                "variant_id": variant_id,
+                "quantity": 2,
+                "unit_price": "12.50",
+            }
+        ],
+        "notes": "Old delivery entered from khata",
+        "entered_at": "2026-10-05T09:00:00Z",
+        "delivered_at": "2026-09-20T14:30:00Z",
+        "payment": {
+            "amount": "15.00",
+            "method": "cash",
+            "collected_at": "2026-09-22T10:00:00Z",
+            "generate_receipt": True,
+        },
+    }
+    r = await client.post(
+        f"/api/v1/khata/customers/{customer['id']}/delivered-orders", json=payload
+    )
+    assert r.status_code == 201, r.text
+    result = r.json()
+    assert result["source"] == "khata_direct"
+    assert result["order_status"] == "delivered"
+    assert result["total_amount"] == "25.00"
+    assert result["amount_paid"] == "15.00"
+    assert result["payment_status"] == "partial"
+    assert result["payment"]["receipt_number"] == "RCT-1"
+    assert result["delivered_at"] == "2026-09-20T14:30:00Z"
+
+    order_id = result["order_id"]
+
+    r = await client.get("/api/v1/khata/customers")
+    row = _customer_summary(r.json(), customer["id"])
+    assert row["total_billed"] == "25.00"
+    assert row["total_paid"] == "15.00"
+    assert row["outstanding"] == "10.00"
+
+    r = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    detail = r.json()
+    khata_order = next(o for o in detail["orders"] if o["order_id"] == order_id)
+    assert khata_order["source"] == "khata_direct"
+    assert datetime.fromisoformat(
+        khata_order["delivered_at"].replace("Z", "+00:00")
+    ) == datetime.fromisoformat(result["delivered_at"].replace("Z", "+00:00"))
+    assert [row["entry_type"] for row in detail["ledger"]] == ["invoice", "payment"]
+
+    r = await client.get(f"/api/v1/orders/{order_id}")
+    assert r.status_code == 200
+    assert r.json()["source"] == "khata_direct"
+    assert r.json()["status"] == "delivered"
+
+    async with get_session() as session:
+        delivery = (
+            await session.execute(select(Delivery).where(Delivery.order_id == order_id))
+        ).scalar_one()
+        assert delivery.status == "delivered"
+        assert delivery.delivered_at is not None
+
+        variant = (
+            await session.execute(
+                select(ProductVariant).where(ProductVariant.id == variant_id)
+            )
+        ).scalar_one()
+        assert variant.stock_quantity == 98
+
+        sale = (
+            await session.execute(
+                select(Transaction).where(
+                    Transaction.external_id == f"khata-direct-sale:{order_id}"
+                )
+            )
+        ).scalar_one()
+        assert sale.type == "sale"
+        assert sale.amount == 25

@@ -17,12 +17,15 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 
 from app.modules.accounting.posting import PostingService
+from app.modules.customer_prices.service import resolve_price
 from app.modules.customers.credit import (
     credit_available,
     credit_used_for,
     credit_used_map,
     credit_utilization,
+    exceeds_limit,
 )
+from app.modules.deliveries.models import Delivery
 from app.modules.khata import pdf
 from app.modules.khata.layout import default_layout, normalize_layout
 from app.modules.khata.models import BillLayout, BillTemplate, LedgerEntry
@@ -35,6 +38,8 @@ from app.modules.khata.schemas import (
     BillTemplateRead,
     BillTemplateUpdate,
     CustomerKhataDetail,
+    DirectDeliveryInput,
+    DirectDeliveryResult,
     ImageAsset,
     InvoiceItemRead,
     InvoiceRead,
@@ -49,7 +54,11 @@ from app.modules.khata.schemas import (
     RecordPaymentInput,
     SetBillLayoutDefaultInput,
 )
-from app.modules.orders.models import Order
+from app.modules.orders.models import Order, OrderItem
+from app.modules.orders.repository import OrderRepository
+from app.modules.products.models import Product, ProductVariant
+from app.modules.products.stock import StockChange, apply_stock_changes
+from app.modules.transactions.models import Transaction
 from app.modules.users.models import User
 from app.shared.exceptions import ConflictError, ForbiddenError, NotFoundError, ValidationError
 
@@ -60,6 +69,10 @@ ALLOWED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 
 def _q2(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.01"))
+
+
+def _utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 class KhataService:
@@ -109,7 +122,9 @@ class KhataService:
         customer = await self.repo.get_customer(customer_id)
         orders = await self.repo.list_billable_orders(customer_id)
         payments = await self.repo.list_payments(customer_id)
-        invoice_numbers = await self.repo.invoice_numbers_by_order([o.id for o in orders])
+        order_ids = [o.id for o in orders]
+        invoice_numbers = await self.repo.invoice_numbers_by_order(order_ids)
+        delivery_dates = await self.repo.delivered_at_by_order(order_ids)
         total_billed = sum(((o.total_amount or ZERO) for o in orders), ZERO)
         total_paid = sum((p.amount for p in payments if p.status == "active"), ZERO)
 
@@ -119,6 +134,8 @@ class KhataService:
                 order_ref=o.order_ref,
                 created_at=o.created_at,
                 status=o.status,
+                source=o.source,
+                delivered_at=delivery_dates.get(o.id),
                 total_amount=o.total_amount,
                 amount_paid=o.amount_paid,
                 payment_status=o.payment_status,
@@ -145,7 +162,7 @@ class KhataService:
             credit_utilization=credit_utilization(customer.credit_limit, used),
             orders=order_reads,
             payments=payment_reads,
-            ledger=self._build_ledger(orders, payments, invoice_numbers),
+            ledger=self._build_ledger(orders, payments, invoice_numbers, delivery_dates),
         )
 
     def _build_ledger(
@@ -153,6 +170,7 @@ class KhataService:
         orders: list[Order],
         payments: list[LedgerEntry],
         invoice_numbers: dict,
+        delivery_dates: dict | None = None,
     ) -> list[LedgerEntryRead]:
         """Chronological debit/credit ledger for the customer's account.
 
@@ -166,7 +184,7 @@ class KhataService:
         for o in orders:
             rows.append(
                 {
-                    "date": o.created_at,
+                    "date": (delivery_dates or {}).get(o.id) or o.created_at,
                     "entry_type": "invoice",
                     "order_id": o.id,
                     "order_ref": o.order_ref,
@@ -484,6 +502,218 @@ class KhataService:
         # Rebuild with fully-loaded relationships for the response.
         fresh = await self.repo.get_entry(entry.id)
         return self._payment_read(fresh)
+
+    async def record_direct_delivery(
+        self, customer_id: UUID, data: DirectDeliveryInput
+    ) -> DirectDeliveryResult:
+        """Record a direct/backdated delivery from the customer's khata.
+
+        One transaction writes the delivered order, its delivery record, the
+        stock issue, the sale transaction + journal entry, and — when supplied —
+        a khata receipt allocated to that order. The customer comes from the
+        khata page, so no payload can move the entry to another account.
+        """
+        customer = await self.repo.get_customer(customer_id)
+        payment = data.payment
+        if payment is not None:
+            if payment.amount <= 0:
+                raise ValidationError("Payment amount must be greater than zero")
+            if payment.method not in VALID_METHODS:
+                raise ValidationError(
+                    f"method must be one of: {', '.join(sorted(VALID_METHODS))}"
+                )
+            if payment.note and len(payment.note) > 500:
+                raise ValidationError("Note is too long (max 500 characters)")
+
+        entered_at = _utc(data.entered_at or datetime.now(UTC))
+        delivered_at = _utc(data.delivered_at)
+
+        products = (
+            await self.session.execute(
+                select(Product).where(
+                    Product.tenant_id == self.tenant_id,
+                    Product.id.in_([item.product_id for item in data.items]),
+                )
+            )
+        ).scalars().all()
+        product_map = {p.id: p for p in products}
+        if len(product_map) != len({item.product_id for item in data.items}):
+            raise ValidationError("A product on this delivery was not found")
+
+        variants = (
+            await self.session.execute(
+                select(ProductVariant).where(
+                    ProductVariant.tenant_id == self.tenant_id,
+                    ProductVariant.id.in_([item.variant_id for item in data.items]),
+                )
+            )
+        ).scalars().all()
+        variant_map = {v.id: v for v in variants}
+        if len(variant_map) != len({item.variant_id for item in data.items}):
+            raise ValidationError("A product variant on this delivery was not found")
+
+        total = ZERO
+        items: list[OrderItem] = []
+        stock_changes: list[StockChange] = []
+        for item in data.items:
+            product = product_map[item.product_id]
+            variant = variant_map[item.variant_id]
+            if variant.product_id != product.id:
+                raise ValidationError(
+                    f"Variant {variant.name} does not belong to {product.name}"
+                )
+            if item.quantity != item.quantity.to_integral_value():
+                raise ValidationError("Line quantities must be whole numbers")
+            if item.unit_price is not None:
+                unit_price = _q2(item.unit_price)
+            else:
+                unit_price, _currency = await resolve_price(
+                    self.session, self.tenant_id, customer.id, variant.id
+                )
+            amount = _q2(item.quantity * unit_price)
+            total += amount
+            items.append(
+                OrderItem(
+                    tenant_id=self.tenant_id,
+                    product_id=product.id,
+                    variant_id=variant.id,
+                    product_name=product.name,
+                    variant_name=variant.name,
+                    unit=variant.unit,
+                    quantity=item.quantity,
+                    unit_price=unit_price,
+                    amount=amount,
+                )
+            )
+            stock_changes.append(
+                StockChange(
+                    variant_id=variant.id,
+                    product_id=product.id,
+                    product_name=product.name,
+                    variant_name=variant.name,
+                    delta=-int(item.quantity),
+                )
+            )
+        total = _q2(total)
+
+        if not data.override_credit_limit and customer.credit_limit is not None:
+            used = await credit_used_for(self.session, self.tenant_id, customer.id)
+            settled_now = payment.amount if payment is not None else ZERO
+            if exceeds_limit(customer.credit_limit, used, total - settled_now):
+                raise ConflictError(
+                    f"This delivery takes {customer.name} past their credit limit of "
+                    f"{customer.credit_limit:.2f}. Re-send with "
+                    "override_credit_limit=true to proceed anyway."
+                )
+
+        order = Order(
+            tenant_id=self.tenant_id,
+            order_ref=await OrderRepository(self.session, self.tenant_id).next_order_ref(),
+            customer_id=customer.id,
+            route_id=customer.route_id,
+            delivery_address=data.delivery_address or customer.address,
+            delivery_lat=customer.latitude,
+            delivery_lng=customer.longitude,
+            notes=data.notes,
+            created_by=self.user_id,
+            status="delivered",
+            source="khata_direct",
+            payment_status="unpaid",
+            total_amount=total,
+            amount_paid=ZERO,
+            created_at=entered_at,
+            updated_at=entered_at,
+        )
+        self.session.add(order)
+        await self.session.flush()
+        for item in items:
+            item.order_id = order.id
+            self.session.add(item)
+        await apply_stock_changes(
+            self.session,
+            self.tenant_id,
+            stock_changes,
+            reason="order",
+            order_id=order.id,
+        )
+        await self.session.flush()
+
+        delivery = Delivery(
+            tenant_id=self.tenant_id,
+            order_id=order.id,
+            route_id=order.route_id,
+            delivery_agent_id=data.delivery_agent_id,
+            status="delivered",
+            assigned_at=delivered_at if data.delivery_agent_id else None,
+            picked_up_at=delivered_at if data.delivery_agent_id else None,
+            delivered_at=delivered_at,
+            proof_notes=data.notes,
+            created_at=entered_at,
+            updated_at=entered_at,
+        )
+        self.session.add(delivery)
+        await self.session.flush()
+
+        sale = Transaction(
+            tenant_id=self.tenant_id,
+            type="sale",
+            transaction_date=delivered_at,
+            external_id=f"khata-direct-sale:{order.id}",
+            amount=total,
+            currency="NPR",
+            description=f"Direct delivery · order {order.order_ref}",
+            customer_id=customer.id,
+            metadata_={"order_id": str(order.id), "source": "khata_direct"},
+        )
+        self.session.add(sale)
+        await self.session.flush()
+        await PostingService(self.session, self.tenant_id, self.user_id).post_transaction(sale)
+        await self._recalculate_finance(delivered_at)
+
+        entry: LedgerEntry | None = None
+        if payment is not None:
+            template = await self.repo.get_template_or_create()
+            receipt_number: str | None = None
+            if payment.generate_receipt:
+                receipt_number = f"{template.receipt_number_prefix}{template.next_receipt_number}"
+                template.next_receipt_number += 1
+            entry = LedgerEntry(
+                tenant_id=self.tenant_id,
+                customer_id=customer.id,
+                amount=_q2(payment.amount),
+                method=payment.method,
+                collected_by=self.user_id,
+                collected_at=_utc(payment.collected_at or datetime.now(UTC)),
+                note=payment.note,
+                payer_bill_no=payment.payer_bill_no,
+                receipt_number=receipt_number,
+                receipt_snapshot=template.snapshot() if payment.generate_receipt else None,
+                status="active",
+            )
+            self.session.add(entry)
+            await self.session.flush()
+            await self.repo.add_allocation(entry.id, order.id, _q2(payment.amount))
+            order.amount_paid = min(_q2(payment.amount), total)
+            self._recompute_payment_status(order)
+            await self.session.flush()
+            await self._post_receipt_to_ledger(entry)
+            await self._notify_payment(customer.id, payment.amount, [(order, payment.amount)])
+
+        payment_read = None
+        if entry is not None:
+            payment_read = self._payment_read(await self.repo.get_entry(entry.id))
+        return DirectDeliveryResult(
+            order_id=order.id,
+            order_ref=order.order_ref,
+            order_status=order.status,
+            source=order.source,
+            total_amount=total,
+            amount_paid=order.amount_paid,
+            payment_status=order.payment_status,
+            delivery_id=delivery.id,
+            delivered_at=delivered_at,
+            payment=payment_read,
+        )
 
     def _allocate(
         self, orders: list[Order], data: RecordPaymentInput

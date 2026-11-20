@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.customers.models import Customer
+from app.modules.deliveries.models import Delivery
 from app.modules.khata.models import (
     BillLayout,
     BillTemplate,
@@ -112,6 +113,19 @@ class KhataRepository:
             .order_by(Order.created_at.asc())
         )
         return list(result.scalars().all())
+
+    async def delivered_at_by_order(self, order_ids: list[UUID]) -> dict[UUID, object]:
+        """Actual hand-over timestamp per delivered order (for the khata list)."""
+        if not order_ids:
+            return {}
+        result = await self.session.execute(
+            select(Delivery.order_id, Delivery.delivered_at).where(
+                Delivery.tenant_id == self.tenant_id,
+                Delivery.order_id.in_(order_ids),
+                Delivery.status == "delivered",
+            )
+        )
+        return dict(result.all())
 
     async def get_order(self, order_id: UUID) -> Order:
         result = await self.session.execute(

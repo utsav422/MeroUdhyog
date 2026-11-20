@@ -2,7 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { accountingKeys } from '../accounting/api';
+import { customersKeys } from '../customers/api';
+import { deliveriesKeys } from '../deliveries/api';
+import { financeKeys } from '../finance/api';
 import { ordersKeys } from '../orders/api';
+import { inventoryKeys, productsKeys } from '../products/api';
 
 export type KhataCustomerSummary = {
   customer_id: string;
@@ -28,6 +33,8 @@ export type KhataOrder = {
   order_ref: string;
   created_at: string;
   status: string;
+  source: string;
+  delivered_at: string | null;
   total_amount: string;
   amount_paid: string;
   payment_status: string;
@@ -102,6 +109,44 @@ export type RecordPaymentInput = {
   payer_bill_no?: string | null;
   allocations?: { order_id: string; amount: string }[] | null;
   generate_receipt?: boolean;
+};
+
+export type DirectDeliveryItemInput = {
+  product_id: string;
+  variant_id: string;
+  quantity: number;
+  unit_price?: string | null;
+};
+
+export type DirectDeliveryInput = {
+  items: DirectDeliveryItemInput[];
+  delivery_address?: string | null;
+  notes?: string | null;
+  delivery_agent_id?: string | null;
+  entered_at?: string | null;
+  delivered_at: string;
+  override_credit_limit?: boolean;
+  payment?: {
+    amount: string;
+    method: string;
+    collected_at?: string | null;
+    note?: string | null;
+    payer_bill_no?: string | null;
+    generate_receipt?: boolean;
+  } | null;
+};
+
+export type DirectDeliveryResult = {
+  order_id: string;
+  order_ref: string;
+  order_status: string;
+  source: string;
+  total_amount: string;
+  amount_paid: string;
+  payment_status: string;
+  delivery_id: string;
+  delivered_at: string;
+  payment: Payment | null;
 };
 
 export type Receipt = {
@@ -258,6 +303,27 @@ export function useRecordPayment() {
       qc.invalidateQueries({ queryKey: khataKeys.all });
       qc.invalidateQueries({ queryKey: ordersKeys.all });
       void variables;
+    },
+  });
+}
+
+export function useCreateDirectDelivery() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ customerId, input }: { customerId: string; input: DirectDeliveryInput }) =>
+      apiClient.post<DirectDeliveryResult>(
+        `/khata/customers/${customerId}/delivered-orders`,
+        input,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: khataKeys.all });
+      qc.invalidateQueries({ queryKey: ordersKeys.all });
+      qc.invalidateQueries({ queryKey: deliveriesKeys.all });
+      qc.invalidateQueries({ queryKey: productsKeys.all });
+      qc.invalidateQueries({ queryKey: inventoryKeys.all });
+      qc.invalidateQueries({ queryKey: accountingKeys.all });
+      qc.invalidateQueries({ queryKey: financeKeys.all });
+      qc.invalidateQueries({ queryKey: customersKeys.all });
     },
   });
 }

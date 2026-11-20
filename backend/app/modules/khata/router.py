@@ -13,6 +13,8 @@ from app.modules.khata.schemas import (
     BillTemplateRead,
     BillTemplateUpdate,
     CustomerKhataDetail,
+    DirectDeliveryInput,
+    DirectDeliveryResult,
     InvoiceRead,
     KhataCustomerSummary,
     PaymentListRead,
@@ -50,6 +52,29 @@ async def customer_khata(
 ):
     service = await _service(db, tenant_id)
     return await service.customer_detail(customer_id)
+
+
+@router.post(
+    "/customers/{customer_id}/delivered-orders",
+    response_model=DirectDeliveryResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def record_direct_delivery(
+    customer_id: UUID,
+    data: DirectDeliveryInput,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
+    _=Depends(require_permission(Permissions.MANAGE_KHATA)),
+):
+    """Record a direct/backdated delivery (and optional payment) in the khata.
+
+    Creates a real delivered order + delivery + stock issue + sale posting so
+    the entry shows up in orders, deliveries, inventory, accounting and the
+    customer's running ledger.
+    """
+    service = await _service(db, tenant_id, user_id)
+    return await service.record_direct_delivery(customer_id, data)
 
 
 @router.get("/payments", response_model=PaymentListRead)

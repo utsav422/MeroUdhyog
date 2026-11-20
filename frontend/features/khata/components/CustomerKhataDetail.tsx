@@ -14,11 +14,12 @@ import {
   FilePdf,
   HandCoins,
   Receipt,
+  Truck,
   XCircle,
 } from '@phosphor-icons/react';
 import { CreditLimitBar, EmptyState, ErrorState, LoadingState, PageHeader, ResponsiveTable, StatusBadge } from '@/components/shared';
 import { useSession } from '@/lib/providers';
-import { formatDateTime, formatMoney } from '@/lib/format';
+import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
 import { paymentMethodLabel } from '../constants';
 import {
   downloadReceiptPdf,
@@ -27,6 +28,7 @@ import {
 } from '../api';
 import type { Payment } from '../api';
 import RecordPaymentModal from './RecordPaymentModal';
+import DirectDeliveryModal from './DirectDeliveryModal';
 import LedgerTable from './LedgerTable';
 import PdfPreviewModal from './PdfPreviewModal';
 
@@ -77,6 +79,7 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
   const detailQuery = useCustomerKhata(customerId);
   const voidPayment = useVoidPayment();
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [directDeliveryOpen, setDirectDeliveryOpen] = useState(false);
   const [invoicePreview, setInvoicePreview] = useState<{
     orderId: string;
     orderRef: string;
@@ -136,12 +139,21 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
             'Customer ledger'
           }
           actions={
-            <Button
-              leftSection={<HandCoins size={16} weight="bold" />}
-              onClick={() => setPaymentOpen(true)}
-            >
-              Record payment
-            </Button>
+            <Group gap="sm">
+              <Button
+                variant="light"
+                leftSection={<Truck size={16} weight="bold" />}
+                onClick={() => setDirectDeliveryOpen(true)}
+              >
+                Add past delivery
+              </Button>
+              <Button
+                leftSection={<HandCoins size={16} weight="bold" />}
+                onClick={() => setPaymentOpen(true)}
+              >
+                Record payment
+              </Button>
+            </Group>
           }
         />
       </div>
@@ -211,6 +223,7 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
             <Table.Thead>
               <Table.Tr className="text-zinc-400">
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Order</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Delivered</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Status</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Total</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider" ta="right">Paid</Table.Th>
@@ -232,6 +245,16 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
                       >
                         {o.order_ref}
                       </button>
+                    </Table.Td>
+                    <Table.Td>
+                      <div className="flex flex-col gap-1">
+                        <Text size="xs" className="text-zinc-600">
+                          {o.delivered_at ? formatDate(o.delivered_at) : formatDate(o.created_at)}
+                        </Text>
+                        {o.source === 'khata_direct' && (
+                          <Text size="xs" fw={600} className="text-brand-700">Direct</Text>
+                        )}
+                      </div>
                     </Table.Td>
                     <Table.Td>
                       <StatusBadge status={o.status} />
@@ -357,6 +380,16 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         onClose={() => setPaymentOpen(false)}
         customerId={detail.customer_id}
         orders={detail.orders}
+      />
+
+      <DirectDeliveryModal
+        opened={directDeliveryOpen}
+        onClose={() => setDirectDeliveryOpen(false)}
+        customerId={detail.customer_id}
+        customerName={detail.customer_name}
+        creditLimit={detail.credit_limit}
+        creditAvailable={detail.credit_available}
+        onRecorded={() => void detailQuery.refetch()}
       />
 
       <PdfPreviewModal

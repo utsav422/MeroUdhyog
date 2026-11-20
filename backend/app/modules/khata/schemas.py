@@ -26,6 +26,8 @@ class KhataOrderRead(BaseModel):
     order_ref: str
     created_at: datetime
     status: str
+    source: str = "order"
+    delivered_at: datetime | None = None
     total_amount: Decimal
     amount_paid: Decimal
     payment_status: str
@@ -168,6 +170,71 @@ class RecordPaymentInput(BaseModel):
 
 class VoidPaymentInput(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
+
+
+class DirectDeliveryItemInput(BaseModel):
+    """One line of a delivered order recorded directly from the khata."""
+
+    product_id: UUID
+    variant_id: UUID
+    quantity: Decimal = Field(gt=0, decimal_places=4)
+    # Optional historical selling rate. When omitted the customer/variant price
+    # list resolves it, exactly like a normal order.
+    unit_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+
+
+class DirectDeliveryPaymentInput(BaseModel):
+    """Optional payment collected together with a direct delivered order.
+
+    Reuses the same ledger entry/receipt/accounting flow as a standalone
+    khata payment — the only difference is that it is allocated to the order
+    created by this request.
+    """
+
+    amount: Decimal = Field(gt=0, decimal_places=2)
+    method: str = Field(min_length=1, max_length=20)
+    collected_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=500)
+    payer_bill_no: str | None = Field(default=None, max_length=40)
+    generate_receipt: bool = True
+
+    def validate_method(self) -> None:
+        if self.method not in VALID_METHODS:
+            raise ValueError(f"method must be one of: {', '.join(sorted(VALID_METHODS))}")
+
+
+class DirectDeliveryInput(BaseModel):
+    """Everything needed to record an old/direct delivery in the khata.
+
+    The customer is taken from the khata page (path parameter), never from the
+    payload, so a delivery can never be posted to another customer's account.
+    """
+
+    # When the record is being entered (defaults to now). Distinct from the
+    # delivery date, which drives the sale/ledger posting date.
+    entered_at: datetime | None = None
+    delivered_at: datetime
+    notes: str | None = Field(default=None, max_length=500)
+    delivery_address: str | None = Field(default=None, max_length=500)
+    delivery_agent_id: UUID | None = None
+    items: list[DirectDeliveryItemInput] = Field(min_length=1, max_length=100)
+    payment: DirectDeliveryPaymentInput | None = None
+    override_credit_limit: bool = False
+
+
+class DirectDeliveryResult(BaseModel):
+    """The delivered order (and optional payment) created by one atomic write."""
+
+    order_id: UUID
+    order_ref: str
+    order_status: str
+    source: str
+    total_amount: Decimal
+    amount_paid: Decimal
+    payment_status: str
+    delivery_id: UUID
+    delivered_at: datetime
+    payment: PaymentRead | None = None
 
 
 class ImageAsset(BaseModel):
