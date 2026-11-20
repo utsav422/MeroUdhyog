@@ -110,6 +110,7 @@ class TenantAdmin(SqlAlchemyModelAdmin):
 
 class UserAdmin(TenantScopedAdminMixin, SqlAlchemyModelAdmin):
     menu_section = "Accounts"
+    exclude = ("avatar_data",)
     list_display = (
         "email", "full_name", "role", "status", "is_active", "last_login_at",
         "tenant", "tenant_name",

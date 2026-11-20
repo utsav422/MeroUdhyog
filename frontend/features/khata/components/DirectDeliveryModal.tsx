@@ -19,14 +19,18 @@ import { Plus, Trash } from '@phosphor-icons/react';
 import { formatMoney } from '@/lib/format';
 import { PAYMENT_METHODS } from '../constants';
 import { useCreateDirectDelivery } from '../api';
+import { useCustomerPrices } from '../../customers/api';
+import type { CustomerPrice } from '../../customers/api';
 import { defaultVariantPrice, useProducts } from '../../products/api';
 import type { Variant } from '../../products/api';
+import DualDateInput from './DualDateInput';
 
 type Line = {
   product_id: string;
   variant_id: string;
   quantity: number;
   unit_price: string;
+  priceEdited?: boolean;
 };
 
 function localDateTimeValue(date = new Date()) {
@@ -44,6 +48,15 @@ function toIso(value: string) {
 
 function dateToIso(value: string) {
   return new Date(`${value}T12:00:00`).toISOString();
+}
+
+function effectivePrice(variant: Variant, override?: CustomerPrice) {
+  return override?.price ?? defaultVariantPrice(variant);
+}
+
+function lineUnitPrice(line: Line, prices: CustomerPrice[] | undefined) {
+  if (line.priceEdited || !line.variant_id || !prices) return line.unit_price;
+  return prices.find((price) => price.variant_id === line.variant_id)?.price ?? line.unit_price;
 }
 
 export default function DirectDeliveryModal({
@@ -64,9 +77,12 @@ export default function DirectDeliveryModal({
   onRecorded?: () => void;
 }) {
   const productsQuery = useProducts(opened);
+  const customerPricesQuery = useCustomerPrices(opened ? customerId : null, opened);
   const createDelivery = useCreateDirectDelivery();
 
-  const [lines, setLines] = useState<Line[]>([{ product_id: '', variant_id: '', quantity: 1, unit_price: '0' }]);
+  const [lines, setLines] = useState<Line[]>([
+    { product_id: '', variant_id: '', quantity: 1, unit_price: '0', priceEdited: false },
+  ]);
   const [enteredAt, setEnteredAt] = useState(localDateTimeValue());
   const [deliveredDate, setDeliveredDate] = useState(localDateValue());
   const [address, setAddress] = useState('');
@@ -96,13 +112,19 @@ export default function DirectDeliveryModal({
     return options;
   }, [productsQuery.data]);
 
+  const customerPrices = customerPricesQuery.data;
+
   const total = useMemo(
-    () => lines.reduce((sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0), 0),
-    [lines],
+    () =>
+      lines.reduce(
+        (sum, line) => sum + (Number(line.quantity) || 0) * (Number(lineUnitPrice(line, customerPrices)) || 0),
+        0,
+      ),
+    [lines, customerPrices],
   );
 
   const reset = () => {
-    setLines([{ product_id: '', variant_id: '', quantity: 1, unit_price: '0' }]);
+    setLines([{ product_id: '', variant_id: '', quantity: 1, unit_price: '0', priceEdited: false }]);
     setEnteredAt(localDateTimeValue());
     setDeliveredDate(localDateValue());
     setAddress('');
@@ -133,7 +155,11 @@ export default function DirectDeliveryModal({
     updateLine(index, {
       variant_id: variantId,
       product_id: option.product_id,
-      unit_price: defaultVariantPrice(option.data),
+      unit_price: effectivePrice(
+        option.data,
+        customerPrices?.find((price) => price.variant_id === variantId),
+      ),
+      priceEdited: false,
     });
   };
 
@@ -160,11 +186,11 @@ export default function DirectDeliveryModal({
             product_id: line.product_id,
             variant_id: line.variant_id,
             quantity: Number(line.quantity),
-            unit_price: line.unit_price,
+            unit_price: lineUnitPrice(line, customerPrices),
           })),
           delivery_address: address.trim() || null,
           notes: notes.trim() || null,
-          entered_at: enteredAt ? toIso(enteredAt) : null,
+          entered_at: enteredAt.length === 16 ? toIso(enteredAt) : null,
           delivered_at: dateToIso(deliveredDate),
           override_credit_limit: overrideCreditLimit,
           payment: includePayment
@@ -194,6 +220,9 @@ export default function DirectDeliveryModal({
     );
   };
 
+  const enteredDate = enteredAt.slice(0, 10);
+  const enteredTime = enteredAt.slice(11, 16) || '09:00';
+
   return (
     <Modal opened={opened} onClose={close} title={`Add past delivery · ${customerName}`} size="xl" centered>
       <Stack gap="md">
@@ -203,19 +232,23 @@ export default function DirectDeliveryModal({
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <TextInput
-            label="Recorded / entered at"
-            type="datetime-local"
-            value={enteredAt}
-            onChange={(e) => setEnteredAt(e.currentTarget.value)}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <DualDateInput
+            label="Recorded on"
+            value={enteredDate}
+            onChange={(date) => setEnteredAt(date ? `${date}T${enteredTime}` : '')}
           />
           <TextInput
+            label="Recorded time"
+            type="time"
+            value={enteredTime}
+            onChange={(e) => enteredDate && setEnteredAt(`${enteredDate}T${e.currentTarget.value}`)}
+          />
+          <DualDateInput
             label="Delivered on"
-            type="date"
             required
             value={deliveredDate}
-            onChange={(e) => setDeliveredDate(e.currentTarget.value)}
+            onChange={setDeliveredDate}
           />
           <TextInput
             label="Delivery address"
@@ -230,7 +263,7 @@ export default function DirectDeliveryModal({
             <div>
               <Text size="sm" fw={600} className="text-zinc-700">Delivered items</Text>
               <Text size="xs" c="dimmed">
-                Enter the price charged at the time. Current stock is not capped — this is a past delivery.
+                Customer-specific price is used when set, otherwise the default price. Current stock is not capped.
               </Text>
             </div>
             <Button
@@ -238,7 +271,10 @@ export default function DirectDeliveryModal({
               size="xs"
               leftSection={<Plus size={14} />}
               onClick={() =>
-                setLines((prev) => [...prev, { product_id: '', variant_id: '', quantity: 1, unit_price: '0' }])
+                setLines((prev) => [
+                  ...prev,
+                  { product_id: '', variant_id: '', quantity: 1, unit_price: '0', priceEdited: false },
+                ])
               }
             >
               Add item
@@ -282,13 +318,17 @@ export default function DirectDeliveryModal({
                       <input
                         type="number"
                         step="0.01"
-                        value={line.unit_price}
-                        onChange={(e) => updateLine(index, { unit_price: e.currentTarget.value })}
+                        value={lineUnitPrice(line, customerPrices)}
+                        onChange={(e) =>
+                          updateLine(index, { unit_price: e.currentTarget.value, priceEdited: true })
+                        }
                         className="h-8 w-24 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-right text-sm outline-none focus:border-brand-400 focus:bg-white"
                       />
                     </Table.Td>
                     <Table.Td ta="right" fw={600} className="text-zinc-800">
-                      {formatMoney(((Number(line.quantity) || 0) * (Number(line.unit_price) || 0)).toString())}
+                      {formatMoney(
+                        ((Number(line.quantity) || 0) * (Number(lineUnitPrice(line, customerPrices)) || 0)).toString(),
+                      )}
                     </Table.Td>
                     <Table.Td>
                       <button
@@ -343,12 +383,13 @@ export default function DirectDeliveryModal({
                 value={paymentMethod}
                 onChange={(v) => setPaymentMethod(v ?? 'cash')}
               />
-              <TextInput
-                label="Payment date"
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.currentTarget.value)}
-              />
+              <div className="sm:col-span-2">
+                <DualDateInput
+                  label="Payment date"
+                  value={paymentDate}
+                  onChange={setPaymentDate}
+                />
+              </div>
               <TextInput
                 label="Money recipient bill no."
                 placeholder="Optional voucher number"

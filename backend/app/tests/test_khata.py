@@ -633,3 +633,52 @@ async def test_direct_delivery_is_fully_integrated(client):
         ).scalar_one()
         assert sale.type == "sale"
         assert sale.amount == 25
+
+
+@pytest.mark.asyncio
+async def test_direct_delivery_uses_customer_price_without_rewriting_history(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "History")
+    customer = await _create_customer(client)
+    variant_id = product["variants"][0]["id"]
+    price_url = f"/api/v1/customers/{customer['id']}/prices"
+
+    r = await client.post(
+        price_url,
+        json={"variant_id": variant_id, "price": "12.00"},
+    )
+    assert r.status_code == 201, r.text
+
+    payload = {
+        "items": [{"product_id": product["id"], "variant_id": variant_id, "quantity": 2}],
+        "notes": "Customer-specific price",
+        "delivered_at": "2026-10-01T12:00:00Z",
+    }
+    r = await client.post(
+        f"/api/v1/khata/customers/{customer['id']}/delivered-orders", json=payload
+    )
+    assert r.status_code == 201, r.text
+    first = r.json()
+    assert first["total_amount"] == "24.00"
+
+    r = await client.patch(
+        f"{price_url}/{variant_id}",
+        json={"price": "15.00"},
+    )
+    assert r.status_code == 200, r.text
+
+    r = await client.post(
+        f"/api/v1/khata/customers/{customer['id']}/delivered-orders", json=payload
+    )
+    assert r.status_code == 201, r.text
+    second = r.json()
+    assert second["total_amount"] == "30.00"
+
+    r = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    invoices = [entry for entry in r.json()["ledger"] if entry["entry_type"] == "invoice"]
+    assert sorted(entry["debit"] for entry in invoices) == ["24.00", "30.00"]
+
+    r = await client.get(f"/api/v1/orders/{first['order_id']}")
+    assert r.json()["items"][0]["unit_price"] == "12.00"
+    r = await client.get(f"/api/v1/orders/{second['order_id']}")
+    assert r.json()["items"][0]["unit_price"] == "15.00"

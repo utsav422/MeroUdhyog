@@ -19,6 +19,7 @@ import { formatMoney } from '@/lib/format';
 import { PAYMENT_METHODS } from '../constants';
 import { useRecordPayment } from '../api';
 import type { KhataOrder } from '../api';
+import DualDateInput from './DualDateInput';
 
 type AllocationRow = { order_id: string; amount: string };
 
@@ -196,12 +197,13 @@ export default function RecordPaymentModal({
             onChange={(e) => setPayerBillNo(e.currentTarget.value)}
             maxLength={40}
           />
-          <TextInput
-            label="Collection date"
-            type="date"
-            value={collectedDate}
-            onChange={(e) => setCollectedDate(e.currentTarget.value)}
-          />
+          <div className="sm:col-span-2">
+            <DualDateInput
+              label="Collection date"
+              value={collectedDate}
+              onChange={setCollectedDate}
+            />
+          </div>
           <div className="flex items-end">
             <Checkbox
               label="Generate a printable receipt"
