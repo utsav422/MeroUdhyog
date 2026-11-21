@@ -49,7 +49,7 @@ import { EMPTY_DATE_RANGE, dateInRange } from '@/components/shared';
 import { ApiClientError, apiClient } from '@/lib/api-client';
 import { formatMoney, formatDate, formatDateTime } from '@/lib/format';
 import { downloadCsv } from '@/lib/exportCsv';
-import { useOrders, ordersKeys, itemCount, useOrderStatusUpdate, useCreateDeliveryForOrder, useBulkOrderStatusUpdate, nextOrderStatuses } from '../api';
+import { useOrders, ordersKeys, itemCount, useOrderStatusUpdate, useCreateDeliveryForOrder, useBulkOrderStatusUpdate, useDeleteOrder, nextOrderStatuses } from '../api';
 import type { Order } from '../api';
 import { useReorder, ReorderBadge } from './Reorder';
 import { useDeliveries } from '../../deliveries/api';
@@ -177,6 +177,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
   const statusMutation = useOrderStatusUpdate();
   const createDeliveryMutation = useCreateDeliveryForOrder();
   const bulkStatusMutation = useBulkOrderStatusUpdate();
+  const deleteOrderMutation = useDeleteOrder();
   const reorder = useReorder();
 
   // Set of order ids that already have a Delivery record
@@ -273,6 +274,30 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
       overBy: number;
     };
   } | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<Order | null>(null);
+
+  const confirmDeleteOrder = () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    deleteOrderMutation.mutate(target.id, {
+      onSuccess: () => {
+        notifications.show({
+          color: 'success',
+          title: 'Order deleted',
+          message: `${target.order_ref} and all of its linked records were voided.`,
+        });
+        setSelected((current) => current.filter((id) => id !== target.id));
+        setDeleteTarget(null);
+      },
+      onError: (error) =>
+        notifications.show({
+          color: 'red',
+          title: 'Delete failed',
+          message: error instanceof Error ? error.message : 'Something went wrong',
+        }),
+    });
+  };
 
   // The two pages are an exact partition of the order list, so scope is
   // applied before any search/filter/sort work below.
@@ -807,6 +832,11 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
       show: (o: Order) => ['failed', 'cancelled'].includes(o.status),
       onClick: (o: Order) => reorder.reorderOrder(o),
     },
+    {
+      label: 'Delete',
+      icon: <Trash size={16} />,
+      onClick: (o: Order) => setDeleteTarget(o),
+    },
   ];
 
   const hasActiveFilters =
@@ -860,7 +890,6 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={meta.title}
         subtitle={meta.subtitle}
         actions={
           <Group gap="sm">
@@ -1381,6 +1410,52 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
             </Group>
           </Stack>
         )}
+      </Modal>
+
+      <Modal
+        opened={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title={
+          <div>
+            <Text fw={700} size="lg">Delete order {deleteTarget?.order_ref}?</Text>
+            <Text size="xs" c="dimmed" className="mt-0.5">
+              This permanently voids everything linked to this order.
+            </Text>
+          </div>
+        }
+        centered
+        radius="xl"
+        size="md"
+      >
+        <Stack gap="md">
+          <Alert
+            color="red"
+            variant="light"
+            icon={<Warning size={18} weight="fill" />}
+            title="This action cannot be undone"
+          >
+            Deleting this order permanently removes its line items, delivery records and location
+            history, invoices, and khata allocations. The sale transactions and journal entries
+            created for this order will be voided, reserved stock will be returned, and payments
+            recorded only against this order will also be voided.
+          </Alert>
+          <Text size="xs" c="dimmed">
+            Payments shared with other orders stay active, but their link to this order is removed.
+          </Text>
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" size="md" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              size="md"
+              loading={deleteOrderMutation.isPending}
+              onClick={confirmDeleteOrder}
+            >
+              Delete order
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </div>
   );

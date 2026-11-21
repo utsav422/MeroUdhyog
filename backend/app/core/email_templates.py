@@ -153,6 +153,46 @@ def verification_email(*, full_name: str, link: str, expires_hours: int) -> tupl
     return text, html
 
 
+def staff_id_verification_email(
+    *,
+    full_name: str,
+    email: str,
+    role: str,
+    tenant_name: str,
+    link: str,
+    expires_hours: int,
+) -> tuple[str, str]:
+    name = full_name.strip() or "there"
+    business = tenant_name.strip() or "your workspace"
+    text = (
+        f"Namaste {name},\n\n"
+        f"{business} has added you as {role} with the login email {email}. "
+        "Verify your ID to activate your staff account:\n\n"
+        f"{link}\n\n"
+        f"This link expires in {expires_hours} hours.\n\n"
+        "If you were not added by this business, you can ignore this email.\n\n"
+        "Need help? Write to info@meroudhyog.com or call "
+        "+977 9840934837.\n"
+        "Factoryze Tech · Pepsicola, Kathmandu · Branch: Itahari, Sunsari"
+    )
+    html = _layout(
+        title=f"Verify your ID for {business}",
+        preheader=f"Verify your ID to finish joining {business} on Mero Udhyog.",
+        eyebrow="ID verification",
+        heading="Verify your ID",
+        name=name,
+        intro=(
+            f"{business} has added you as {role} with the login email {email}. "
+            "Verify your ID to activate your staff account. If you were not "
+            "added by this business, you can safely ignore this email."
+        ),
+        cta_label="Verify my ID",
+        cta_url=link,
+        expiry_note=f"This link expires in {expires_hours} hours.",
+    )
+    return text, html
+
+
 def password_reset_email(*, full_name: str, link: str, expires_minutes: int) -> tuple[str, str]:
     name = full_name.strip() or "there"
     text = (

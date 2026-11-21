@@ -2,8 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { REALTIME_FALLBACK_POLL_MS } from '@/lib/realtime';
 import { MAX_FETCH } from '../products/api';
-import { ordersKeys } from '../orders/api';
+import { invalidateOrderRelatedQueries, ordersKeys } from '../orders/api';
 
 export type Delivery = {
   id: string;
@@ -42,6 +43,8 @@ export function useDeliveries(routeId?: string | null) {
           ? `/deliveries?limit=${MAX_FETCH}&route_id=${routeId}`
           : `/deliveries?limit=${MAX_FETCH}`,
       ),
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -49,6 +52,8 @@ export function useMyDeliveries() {
   return useQuery({
     queryKey: deliveriesKeys.mine(),
     queryFn: () => apiClient.get<Delivery[]>(`/deliveries/me?limit=${MAX_FETCH}`),
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -112,8 +117,17 @@ export function useBulkAssignDelivery() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: deliveriesKeys.all });
-      // Assigning pending deliveries moves the linked orders into the flow too.
       qc.invalidateQueries({ queryKey: ordersKeys.all });
     },
+  });
+}
+
+export function useDeleteDelivery() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: async (deliveryId: string) => {
+      await apiClient.delete(`/deliveries/${deliveryId}`);
+    },
+    onSuccess: () => invalidateOrderRelatedQueries(qc),
   });
 }

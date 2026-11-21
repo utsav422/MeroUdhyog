@@ -514,9 +514,6 @@ export default function OrdersCalendar() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Text fw={700} size="xl" className="leading-tight">
-            Activity calendar
-          </Text>
           <Text size="sm" c="dimmed" className="mt-1">
             Every order and delivery event, plus your own day notes — on one timeline.
           </Text>

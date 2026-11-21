@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Button, Group, Table, Text, Select } from '@mantine/core';
+import { Alert, Button, Group, Modal, Stack, Table, Text, Select } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
   ArrowLeft,
@@ -15,8 +16,10 @@ import {
   Truck,
   ArrowsClockwise,
   FilePdf,
+  Trash,
+  Warning,
 } from '@phosphor-icons/react';
-import { useOrder, itemCount, useOrderStatusUpdate, useAssignDelivery, useUpdateDeliveryStatus, useDeliveryForOrder } from '@/features/orders/api';
+import { useOrder, itemCount, useOrderStatusUpdate, useAssignDelivery, useUpdateDeliveryStatus, useDeliveryForOrder, useDeleteOrder } from '@/features/orders/api';
 import { useReorder, ReorderBadge } from '@/features/orders/components/Reorder';
 import { useCustomers } from '@/features/customers/api';
 import { useUsers } from '@/features/staff/api';
@@ -49,7 +52,9 @@ export default function OrderDetailPage() {
   const statusMutation = useOrderStatusUpdate();
   const assignMutation = useAssignDelivery();
   const deliveryStatusMutation = useUpdateDeliveryStatus();
+  const deleteMutation = useDeleteOrder();
   const reorder = useReorder();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (isLoading) return <LoadingState />;
   if (isError) return <ErrorState retry={() => refetch()} />;
@@ -117,6 +122,25 @@ export default function OrderDetailPage() {
           }),
       },
     );
+  };
+
+  const confirmDeleteOrder = () => {
+    deleteMutation.mutate(data.id, {
+      onSuccess: () => {
+        notifications.show({
+          color: 'success',
+          title: 'Order deleted',
+          message: `${data.order_ref} and all of its linked records were voided.`,
+        });
+        router.push('/orders');
+      },
+      onError: (error) =>
+        notifications.show({
+          color: 'red',
+          title: 'Delete failed',
+          message: error instanceof Error ? error.message : 'Something went wrong',
+        }),
+    });
   };
 
   const assignAgent = (agentId: string | null) => {
@@ -226,6 +250,14 @@ export default function OrderDetailPage() {
                 View Invoice
               </Button>
             )}
+            <Button
+              variant="default"
+              color="red"
+              leftSection={<Trash size={16} />}
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete order
+            </Button>
           </div>
         </div>
       </div>
@@ -488,6 +520,52 @@ export default function OrderDetailPage() {
           <Text size="sm" className="text-zinc-600">{data.notes}</Text>
         </div>
       )}
+
+      <Modal
+        opened={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title={
+          <div>
+            <Text fw={700} size="lg">Delete order {data.order_ref}?</Text>
+            <Text size="xs" c="dimmed" className="mt-0.5">
+              This permanently voids everything linked to this order.
+            </Text>
+          </div>
+        }
+        centered
+        radius="xl"
+        size="md"
+      >
+        <Stack gap="md">
+          <Alert
+            color="red"
+            variant="light"
+            icon={<Warning size={18} weight="fill" />}
+            title="This action cannot be undone"
+          >
+            Deleting this order permanently removes its line items, delivery records and location
+            history, invoices, and khata allocations. The sale transactions and journal entries
+            created for this order will be voided, reserved stock will be returned, and payments
+            recorded only against this order will also be voided.
+          </Alert>
+          <Text size="xs" c="dimmed">
+            Payments shared with other orders stay active, but their link to this order is removed.
+          </Text>
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" size="md" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              size="md"
+              loading={deleteMutation.isPending}
+              onClick={confirmDeleteOrder}
+            >
+              Delete order
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </div>
   );
 }

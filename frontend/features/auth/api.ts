@@ -77,6 +77,14 @@ export const authApi = {
       `/auth/verify-email/validate?token=${encodeURIComponent(token)}`,
     ),
 
+  verifyId: (token: string) =>
+    apiClient.post<MessageResponse>('/auth/verify-id', { token }),
+
+  validateIdToken: (token: string) =>
+    apiClient.get<TokenInfoResponse>(
+      `/auth/verify-id/validate?token=${encodeURIComponent(token)}`,
+    ),
+
   resendVerification: (email: string) =>
     apiClient.post<MessageResponse>('/auth/resend-verification', { email }),
 };

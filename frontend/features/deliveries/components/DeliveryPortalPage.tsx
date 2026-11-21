@@ -237,7 +237,6 @@ export default function DeliveryPortalPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={isAgent ? 'My Deliveries' : 'Deliveries'}
         subtitle={
           isAgent
             ? `Hi ${session?.full_name ?? 'there'} — go live with GPS so your manager can follow you, then update statuses as you deliver.`

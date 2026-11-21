@@ -105,7 +105,7 @@ export default function CustomerDetailPage() {
           await apiClient.post(`/customers/${customer.id}/prices`, {
             variant_id: row.variantId,
             price: newValue,
-            currency: 'INR',
+            currency: 'NPR',
           });
         }
       }

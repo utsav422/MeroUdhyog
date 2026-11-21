@@ -150,7 +150,6 @@ function ProfileContent({ profile }: { profile: UserProfile }) {
   return (
     <div>
       <PageHeader
-        title="My profile"
         subtitle="Manage your personal details, profile photo, and saved location."
         actions={
           <Button
@@ -373,7 +372,6 @@ export default function ProfilePage() {
     return (
       <div>
         <PageHeader
-          title="My profile"
           subtitle="Manage your personal details, profile photo, and saved location."
         />
         <LoadingState label="Loading profile…" />
@@ -385,7 +383,6 @@ export default function ProfilePage() {
     return (
       <div>
         <PageHeader
-          title="My profile"
           subtitle="Manage your personal details, profile photo, and saved location."
         />
         <ErrorState

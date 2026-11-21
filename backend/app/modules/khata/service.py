@@ -54,6 +54,7 @@ from app.modules.khata.schemas import (
     RecordPaymentInput,
     SetBillLayoutDefaultInput,
 )
+from app.modules.notifications.schemas import BACKOFFICE_ROLES
 from app.modules.orders.models import Order, OrderItem
 from app.modules.orders.repository import OrderRepository
 from app.modules.products.models import Product, ProductVariant
@@ -429,6 +430,26 @@ class KhataService:
 
         return NotificationService(self.session, self.tenant_id)
 
+    async def _notify_direct_delivery(self, order: Order, delivery: Delivery) -> None:
+        service = self._notify_service()
+        await service.order_created(order.id, order.order_ref)
+        await service.order_status(
+            order.id,
+            order.order_ref,
+            "delivered",
+            extra="Direct delivery was recorded from khata.",
+        )
+        await service.delivery_status(
+            order_id=order.id,
+            order_ref=order.order_ref,
+            status="delivered",
+            message=f"Direct delivery for order {order.order_ref} was recorded as delivered.",
+            recipient_roles=BACKOFFICE_ROLES,
+            urgency="high",
+            link=f"/deliveries/{delivery.id}",
+            delivery_id=delivery.id,
+        )
+
     async def _notify_payment(
         self, customer_id: UUID, amount: Decimal, allocations: list[tuple[Order, Decimal]]
     ) -> None:
@@ -436,7 +457,7 @@ class KhataService:
             order_refs = [str(order.order_ref) for order, _amt in allocations if order.order_ref]
             await self._notify_service().payment_received(
                 customer_id,
-                f"₹{_q2(amount):.2f}",
+                f"NPR {_q2(amount):.2f}",
                 order_refs,
             )
         except Exception:  # noqa: BLE001 - never break a payment on notifications
@@ -653,6 +674,7 @@ class KhataService:
         )
         self.session.add(delivery)
         await self.session.flush()
+        await self._notify_direct_delivery(order, delivery)
 
         sale = Transaction(
             tenant_id=self.tenant_id,
@@ -806,6 +828,17 @@ class KhataService:
         await self._reverse_receipt_in_ledger(entry)
         fresh = await self.repo.get_entry(entry_id)
         return self._payment_read(fresh)
+
+    async def void_payment_for_deletion(self, entry_id: UUID, order_ref: str) -> None:
+        entry = await self.repo.get_entry(entry_id)
+        if entry.status != "active":
+            return
+        entry.status = "voided"
+        entry.voided_by = self.user_id
+        entry.voided_at = datetime.now(UTC)
+        entry.void_reason = f"Order {order_ref} was deleted"
+        await self.session.flush()
+        await self._reverse_receipt_in_ledger(entry)
 
     # ---- receipts ---------------------------------------------------------------
 

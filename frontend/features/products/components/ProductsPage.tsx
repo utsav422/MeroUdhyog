@@ -304,7 +304,6 @@ export default function ProductsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Products"
         subtitle="Manage your product catalogue and pricing"
         actions={
           <div className="flex items-center gap-2">

@@ -14,9 +14,9 @@ import {
   PageHeader,
 } from '@/components/shared';
 import type { Column, SortState } from '@/components/shared';
-import { apiClient } from '@/lib/api-client';
+import { ApiClientError, apiClient } from '@/lib/api-client';
 import { formatDate } from '@/lib/format';
-import { useUsers, staffKeys } from '../api';
+import { useUsers, staffKeys, checkStaffEmail } from '../api';
 import type { User } from '../api';
 import { staffFormSchema, ROLES } from '../schema';
 import { useRoles } from '../../roles/api';
@@ -47,7 +47,7 @@ export default function StaffPage() {
     initialValues: {
       full_name: '',
       email: '',
-      role: 'staff',
+      role: 'worker',
       password: '',
     },
   });
@@ -81,7 +81,7 @@ export default function StaffPage() {
   const openCreate = () => {
     setEditing(null);
     form.reset();
-    form.setValues({ role: 'staff' });
+    form.setValues({ role: 'worker' });
     setDrawerOpen(true);
   };
 
@@ -103,32 +103,55 @@ export default function StaffPage() {
           full_name: values.full_name,
           role: values.role,
         });
-      } else {
-        await apiClient.post('/users', {
-          full_name: values.full_name,
-          email: values.email,
-          role: values.role,
-          password: values.password,
-        });
+        return null;
       }
+      const availability = await checkStaffEmail(values.email);
+      if (!availability.available) {
+        form.setFieldError('email', 'A user with this email already exists. Use another email.');
+        notifications.show({
+          color: 'orange',
+          title: 'Email already in use',
+          message: 'Use another email and click Add staff again.',
+        });
+        throw new Error('EMAIL_TAKEN');
+      }
+      return apiClient.post<User>('/users', {
+        full_name: values.full_name,
+        email: values.email,
+        role: values.role,
+        password: values.password,
+      });
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
       notifications.show({
         color: 'success',
         title: editing ? 'Staff updated' : 'Staff added',
-        message: form.values.full_name,
+        message: created
+          ? `ID verification link sent to ${created.email}`
+          : form.values.full_name,
       });
       qc.invalidateQueries({ queryKey: staffKeys.all });
       setDrawerOpen(false);
       form.reset();
       setEditing(null);
     },
-    onError: (error) =>
+    onError: (error) => {
+      if (error instanceof Error && error.message === 'EMAIL_TAKEN') return;
+      if (error instanceof ApiClientError && error.status === 409) {
+        form.setFieldError('email', 'A user with this email already exists. Use another email.');
+        notifications.show({
+          color: 'orange',
+          title: 'Email already in use',
+          message: 'Use another email and click Add staff again.',
+        });
+        return;
+      }
       notifications.show({
         color: 'red',
         title: 'Save failed',
         message: error instanceof Error ? error.message : 'Something went wrong',
-      }),
+      });
+    },
   });
 
   const toggleActiveMutation = useMutation({
@@ -178,6 +201,21 @@ export default function StaffPage() {
         </span>
       ),
     },
+    {
+      key: 'is_email_verified',
+      header: 'ID check',
+      render: (u) => (
+        <span
+          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            u.is_email_verified
+              ? 'bg-success-50 text-success-600'
+              : 'bg-warning-50 text-warning-600'
+          }`}
+        >
+          {u.is_email_verified ? 'Verified' : 'Pending'}
+        </span>
+      ),
+    },
     { key: 'created_at', header: 'Joined', sortable: true, render: (u) => formatDate(u.created_at) },
     {
       key: 'is_active',
@@ -204,7 +242,6 @@ export default function StaffPage() {
   return (
     <div>
       <PageHeader
-        title="Staff"
         subtitle="Manage team members and their roles"
         actions={
           <Button leftSection={<Plus size={16} weight="bold" />} onClick={openCreate}>

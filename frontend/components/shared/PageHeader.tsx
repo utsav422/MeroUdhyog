@@ -7,10 +7,11 @@ export default function PageHeader({
   subtitle,
   actions,
 }: {
-  title: string;
+  title?: string;
   subtitle?: string;
   actions?: React.ReactNode;
 }) {
+  if (!title && !subtitle && !actions) return null;
   return (
     <Group
       justify="space-between"
@@ -22,9 +23,11 @@ export default function PageHeader({
       {/* min-w-0 lets the title shrink instead of forcing the actions off
           screen when both are on one line. */}
       <div className="min-w-0 flex-1">
-        <Text fw={700} size="xl" c="var(--foreground)" className="leading-tight tracking-tight">
-          {title}
-        </Text>
+        {title && (
+          <Text fw={700} size="xl" c="var(--foreground)" className="leading-tight tracking-tight">
+            {title}
+          </Text>
+        )}
         {subtitle && (
           <Text size="sm" className="mt-1 text-[var(--muted)]">
             {subtitle}

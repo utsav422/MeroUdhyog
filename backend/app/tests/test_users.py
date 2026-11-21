@@ -55,6 +55,81 @@ async def test_list_users_requires_and_returns_tenant_users(client):
 
 
 @pytest.mark.asyncio
+async def test_check_email_reports_existing_user_without_sending_verification(client, monkeypatch):
+    slug = f"c{uuid.uuid4().hex[:6]}"
+    reg = await _register(client, slug)
+    duplicate = f"{slug}@test.com".upper()
+    fresh = f"fresh{uuid.uuid4().hex[:4]}@test.com"
+    sent = []
+
+    def fake_send_email(*, to, subject, text, html):
+        sent.append(to)
+
+    monkeypatch.setattr("app.modules.auth.service.send_email", fake_send_email)
+
+    taken = await client.get("/api/v1/users/check-email", params={"email": duplicate})
+    assert taken.status_code == 200, taken.text
+    assert taken.json()["available"] is False
+
+    available = await client.get("/api/v1/users/check-email", params={"email": fresh})
+    assert available.status_code == 200, available.text
+    assert available.json()["available"] is True
+
+    conflict = await client.post(
+        "/api/v1/users",
+        json={
+            "email": duplicate.lower(),
+            "password": "Sup3rSecret!2026",
+            "full_name": "Duplicate Staff",
+            "role": "worker",
+        },
+    )
+    assert conflict.status_code == 409, conflict.text
+    assert sent == []
+    assert reg["user_id"]
+
+
+@pytest.mark.asyncio
+async def test_create_staff_sends_id_verification_email(client, monkeypatch):
+    slug = f"s{uuid.uuid4().hex[:6]}"
+    await _register(client, slug)
+    email = f"staff{uuid.uuid4().hex[:4]}@test.com"
+    sent = []
+
+    def fake_send_email(*, to, subject, text, html):
+        sent.append({"to": to, "subject": subject, "text": text, "html": html})
+
+    monkeypatch.setattr("app.modules.auth.service.send_email", fake_send_email)
+
+    r = await client.post(
+        "/api/v1/users",
+        json={
+            "email": email,
+            "password": "Sup3rSecret!2026",
+            "full_name": "New Staff",
+            "role": "worker",
+        },
+    )
+    assert r.status_code == 201, r.text
+    assert not r.json()["is_email_verified"]
+    assert len(sent) == 1
+    assert sent[0]["to"] == email
+    assert "Verify your ID" in sent[0]["subject"]
+    assert slug.title() in sent[0]["subject"]
+    assert "New Staff" in sent[0]["text"]
+    assert "worker" in sent[0]["text"]
+
+    token = sent[0]["text"].split("/verify-id?token=")[1].split()[0]
+    verified = await client.post("/api/v1/auth/verify-id", json={"token": token})
+    assert verified.status_code == 200, verified.text
+
+    users = await client.get("/api/v1/users")
+    assert users.status_code == 200, users.text
+    staff = next(u for u in users.json() if u["email"] == email)
+    assert staff["is_email_verified"]
+
+
+@pytest.mark.asyncio
 async def test_viewer_can_list_but_owner_creates_via_manage_users(client):
     reg = await _register(client, f"v{uuid.uuid4().hex[:6]}")
     tenant_id = reg["tenant_id"]

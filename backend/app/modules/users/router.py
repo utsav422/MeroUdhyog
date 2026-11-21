@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
+from pydantic import EmailStr
 
 from app.core.dependencies import (
     get_current_tenant_id,
@@ -7,6 +8,7 @@ from app.core.dependencies import (
 )
 from app.core.permissions import Permissions, require_permission
 from app.modules.users.schemas import (
+    EmailAvailabilityResponse,
     UserCreate,
     UserProfileRead,
     UserProfileUpdate,
@@ -91,6 +93,20 @@ async def list_users(
     service = UserService(db)
     users = await service.list_users(tenant_id, limit, offset)
     return [UserRead.model_validate(u) for u in users]
+
+
+@router.get(
+    "/check-email",
+    response_model=EmailAvailabilityResponse,
+)
+async def check_email(
+    email: EmailStr = Query(...),
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    _=Depends(require_permission(Permissions.MANAGE_USERS)),
+):
+    service = UserService(db)
+    return await service.check_email(tenant_id, email)
 
 
 @router.post(

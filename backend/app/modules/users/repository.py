@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.users.models import User
@@ -18,7 +18,10 @@ class UserRepository:
 
     async def get_by_email(self, email: str, tenant_id: UUID) -> User | None:
         result = await self.session.execute(
-            select(User).where(User.email == email, User.tenant_id == tenant_id)
+            select(User).where(
+                func.lower(User.email) == email.strip().lower(),
+                User.tenant_id == tenant_id,
+            )
         )
         return result.scalar_one_or_none()
 

@@ -14,6 +14,10 @@ class DeliveryRepository:
         self.session = session
         self.tenant_id = tenant_id
 
+    async def delete(self, delivery: Delivery) -> None:
+        await self.session.delete(delivery)
+        await self.session.flush()
+
     async def list(
         self,
         limit: int,

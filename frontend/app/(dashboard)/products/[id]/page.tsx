@@ -130,7 +130,7 @@ export default function ProductDetailPage() {
             {
               price: row.price || 0,
               cost_price: row.cost_price || null,
-              currency: 'INR',
+              currency: 'NPR',
             },
           ],
         });
@@ -177,7 +177,7 @@ export default function ProductDetailPage() {
         await apiClient.post(`/products/${data.id}/variants/${row.id}/prices`, {
           price: row.price || 0,
           cost_price: row.cost_price || null,
-          currency: 'INR',
+          currency: 'NPR',
         });
       }
     },
@@ -428,7 +428,7 @@ export default function ProductDetailPage() {
               <NumberInput
                 label="Wholesale price"
                 min={0}
-                prefix="₹ "
+                prefix="NPR "
                 decimalScale={2}
                 placeholder="0.00"
                 value={editing.row.price}
@@ -437,7 +437,7 @@ export default function ProductDetailPage() {
               <NumberInput
                 label="Cost of making"
                 min={0}
-                prefix="₹ "
+                prefix="NPR "
                 decimalScale={2}
                 placeholder="0.00"
                 value={editing.row.cost_price}
@@ -574,13 +574,18 @@ export default function ProductDetailPage() {
                         <button
                           type="button"
                           aria-label="Delete variant"
+                          title={
+                            data.variants.length <= 1
+                              ? 'A product must keep at least one variant. Edit this variant or delete the product instead.'
+                              : `Delete variant "${v.name}"? This cannot be undone.`
+                          }
                           onClick={() => {
                             if (window.confirm(`Delete variant "${v.name}"? This cannot be undone.`)) {
                               deleteMutation.mutate(v.id);
                             }
                           }}
-                          disabled={!!editing || deleteMutation.isPending}
-                          className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-danger-50 hover:text-danger-500 disabled:opacity-40"
+                          disabled={!!editing || deleteMutation.isPending || data.variants.length <= 1}
+                          className="rounded-lg p-1.5 text-[var(--muted)] transition-colors hover:bg-danger-50 hover:text-danger-500 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <TrashSimple size={15} />
                         </button>

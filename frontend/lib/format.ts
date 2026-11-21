@@ -1,4 +1,4 @@
-export function formatMoney(value: string | number | null | undefined, currency = 'INR'): string {
+export function formatMoney(value: string | number | null | undefined, currency = 'NPR'): string {
   if (value === null || value === undefined || value === '') return '—';
   const num = Number(value);
   if (Number.isNaN(num)) return '—';
@@ -17,7 +17,7 @@ export function formatMoney(value: string | number | null | undefined, currency 
 export function formatPriceUnit(
   value: string | number | null | undefined,
   unit?: string | null,
-  currency = 'INR',
+  currency = 'NPR',
 ): string {
   const money = formatMoney(value, currency);
   if (unit && unit.trim()) return `${money} / ${unit.trim()}`;

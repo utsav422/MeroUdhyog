@@ -18,6 +18,10 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class EmailAvailabilityResponse(BaseModel):
+    available: bool
+
+
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -28,6 +32,7 @@ class UserRead(BaseModel):
     role: str
     is_active: bool
     is_superadmin: bool
+    is_email_verified: bool
     created_at: datetime
 
 

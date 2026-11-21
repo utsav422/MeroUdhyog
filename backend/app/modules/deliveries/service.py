@@ -23,6 +23,7 @@ from app.modules.deliveries.schemas import (
     LocationReport,
 )
 from app.modules.finance.service import FinanceService, month_of_dt
+from app.modules.notifications.schemas import BACKOFFICE_ROLES
 from app.modules.orders.models import Order
 from app.modules.routes.models import Route
 from app.modules.transactions.models import Transaction
@@ -116,6 +117,33 @@ class DeliveryService:
             recipient_user_id=delivery.delivery_agent_id,
             urgency="high",
             link="/deliveries/portal",
+            delivery_id=delivery.id,
+        )
+
+    async def _notify_backoffice(
+        self,
+        delivery: Delivery,
+        status: str,
+        message: str | None = None,
+        urgency: str = "normal",
+        link: str | None = None,
+    ) -> None:
+        order_ref = await self._order_ref(delivery.order_id)
+        customer_name = await self._order_customer_name(delivery.order_id)
+        who = f" of {customer_name}" if customer_name else ""
+        default_message = (
+            f"Delivery for order {order_ref or ''}{who} is now "
+            f"{status.replace('_', ' ')}."
+        )
+        await self._notify_service().delivery_status(
+            order_id=delivery.order_id or delivery.id,
+            order_ref=order_ref or "",
+            status=status,
+            message=message or default_message,
+            recipient_roles=BACKOFFICE_ROLES,
+            urgency=urgency,
+            link=link or f"/deliveries/{delivery.id}",
+            delivery_id=delivery.id,
         )
 
     async def list(
@@ -208,6 +236,7 @@ class DeliveryService:
             assigned_at=None,
         )
         created = await self.repo.create(delivery)
+        await self._notify_backoffice(created, "created")
         # The delivery stays "pending assignment" until a manager assigns an
         # agent; only then does the linked order move into the delivery flow.
         return await self._enrich(created)
@@ -239,6 +268,7 @@ class DeliveryService:
         # A pending delivery entering the flow syncs the order to "assigned".
         await self._sync_order_status(delivery.order_id, "assigned")
         await self._notify_agent_assigned(delivery)
+        await self._notify_backoffice(updated, "assigned", urgency="high")
         return await self._enrich(updated)
 
     async def bulk_assign(
@@ -264,6 +294,7 @@ class DeliveryService:
             raise NotFoundError("Delivery agent not found")
         deliveries = await self.repo.get_many(delivery_ids)
         assigned = 0
+        assigned_deliveries: list[Delivery] = []
         skipped: list[DeliveryBulkAssignSkip] = []
         for delivery in deliveries:
             if delivery.status != "pending_assignment":
@@ -278,10 +309,12 @@ class DeliveryService:
             delivery.status = "assigned"
             delivery.assigned_at = datetime.now(UTC)
             await self._sync_order_status(delivery.order_id, "assigned")
+            assigned_deliveries.append(delivery)
             assigned += 1
         await self.session.flush()
-        if assigned and deliveries:
-            await self._notify_agent_assigned(deliveries[0])
+        for delivery in assigned_deliveries:
+            await self._notify_agent_assigned(delivery)
+            await self._notify_backoffice(delivery, "assigned", urgency="high")
         return DeliveryBulkAssignResult(assigned=assigned, skipped=skipped)
 
     async def update_status(
@@ -320,22 +353,19 @@ class DeliveryService:
         if data.proof_notes is not None:
             delivery.proof_notes = data.proof_notes
         updated = await self.repo.update(delivery)
-        # Keep the back office in the loop when a delivery completes or fails.
-        if data.status in ("delivered", "failed"):
-            order_ref = await self._order_ref(delivery.order_id)
-            customer_name = await self._order_customer_name(delivery.order_id)
-            who = f" of {customer_name}" if customer_name else ""
-            await self._notify_service().delivery_status(
-                order_id=delivery.order_id or delivery.id,
-                order_ref=order_ref or "",
-                status=data.status,
-                message=(
-                    f"Order {order_ref or ''}{who} was delivered successfully."
-                    if data.status == "delivered"
-                    else f"Order {order_ref or ''}{who} delivery was marked failed."
-                ),
-                recipient_roles=["owner", "admin", "manager"],
-                urgency="high",
+        if data.status:
+            messages = {
+                "delivered": "Order delivery completed successfully.",
+                "failed": "Order delivery was marked failed.",
+                "picked_up": "The agent has picked up the order.",
+                "in_transit": "The order is on the way to the customer.",
+            }
+            await self._notify_backoffice(
+                updated,
+                data.status,
+                message=messages.get(data.status),
+                urgency="high" if data.status in ("delivered", "failed") else "normal",
+                link=f"/deliveries/{updated.id}",
             )
         return await self._enrich(updated)
 
@@ -355,6 +385,7 @@ class DeliveryService:
             return
         order.status = new_status
         await self.session.flush()
+        await self._notify_service().order_status(order.id, order.order_ref, new_status)
 
     async def _create_sale_from_delivery(self, delivery: Delivery) -> None:
         order = (
@@ -379,6 +410,60 @@ class DeliveryService:
             self.session, self.tenant_id, self.user_id
         ).post_transaction(sale)
         await self.finance_service.recalculate({month_of_dt(sale.transaction_date)})
+
+    async def delete(self, delivery_id: UUID) -> None:
+        delivery = await self.repo.get(delivery_id)
+        deleted_delivery_id = delivery.id
+        deleted_order_ref = await self._order_ref(delivery.order_id)
+        reset_order = False
+        from app.modules.accounting.voiding import void_linked_accounting
+
+        await void_linked_accounting(
+            self.session,
+            self.tenant_id,
+            self.user_id,
+            order_id=delivery.order_id,
+            delivery_id=delivery.id,
+        )
+        order = (
+            await self.session.execute(
+                select(Order).where(
+                    Order.id == delivery.order_id,
+                    Order.tenant_id == self.tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if order is not None and order.status in {
+            "assigned",
+            "picked_up",
+            "in_transit",
+            "in_delivery",
+            "delivered",
+            "failed",
+        }:
+            order.status = "ready"
+            reset_order = True
+        await self.repo.delete(delivery)
+        if reset_order and order is not None:
+            await self.session.flush()
+            await self._notify_service().order_status(
+                order.id, order.order_ref, "ready", extra="The delivery was deleted."
+            )
+        await self._notify_service().notify(
+            category="system",
+            title="Delivery deleted",
+            message=(
+                f"Delivery for order {deleted_order_ref or ''} was deleted "
+                "and its accounting voided."
+            ),
+            link="/deliveries",
+            data={
+                "delivery_id": str(deleted_delivery_id),
+                "order_ref": deleted_order_ref,
+                "status": "deleted",
+            },
+            recipient_roles=BACKOFFICE_ROLES,
+        )
 
     async def add_location(
         self, delivery_id: UUID, data: DeliveryLocationCreate

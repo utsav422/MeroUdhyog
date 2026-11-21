@@ -2,15 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Avatar, Image } from '@mantine/core';
 import {
   ShoppingBag,
   Users,
   Package,
   Truck,
-  SquareHalf,
   ChartPieSlice,
   Sparkle,
-  Factory,
   Tag,
   MapTrifold,
   Wallet,
@@ -39,6 +38,7 @@ import {
   Files,
   X,
 } from '@phosphor-icons/react';
+import { apiAssetUrl } from '@/lib/api-client';
 import { useSession } from '@/lib/providers';
 
 type NavItem = {
@@ -302,6 +302,13 @@ export default function Sidebar({
   const isDeliveryAgent = session?.role === 'delivery';
   const isOwner = session?.role === 'owner';
   const held = new Set(session?.permissions ?? []);
+  const avatarSrc = apiAssetUrl(session?.avatar_url);
+  const avatarInitials = (session?.full_name ?? '')
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   const canSee = (permission?: string, anyPermission?: string[]) => {
     if (isOwner) return true;
@@ -357,7 +364,13 @@ export default function Sidebar({
   return (
     <>
       <aside className="hidden h-full w-64 shrink-0 flex-col overflow-hidden border-r border-zinc-200/70 bg-white px-4 py-5 lg:flex">
-        <SidebarInner tenantName={tenantName} navGroups={navGroups} isActive={active} />
+        <SidebarInner
+          tenantName={tenantName}
+          avatarSrc={avatarSrc}
+          avatarInitials={avatarInitials}
+          navGroups={navGroups}
+          isActive={active}
+        />
       </aside>
 
       <div
@@ -385,7 +398,13 @@ export default function Sidebar({
           >
             <X size={16} />
           </button>
-          <SidebarInner tenantName={tenantName} navGroups={navGroups} isActive={active} />
+          <SidebarInner
+            tenantName={tenantName}
+            avatarSrc={avatarSrc}
+            avatarInitials={avatarInitials}
+            navGroups={navGroups}
+            isActive={active}
+          />
         </div>
       </div>
     </>
@@ -394,19 +413,21 @@ export default function Sidebar({
 
 function SidebarInner({
   tenantName,
+  avatarSrc,
+  avatarInitials,
   navGroups,
   isActive,
 }: {
   tenantName: string;
+  avatarSrc?: string;
+  avatarInitials: string;
   navGroups: NavGroup[];
   isActive: (item: NavItem) => boolean;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-6 flex shrink-0 items-center gap-2.5 px-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white">
-          <Factory size={20} weight="duotone" />
-        </div>
+        <Image src="/logo-mark.svg" alt="Mero Udhyog" w={36} h={36} radius="xl" />
         <div className="leading-tight">
           <div className="text-[15px] font-bold text-zinc-900">Mero Udhyog</div>
           <div className="text-xs text-zinc-400">Tenant dashboard</div>
@@ -414,9 +435,9 @@ function SidebarInner({
       </div>
 
       <div className="mb-6 flex shrink-0 items-center gap-2 rounded-xl bg-zinc-50 px-3 py-2.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
-          <SquareHalf size={16} weight="fill" />
-        </div>
+        <Avatar src={avatarSrc} color="brand" radius="xl" size={32}>
+          {avatarInitials || 'U'}
+        </Avatar>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-sm font-semibold text-zinc-800">
             {tenantName}

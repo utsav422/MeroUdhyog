@@ -273,7 +273,6 @@ export default function TodayLedgerPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Stock as of Today"
         subtitle={`${todayLabel} · opening, movement and closing for every product`}
         actions={
           <Group gap="xs">

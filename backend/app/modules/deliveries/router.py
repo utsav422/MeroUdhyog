@@ -184,6 +184,18 @@ async def update_delivery(
     return await service.update_status(delivery_id, data)
 
 
+@router.delete("/{delivery_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_delivery(
+    delivery_id: UUID,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
+    _=Depends(require_permission(Permissions.MANAGE_CATALOG)),
+):
+    service = await _service(db, tenant_id, user_id)
+    await service.delete(delivery_id)
+
+
 @router.post(
     "/{delivery_id}/locations",
     response_model=DeliveryLocationRead,

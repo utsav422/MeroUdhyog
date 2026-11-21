@@ -152,7 +152,6 @@ export default function CustomersPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Customers"
         subtitle="Manage customers and their custom pricing"
         actions={
           <div className="flex items-center gap-2">

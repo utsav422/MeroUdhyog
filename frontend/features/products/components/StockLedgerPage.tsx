@@ -211,7 +211,6 @@ export default function StockLedgerPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Stock Ledger"
         subtitle="Every time stock is added, used in production, or sold"
         actions={
           <Group gap="xs">

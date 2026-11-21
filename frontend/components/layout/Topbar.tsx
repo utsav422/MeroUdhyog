@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/providers';
 import { useUnreadCount } from '@/features/notifications/api';
 import { NotificationsDrawer } from '@/features/notifications/components/NotificationsDrawer';
+import { useNotificationUI } from '@/features/notifications/components/NotificationUIProvider';
 import GlobalSearchModal from '@/features/search/components/GlobalSearchModal';
 
 const TITLES: Record<string, string> = {
@@ -39,7 +40,8 @@ export default function Topbar({
   const session = useSession();
   const [searchOpen, setSearchOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const { notificationsOpen, openNotifications, closeNotifications } =
+    useNotificationUI();
   const { data: unread } = useUnreadCount();
   const unreadCount = unread?.count ?? 0;
 
@@ -64,6 +66,9 @@ export default function Topbar({
       title = label;
       break;
     }
+  }
+  if (pathname === '/deliveries/portal' && session?.role === 'delivery') {
+    title = 'My Deliveries';
   }
 
   const handleLogout = async () => {
@@ -157,7 +162,7 @@ export default function Topbar({
           <button
             type="button"
             aria-label="Notifications"
-            onClick={() => setNotificationsOpen(true)}
+            onClick={openNotifications}
             className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 transition-colors hover:text-zinc-800"
           >
             <Bell size={18} />
@@ -166,7 +171,7 @@ export default function Topbar({
 
         <NotificationsDrawer
           opened={notificationsOpen}
-          onClose={() => setNotificationsOpen(false)}
+          onClose={closeNotifications}
         />
 
         <Menu shadow="md" width={220} position="bottom-end">

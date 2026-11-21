@@ -1,8 +1,16 @@
 import uuid
 
 import pytest
+from sqlalchemy import select
 
+from app.core.database import get_session
 from app.core.security import create_access_token
+from app.modules.accounting.models import JournalEntry
+from app.modules.deliveries.models import Delivery
+from app.modules.khata.models import LedgerAllocation, LedgerEntry, OrderInvoice
+from app.modules.orders.models import Order
+from app.modules.products.models import ProductVariant
+from app.modules.transactions.models import Transaction
 
 
 async def _register(client, slug):
@@ -152,17 +160,20 @@ async def test_order_invalid_status_and_item_validation(client):
 
 
 @pytest.mark.asyncio
-async def test_only_draft_order_can_be_deleted(client):
+async def test_orders_can_be_deleted_at_any_status(client):
     await _register(client, f"t{uuid.uuid4().hex[:6]}")
     product = await _create_product(client, "Mayo")
     order = await _create_order(client, product)
     await client.patch(f"/api/v1/orders/{order['id']}", json={"status": "confirmed"})
     r = await client.delete(f"/api/v1/orders/{order['id']}")
-    assert r.status_code == 409
+    assert r.status_code == 204
 
     order2 = await _create_order(client, product)
     r = await client.delete(f"/api/v1/orders/{order2['id']}")
     assert r.status_code == 204
+
+    r = await client.get(f"/api/v1/orders/{order['id']}")
+    assert r.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -352,3 +363,113 @@ async def test_list_orders_filtered_by_customer(client):
     ids = [o["id"] for o in r.json()]
     assert order_a["id"] in ids
     assert all(o["customer_id"] == customer_a["id"] for o in r.json())
+
+
+@pytest.mark.asyncio
+async def test_deleting_delivered_order_voids_related_accounting(client):
+    tokens = await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    tenant_id = uuid.UUID(tokens["tenant_id"])
+    product = await _create_product(client, "Voidable")
+    customer = await _create_customer(client, "Void Customer")
+    order = await _create_order(client, product, customer)
+
+    for status in ("confirmed", "ready"):
+        r = await client.patch(f"/api/v1/orders/{order['id']}", json={"status": status})
+        assert r.status_code == 200, r.text
+
+    r = await client.get("/api/v1/deliveries")
+    delivery = next(d for d in r.json() if d["order_id"] == order["id"])
+
+    agent_id = await _create_role_user(
+        tenant_id, "delivery", f"ag{uuid.uuid4().hex[:6]}@test.com"
+    )
+    r = await client.patch(
+        f"/api/v1/deliveries/{delivery['id']}/assign",
+        json={"delivery_agent_id": str(agent_id)},
+    )
+    assert r.status_code == 200, r.text
+    for status in ("picked_up", "in_transit", "delivered"):
+        r = await client.patch(
+            f"/api/v1/deliveries/{delivery['id']}", json={"status": status}
+        )
+        assert r.status_code == 200, r.text
+
+    r = await client.post(
+        "/api/v1/khata/payments",
+        json={
+            "customer_id": customer["id"],
+            "amount": "20.00",
+            "method": "cash",
+        },
+    )
+    assert r.status_code == 201, r.text
+
+    r = await client.get(f"/api/v1/khata/orders/{order['id']}/invoice")
+    assert r.status_code == 200, r.text
+
+    async with get_session() as session:
+        order_id = uuid.UUID(order["id"])
+        delivery_id = uuid.UUID(delivery["id"])
+        txs = (
+            await session.execute(
+                select(Transaction).where(Transaction.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        assert any((t.metadata_ or {}).get("order_id") == str(order_id) for t in txs)
+        assert any((t.metadata_ or {}).get("delivery_id") == str(delivery_id) for t in txs)
+        assert await session.scalar(
+            select(OrderInvoice).where(OrderInvoice.order_id == order_id)
+        ) is not None
+        assert await session.scalar(
+            select(LedgerAllocation).where(LedgerAllocation.order_id == order_id)
+        ) is not None
+
+    r = await client.delete(f"/api/v1/orders/{order['id']}")
+    assert r.status_code == 204, r.text
+
+    async with get_session() as session:
+        order_id = uuid.UUID(order["id"])
+        delivery_id = uuid.UUID(delivery["id"])
+
+        assert await session.get(Order, order_id) is None
+        assert await session.get(Delivery, delivery_id) is None
+        assert await session.scalar(
+            select(OrderInvoice).where(OrderInvoice.order_id == order_id)
+        ) is None
+        assert await session.scalar(
+            select(LedgerAllocation).where(LedgerAllocation.order_id == order_id)
+        ) is None
+
+        txs = (
+            await session.execute(
+                select(Transaction).where(Transaction.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        linked = [
+            t
+            for t in txs
+            if (t.metadata_ or {}).get("order_id") == str(order_id)
+            or (t.metadata_ or {}).get("delivery_id") == str(delivery_id)
+        ]
+        assert linked
+        assert all(not t.is_active for t in linked)
+
+        entries = (
+            await session.execute(
+                select(JournalEntry).where(JournalEntry.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        voided = [e for e in entries if e.source_id in {t.id for t in linked}]
+        assert voided
+        assert all(e.status == "void" for e in voided)
+
+        payments = (
+            await session.execute(
+                select(LedgerEntry).where(LedgerEntry.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        voided_payment = next(p for p in payments if p.status == "voided")
+        assert order["order_ref"] in (voided_payment.void_reason or "")
+
+        variant = await session.get(ProductVariant, uuid.UUID(product["variants"][0]["id"]))
+        assert float(variant.stock_quantity) == 100

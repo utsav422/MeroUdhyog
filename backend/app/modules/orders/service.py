@@ -17,6 +17,7 @@ from app.modules.customers.credit import (
     exceeds_limit as credit_exceeds_limit,
 )
 from app.modules.customers.models import Customer
+from app.modules.notifications.schemas import BACKOFFICE_ROLES
 from app.modules.orders.models import Order, OrderItem
 from app.modules.orders.repository import OrderRepository
 from app.modules.orders.schemas import (
@@ -262,6 +263,7 @@ class OrderService:
         created = await self.repo.create(order, items)
         for movement in movements:
             movement.order_id = created.id
+        await self._notify_service().order_created(created.id, created.order_ref)
         return created
 
     async def _check_credit_limit(
@@ -600,8 +602,18 @@ class OrderService:
 
     async def delete(self, order_id: UUID) -> None:
         order = await self.repo.get(order_id)
-        if order.status != "draft":
-            raise ConflictError("Only draft orders can be deleted")
+        deleted_order_id = order.id
+        deleted_order_ref = order.order_ref
+        from app.modules.accounting.voiding import void_linked_accounting
+
+        await void_linked_accounting(
+            self.session,
+            self.tenant_id,
+            self.user_id,
+            order_id=order.id,
+            order_ref=order.order_ref,
+            void_payments=True,
+        )
         held, meta = await self._held_stock(order)
         await apply_stock_changes(
             self.session,
@@ -615,3 +627,15 @@ class OrderService:
             order_id=order.id,
         )
         await self.repo.delete(order)
+        await self._notify_service().notify(
+            category="system",
+            title="Order deleted",
+            message=f"Order {deleted_order_ref} was deleted and its accounting voided.",
+            link="/orders",
+            data={
+                "order_id": str(deleted_order_id),
+                "order_ref": deleted_order_ref,
+                "status": "deleted",
+            },
+            recipient_roles=BACKOFFICE_ROLES,
+        )

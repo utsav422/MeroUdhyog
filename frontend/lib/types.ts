@@ -314,6 +314,7 @@ export interface UserRead {
   role: string;
   is_active: boolean;
   is_superadmin: boolean;
+  is_email_verified: boolean;
   created_at: string;
 }
 

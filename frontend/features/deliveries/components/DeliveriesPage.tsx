@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Button, Menu, Modal, Select, Stack, Tabs, Text } from '@mantine/core';
+import { Button, Group, Menu, Modal, Select, Stack, Tabs, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { Textarea } from '@mantine/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Truck, MapPin, UserCirclePlus, CaretDown, Package, UsersThree } from '@phosphor-icons/react';
+import { Truck, MapPin, UserCirclePlus, CaretDown, Package, UsersThree, Trash } from '@phosphor-icons/react';
 import { apiClient } from '@/lib/api-client';
 import {
   DataTable,
@@ -17,7 +17,7 @@ import {
 import type { Column, SortState, Filters, DateRangeValue } from '@/components/shared';
 import { EMPTY_DATE_RANGE, dateInRange } from '@/components/shared';
 import { formatDateTime } from '@/lib/format';
-import { useDeliveries, deliveriesKeys, useBulkAssignDelivery, DELIVERY_STATUSES } from '../api';
+import { useDeliveries, deliveriesKeys, useBulkAssignDelivery, useDeleteDelivery, DELIVERY_STATUSES } from '../api';
 import type { Delivery } from '../api';
 import { ordersKeys } from '../../orders/api';
 import { useUsers } from '../../staff/api';
@@ -39,6 +39,7 @@ export default function DeliveriesPage() {
   const [activeRoute, setActiveRoute] = useState<string | null>(null);
   const deliveriesQuery = useDeliveries(activeRoute);
   const bulkAssignMutation = useBulkAssignDelivery();
+  const deleteMutation = useDeleteDelivery();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -54,7 +55,29 @@ export default function DeliveriesPage() {
   const [bulkRouteAgentId, setBulkRouteAgentId] = useState<string | null>(null);
   const [deliverTarget, setDeliverTarget] = useState<Delivery | null>(null);
   const [failedTarget, setFailedTarget] = useState<Delivery | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Delivery | null>(null);
   const [proofNotes, setProofNotes] = useState('');
+
+  const confirmDeleteDelivery = () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    deleteMutation.mutate(target.id, {
+      onSuccess: () => {
+        notifications.show({
+          color: 'success',
+          title: 'Delivery deleted',
+          message: `${target.order_ref ?? 'The delivery'} was removed and its accounting voided.`,
+        });
+        setDeleteTarget(null);
+      },
+      onError: (error) =>
+        notifications.show({
+          color: 'red',
+          title: 'Delete failed',
+          message: error instanceof Error ? error.message : 'Something went wrong',
+        }),
+    });
+  };
 
   const deliveryAgents = useMemo(
     () => (usersQuery.data ?? []).filter((u) => u.role === 'delivery'),
@@ -211,7 +234,6 @@ export default function DeliveriesPage() {
     const next = NEXT_ACTIONS[d.status];
     const deliverable = d.status === 'in_transit';
     const failable = ['assigned', 'picked_up', 'in_transit'].includes(d.status);
-    if (!assignable && !next && !deliverable && !failable) return null;
     return (
       <Menu shadow="md" width={200} position="bottom-end">
         <Menu.Target>
@@ -240,6 +262,10 @@ export default function DeliveriesPage() {
               Mark failed
             </Menu.Item>
           )}
+          <Menu.Divider />
+          <Menu.Item leftSection={<Trash size={16} />} color="red" onClick={() => setDeleteTarget(d)}>
+            Delete delivery
+          </Menu.Item>
         </Menu.Dropdown>
       </Menu>
     );
@@ -292,7 +318,6 @@ export default function DeliveriesPage() {
   return (
     <div>
       <PageHeader
-        title="Deliveries"
         subtitle="Track orders from dispatch to delivery"
         actions={
           <Button leftSection={<Truck size={16} />} onClick={() => deliveriesQuery.refetch()}>
@@ -537,6 +562,44 @@ export default function DeliveriesPage() {
           >
             Mark failed
           </Button>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title={
+          <div>
+            <Text fw={700} size="lg">Delete delivery for {deleteTarget?.order_ref ?? 'this order'}?</Text>
+            <Text size="xs" c="dimmed" className="mt-0.5">
+              This voids the accounting created by this delivery.
+            </Text>
+          </div>
+        }
+        centered
+        radius="xl"
+        size="md"
+      >
+        <Stack gap="md">
+          <Text size="sm" className="text-zinc-700">
+            Deleting this delivery permanently removes its location history and voids the sale
+            transaction and journal entries created by it. The order will be returned to
+            <Text span fw={600}> ready </Text>
+            so a new delivery can be created. This cannot be undone.
+          </Text>
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" size="md" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              size="md"
+              loading={deleteMutation.isPending}
+              onClick={confirmDeleteDelivery}
+            >
+              Delete delivery
+            </Button>
+          </Group>
         </Stack>
       </Modal>
     </div>

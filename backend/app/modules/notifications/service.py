@@ -7,11 +7,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.realtime import PENDING_EVENTS_KEY
 from app.modules.customers.models import Customer
 from app.modules.notifications import push
 from app.modules.notifications.models import Notification, PushSubscription
 from app.modules.notifications.repository import NotificationRepository
 from app.modules.notifications.schemas import (
+    BACKOFFICE_ROLES,
     NotificationRead,
     ReadAllResult,
     UnreadCountRead,
@@ -129,6 +131,18 @@ class NotificationService:
             self.session.add(notification)
         await self.session.flush()
 
+        event = NotificationRead.model_validate(notification).model_dump(mode="json")
+        event.update(
+            {
+                "tenant_id": str(self.tenant_id),
+                "recipient_user_id": (
+                    str(recipient_user_id) if recipient_user_id is not None else None
+                ),
+                "recipient_roles": recipient_roles,
+            }
+        )
+        self.session.info.setdefault(PENDING_EVENTS_KEY, []).append(event)
+
         try:
             if recipient_user_id is not None:
                 await push.push_to_users(
@@ -231,7 +245,7 @@ class NotificationService:
                     "stock": variant.stock_quantity,
                     "threshold": variant.low_stock_threshold,
                 },
-                recipient_roles=["owner", "admin", "manager"],
+                recipient_roles=BACKOFFICE_ROLES,
                 dedupe_key=f"stock:{variant.id}",
                 urgency="normal",
             )
@@ -248,6 +262,19 @@ class NotificationService:
         ).scalar_one_or_none()
         return str(row) if row else None
 
+    async def order_created(self, order_id: UUID, order_ref: str) -> None:
+        customer_name = await self._order_customer_name(order_id)
+        who = f" for {customer_name}" if customer_name else ""
+        await self.notify(
+            category="order",
+            title="New order placed",
+            message=f"Order {order_ref}{who} was created.",
+            link=f"/orders/{order_id}",
+            data={"order_id": str(order_id), "order_ref": order_ref, "status": "draft"},
+            recipient_roles=BACKOFFICE_ROLES,
+            urgency="normal",
+        )
+
     async def order_status(
         self,
         order_id: UUID,
@@ -259,6 +286,11 @@ class NotificationService:
         labels = {
             "confirmed": "Order confirmed",
             "ready": "Order ready for delivery",
+            "assigned": "Order assigned",
+            "picked_up": "Order picked up",
+            "in_transit": "Order on the way",
+            "delivered": "Order delivered",
+            "failed": "Order delivery failed",
             "cancelled": "Order cancelled",
         }
         title = labels.get(status, f"Order {status.replace('_', ' ')}")
@@ -273,7 +305,7 @@ class NotificationService:
             message=message,
             link=f"/orders/{order_id}",
             data={"order_id": str(order_id), "order_ref": order_ref, "status": status},
-            recipient_roles=["owner", "admin", "manager"],
+            recipient_roles=BACKOFFICE_ROLES,
             urgency="normal",
         )
 
@@ -287,6 +319,7 @@ class NotificationService:
         recipient_roles: list[str] | None = None,
         urgency: str = "normal",
         link: str | None = None,
+        delivery_id: UUID | None = None,
     ) -> None:
         customer_name = await self._order_customer_name(order_id)
         if message is None:
@@ -297,7 +330,12 @@ class NotificationService:
             title=f"Delivery {status.replace('_', ' ')}",
             message=message,
             link=link or f"/orders/{order_id}",
-            data={"order_id": str(order_id), "order_ref": order_ref, "status": status},
+            data={
+                "order_id": str(order_id),
+                "order_ref": order_ref,
+                "status": status,
+                "delivery_id": str(delivery_id) if delivery_id else None,
+            },
             recipient_user_id=recipient_user_id,
             recipient_roles=recipient_roles,
             urgency=urgency,
@@ -338,7 +376,11 @@ class NotificationService:
             message = (
                 f"{customer_name} is {stock_status.replace('_', ' ')} — "
                 f"reach out to re-order"
-                + (f" ({days_until_next} day(s) until expected)" if days_until_next is not None else "")
+                + (
+                    f" ({days_until_next} day(s) until expected)"
+                    if days_until_next is not None
+                    else ""
+                )
                 + "."
             )
         elif recommendation == "message":
@@ -346,7 +388,11 @@ class NotificationService:
             message = (
                 f"{customer_name} is {stock_status.replace('_', ' ')} — "
                 "send a gentle reminder"
-                + (f" ({days_until_next} day(s) until expected)" if days_until_next is not None else "")
+                + (
+                    f" ({days_until_next} day(s) until expected)"
+                    if days_until_next is not None
+                    else ""
+                )
                 + "."
             )
         else:
@@ -362,7 +408,7 @@ class NotificationService:
                 "stock_status": stock_status,
                 "recommendation": recommendation,
             },
-            recipient_roles=["owner", "admin", "manager"],
+            recipient_roles=BACKOFFICE_ROLES,
             dedupe_key=(
                 f"prediction:{customer_id}:{stock_status}:{recommendation}:"
                 f"{next_order_date.isoformat() if next_order_date else 'none'}"

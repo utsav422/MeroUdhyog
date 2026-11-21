@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { REALTIME_FALLBACK_POLL_MS } from '@/lib/realtime';
 
 export type VariantPrice = {
   id: string;
@@ -120,7 +121,7 @@ export const categoriesKeys = {
 
 export const inventoryKeys = {
   all: ['inventory'] as const,
-  low: () => [...inventoryKeys.all, 'low'] as const,
+  low: (limit: number) => [...inventoryKeys.all, 'low', limit] as const,
   movements: (limit: number) => [...inventoryKeys.all, 'movements', limit] as const,
   ledger: (params: LedgerParams) =>
     [
@@ -173,6 +174,8 @@ export function useProducts(enabled = true) {
     queryKey: productsKeys.list(),
     queryFn: () => apiClient.get<Product[]>(`/products?limit=${MAX_FETCH}`),
     enabled,
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -193,6 +196,8 @@ export function useAllProducts(search?: string | null, enabled = true) {
       return apiClient.get<Product[]>(`/products?${qs.toString()}`);
     },
     enabled,
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -214,9 +219,11 @@ export function useCategories(enabled = true) {
 
 export function useLowStock(limit = 10, enabled = true) {
   return useQuery({
-    queryKey: inventoryKeys.low(),
+    queryKey: inventoryKeys.low(limit),
     queryFn: () => apiClient.get<LowStockVariant[]>(`/products/inventory/low?limit=${limit}`),
     enabled,
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -225,6 +232,8 @@ export function useStockMovements(limit = 10, enabled = true) {
     queryKey: inventoryKeys.movements(limit),
     queryFn: () => apiClient.get<StockMovement[]>(`/products/inventory/movements?limit=${limit}`),
     enabled,
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 

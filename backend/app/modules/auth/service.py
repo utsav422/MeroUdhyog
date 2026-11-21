@@ -6,7 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.email import send_email
-from app.core.email_templates import password_reset_email, verification_email
+from app.core.email_templates import (
+    password_reset_email,
+    staff_id_verification_email,
+    verification_email,
+)
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -29,6 +33,7 @@ settings = get_settings()
 
 PURPOSE_RESET = "password_reset"
 PURPOSE_VERIFY = "email_verify"
+PURPOSE_ID_VERIFY = "id_verify"
 
 
 class AuthService:
@@ -244,6 +249,26 @@ class AuthService:
             html=html,
         )
 
+    async def send_staff_id_verification(self, user: User, tenant_name: str) -> None:
+        raw = await self._issue_email_token(
+            user, PURPOSE_ID_VERIFY, timedelta(hours=settings.VERIFY_TOKEN_EXPIRE_HOURS)
+        )
+        link = f"{settings.FRONTEND_URL}/verify-id?token={raw}"
+        text, html = staff_id_verification_email(
+            full_name=user.full_name,
+            email=user.email,
+            role=user.role,
+            tenant_name=tenant_name,
+            link=link,
+            expires_hours=settings.VERIFY_TOKEN_EXPIRE_HOURS,
+        )
+        send_email(
+            to=user.email,
+            subject=f"Verify your ID for {tenant_name}",
+            text=text,
+            html=html,
+        )
+
     async def forgot_password(self, email: str) -> None:
         """Always returns success to avoid leaking which emails are registered."""
         user = await self._get_user_by_email(email)
@@ -291,6 +316,12 @@ class AuthService:
         await self.session.flush()
         return user
 
+    async def verify_id(self, raw_token: str) -> User:
+        user = await self._consume_email_token(raw_token, PURPOSE_ID_VERIFY)
+        user.is_email_verified = True
+        await self.session.flush()
+        return user
+
     async def resend_verification(self, email: str) -> None:
         user = await self._get_user_by_email(email)
         if not user or not user.is_active or user.is_email_verified:
@@ -316,6 +347,9 @@ class AuthService:
             return None
         user = await self._get_user_by_id(token.user_id)
         return user.email if user else None
+
+    async def id_token_info(self, raw_token: str) -> str | None:
+        return await self.email_token_info(raw_token, PURPOSE_ID_VERIFY)
 
     async def _revoke_all_refresh_tokens(self, user_id: UUID) -> None:
         now = datetime.now(UTC)

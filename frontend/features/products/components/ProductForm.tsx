@@ -168,7 +168,7 @@ export default function ProductForm({ product }: { product?: Product }) {
               {
                 price: dv.price ?? 0,
                 cost_price: dv.cost_price ?? null,
-                currency: 'INR',
+                currency: 'NPR',
               },
             ],
           };
@@ -193,7 +193,7 @@ export default function ProductForm({ product }: { product?: Product }) {
               {
                 price: values.price ?? 0,
                 cost_price: values.cost_price ?? null,
-                currency: 'INR',
+                currency: 'NPR',
               },
             ],
           },
@@ -325,7 +325,7 @@ export default function ProductForm({ product }: { product?: Product }) {
               <NumberInput
                 label="Wholesale price"
                 min={0}
-                prefix="₹ "
+                prefix="NPR "
                 decimalScale={2}
                 placeholder="0.00"
                 {...form.getInputProps('price')}
@@ -333,7 +333,7 @@ export default function ProductForm({ product }: { product?: Product }) {
               <NumberInput
                 label="Cost of making"
                 min={0}
-                prefix="₹ "
+                prefix="NPR "
                 decimalScale={2}
                 placeholder="0.00"
                 {...form.getInputProps('cost_price')}
@@ -451,7 +451,7 @@ export default function ProductForm({ product }: { product?: Product }) {
                     <NumberInput
                       label="Wholesale price"
                       min={0}
-                      prefix="₹ "
+                      prefix="NPR "
                       decimalScale={2}
                       value={ev.price}
                       onChange={(val) => updateEditableVariant(ev.id, 'price', typeof val === 'number' ? val : undefined)}
@@ -459,7 +459,7 @@ export default function ProductForm({ product }: { product?: Product }) {
                     <NumberInput
                       label="Cost of making"
                       min={0}
-                      prefix="₹ "
+                      prefix="NPR "
                       decimalScale={2}
                       value={ev.cost_price}
                       onChange={(val) => updateEditableVariant(ev.id, 'cost_price', typeof val === 'number' ? val : undefined)}
@@ -540,7 +540,7 @@ export default function ProductForm({ product }: { product?: Product }) {
                         <NumberInput
                           label="Wholesale price"
                           min={0}
-                          prefix="₹ "
+                          prefix="NPR "
                           decimalScale={2}
                           value={dv.price}
                           onChange={(val) => updateDraftVariant(dv.key, 'price', typeof val === 'number' ? val : undefined)}
@@ -548,7 +548,7 @@ export default function ProductForm({ product }: { product?: Product }) {
                         <NumberInput
                           label="Cost of making"
                           min={0}
-                          prefix="₹ "
+                          prefix="NPR "
                           decimalScale={2}
                           value={dv.cost_price}
                           onChange={(val) => updateDraftVariant(dv.key, 'cost_price', typeof val === 'number' ? val : undefined)}

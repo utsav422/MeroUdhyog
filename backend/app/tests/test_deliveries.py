@@ -438,3 +438,67 @@ async def test_agent_reports_location_and_owner_sees_live_agents(client):
     assert Decimal(agent["agent_lng"]) == Decimal("85.3229")
     assert agent["agent_location_updated_at"] is not None
     assert agent["active_deliveries"] == 1
+
+
+@pytest.mark.asyncio
+async def test_deleting_delivery_voids_accounting_and_resets_order(client):
+    from sqlalchemy import select
+
+    from app.core.database import get_session
+    from app.modules.accounting.models import JournalEntry
+    from app.modules.deliveries.models import Delivery
+    from app.modules.transactions.models import Transaction
+
+    tokens = await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    tenant_id = uuid.UUID(tokens["tenant_id"])
+    product = await _create_product(client, f"P{uuid.uuid4().hex[:6]}")
+    order = await _create_ready_order(client, product)
+
+    r = await client.get("/api/v1/deliveries")
+    delivery = next(d for d in r.json() if d["order_id"] == order["id"])
+
+    agent_id = await _create_role_user(
+        tenant_id, "delivery", f"ag{uuid.uuid4().hex[:6]}@test.com"
+    )
+    r = await client.patch(
+        f"/api/v1/deliveries/{delivery['id']}/assign",
+        json={"delivery_agent_id": str(agent_id)},
+    )
+    assert r.status_code == 200, r.text
+    for status in ("picked_up", "in_transit", "delivered"):
+        r = await client.patch(
+            f"/api/v1/deliveries/{delivery['id']}", json={"status": status}
+        )
+        assert r.status_code == 200, r.text
+
+    r = await client.delete(f"/api/v1/deliveries/{delivery['id']}")
+    assert r.status_code == 204, r.text
+
+    r = await client.get(f"/api/v1/deliveries/{delivery['id']}")
+    assert r.status_code == 404
+
+    r = await client.get(f"/api/v1/orders/{order['id']}")
+    assert r.status_code == 200
+    assert r.json()["status"] == "ready"
+
+    async with get_session() as session:
+        delivery_id = uuid.UUID(delivery["id"])
+        assert await session.get(Delivery, delivery_id) is None
+
+        txs = (
+            await session.execute(
+                select(Transaction).where(Transaction.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        linked = [t for t in txs if (t.metadata_ or {}).get("delivery_id") == str(delivery_id)]
+        assert linked
+        assert all(not t.is_active for t in linked)
+
+        entries = (
+            await session.execute(
+                select(JournalEntry).where(JournalEntry.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        voided = [e for e in entries if e.source_id in {t.id for t in linked}]
+        assert voided
+        assert all(e.status == "void" for e in voided)

@@ -10,7 +10,7 @@
  *    >= 100%      exceeded (red)
  *
  *  Over 100% the bar caps at full width and the label carries the real figure
- *  ("₹12.5k / ₹10k"), so an overrun is visible rather than clipped.
+ *  ("NPR 12.5k / NPR 10k"), so an overrun is visible rather than clipped.
  */
 export type CreditLimitFigures = {
   /** Null when the customer has no limit set. A limit of 0 is a real limit
@@ -62,7 +62,7 @@ export default function CreditLimitBar({
     return (
       <span
         className={`inline-flex items-center rounded-lg bg-danger-50 px-2 py-0.5 text-[11px] font-semibold text-danger-700 ${className}`}
-        title="Credit limit is ₹0 — orders require confirmation"
+        title="Credit limit is NPR 0 — orders require confirmation"
       >
         No credit
       </span>

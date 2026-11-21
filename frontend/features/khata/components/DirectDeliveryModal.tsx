@@ -387,7 +387,7 @@ export default function DirectDeliveryModal({
                 label="Amount received"
                 min={0}
                 decimalScale={2}
-                prefix="₹ "
+                prefix="NPR "
                 value={paymentAmount}
                 onChange={(v) => setPaymentAmount(String(v ?? 0))}
               />

@@ -179,7 +179,7 @@ export default function RecordPaymentModal({
             onChange={(v) => setAmount(String(v ?? 0))}
             thousandSeparator=","
             decimalScale={2}
-            prefix="₹ "
+            prefix="NPR "
           />
           <Select
             label="Payment method"

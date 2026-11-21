@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -10,6 +11,7 @@ from app.modules.roles.models import Role
 from app.modules.users.models import User
 from app.modules.users.repository import UserRepository
 from app.modules.users.schemas import (
+    EmailAvailabilityResponse,
     UserCreate,
     UserProfileRead,
     UserProfileUpdate,
@@ -19,6 +21,8 @@ from app.shared.exceptions import ConflictError, NotFoundError, ValidationError
 
 ALLOWED_AVATAR_MIMES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
+
+logger = logging.getLogger(__name__)
 
 
 def avatar_url_for(user: User) -> str | None:
@@ -42,21 +46,38 @@ class UserService:
         if not ok:
             raise NotFoundError(f"Role '{role}' is not defined for this tenant")
 
+    async def check_email(self, tenant_id: UUID, email: str) -> EmailAvailabilityResponse:
+        existing = await self.repo.get_by_email(email, tenant_id)
+        return EmailAvailabilityResponse(available=existing is None)
+
     async def create_user(self, tenant_id: UUID, data: UserCreate) -> UserRead:
-        existing = await self.repo.get_by_email(data.email, tenant_id)
+        email = data.email.strip().lower()
+        existing = await self.repo.get_by_email(email, tenant_id)
         if existing:
             raise ConflictError("A user with this email already exists")
         await self._ensure_role_exists(tenant_id, data.role)
 
         user = User(
             tenant_id=tenant_id,
-            email=data.email,
+            email=email,
             hashed_password=get_password_hash(data.password),
             full_name=data.full_name,
             role=data.role,
         )
         created = await self.repo.create(user)
+        await self._send_id_verification(created, tenant_id)
         return UserRead.model_validate(created)
+
+    async def _send_id_verification(self, user: User, tenant_id: UUID) -> None:
+        from app.modules.auth.service import AuthService
+        from app.modules.tenants.repository import TenantRepository
+
+        tenant = await TenantRepository(self.session).get_by_id(tenant_id)
+        tenant_name = tenant.name if tenant else "Mero Udhyog"
+        try:
+            await AuthService(self.session).send_staff_id_verification(user, tenant_name)
+        except Exception:
+            logger.exception("Failed to send staff ID verification email")
 
     async def get_user(self, user_id: UUID, tenant_id: UUID) -> User:
         user = await self.repo.get_by_id(user_id, tenant_id)

@@ -192,6 +192,22 @@ async def validate_verify_token(
     return TokenInfoResponse(valid=email is not None, email=email)
 
 
+@router.post("/verify-id", response_model=MessageResponse)
+async def verify_id(data: VerifyEmailRequest, db=Depends(get_db)):
+    service = AuthService(db)
+    await service.verify_id(data.token)
+    return MessageResponse(detail="ID verified successfully.")
+
+
+@router.get("/verify-id/validate", response_model=TokenInfoResponse)
+async def validate_id_token(
+    token: str = Query(min_length=10, max_length=512), db=Depends(get_db)
+):
+    service = AuthService(db)
+    email = await service.id_token_info(token)
+    return TokenInfoResponse(valid=email is not None, email=email)
+
+
 @router.post("/resend-verification", response_model=MessageResponse)
 async def resend_verification(data: ResendVerificationRequest, db=Depends(get_db)):
     service = AuthService(db)

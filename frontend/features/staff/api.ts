@@ -12,6 +12,7 @@ export type User = {
   role: string;
   is_active: boolean;
   is_superadmin: boolean;
+  is_email_verified: boolean;
   created_at: string;
 };
 
@@ -32,6 +33,12 @@ export const staffKeys = {
   all: ['staff'] as const,
   list: () => [...staffKeys.all, 'list'] as const,
 };
+
+export function checkStaffEmail(email: string) {
+  return apiClient.get<{ available: boolean }>(
+    `/users/check-email?email=${encodeURIComponent(email.trim())}`,
+  );
+}
 
 export function useUsers() {
   return useQuery({

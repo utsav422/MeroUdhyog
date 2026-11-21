@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import get_settings
+from app.core.realtime import PENDING_EVENTS_KEY, realtime_bus
 
 
 class Base(DeclarativeBase):
@@ -46,14 +47,18 @@ async def get_session() -> AsyncSession:
     if async_session_maker is None:
         init_db()
     async with async_session_maker() as session:
+        events: list[dict] = []
         try:
             yield session
+            events = list(session.info.pop(PENDING_EVENTS_KEY, []))
             await session.commit()
         except Exception:
+            session.info.pop(PENDING_EVENTS_KEY, None)
             await session.rollback()
             raise
         finally:
             await session.close()
+        realtime_bus.publish_many(events)
 
 
 async def get_session_dependency() -> AsyncSession:

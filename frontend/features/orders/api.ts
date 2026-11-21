@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { REALTIME_FALLBACK_POLL_MS } from '@/lib/realtime';
 import { MAX_FETCH } from '../products/api';
 import { deliveriesKeys, useDeliveries } from '../deliveries/api';
 import type { Delivery } from '../deliveries/api';
@@ -81,6 +82,8 @@ export function useOrders(routeId?: string | null) {
           ? `/orders?limit=${MAX_FETCH}&route_id=${routeId}`
           : `/orders?limit=${MAX_FETCH}`,
       ),
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -89,6 +92,8 @@ export function useOrder(id: string | null, enabled = true) {
     queryKey: ordersKeys.detail(id ?? ''),
     queryFn: () => apiClient.get<Order>(`/orders/${id}`),
     enabled: enabled && !!id,
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -189,6 +194,37 @@ export function useReorderOrder() {
       qc.invalidateQueries({ queryKey: ordersKeys.all });
       qc.invalidateQueries({ queryKey: deliveriesKeys.all });
     },
+  });
+}
+
+export const DELETE_RELATED_QUERY_KEYS: string[][] = [
+  ['orders'],
+  ['deliveries'],
+  ['products'],
+  ['inventory'],
+  ['customers'],
+  ['khata'],
+  ['accounting'],
+  ['finance'],
+  ['payments'],
+  ['transactions'],
+  ['search'],
+  ['dashboard'],
+];
+
+export function invalidateOrderRelatedQueries(qc: ReturnType<typeof useQueryClient>) {
+  for (const queryKey of DELETE_RELATED_QUERY_KEYS) {
+    qc.invalidateQueries({ queryKey });
+  }
+}
+
+export function useDeleteOrder() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: async (orderId: string) => {
+      await apiClient.delete(`/orders/${orderId}`);
+    },
+    onSuccess: () => invalidateOrderRelatedQueries(qc),
   });
 }
 

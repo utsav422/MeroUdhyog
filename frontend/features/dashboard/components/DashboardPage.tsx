@@ -559,7 +559,7 @@ export default function DashboardPage() {
         <Panel
           className="xl:col-span-2"
           title="Revenue trend"
-          subtitle="In lakhs (NPR / INR)"
+          subtitle="In lakhs (NPR)"
           action={
             <div className="flex items-center gap-1 rounded-lg bg-black/[0.03] p-0.5">
               {PERIOD_OPTIONS.map((opt) => (

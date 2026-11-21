@@ -8,6 +8,8 @@ import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import { SessionProvider } from '@/lib/providers';
 import { useMe, useTenant } from '@/features/auth/hooks';
 import { PushNotificationsProvider } from '@/features/notifications/components/PushNotificationsProvider';
+import { NotificationUIProvider } from '@/features/notifications/components/NotificationUIProvider';
+import { RealtimeNotificationsProvider } from '@/features/notifications/components/RealtimeNotificationsProvider';
 import { LoadingState } from '@/components/shared';
 
 export default function DashboardLayout({
@@ -67,28 +69,31 @@ export default function DashboardLayout({
 
   return (
     <SessionProvider value={session}>
-      <div className="flex h-dvh overflow-hidden bg-[var(--background)]">
-        <Sidebar
-          tenantName={tenant.data?.name ?? 'Workspace'}
-          mobileOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <Topbar
-            fullName={session?.full_name ?? ''}
-            email={session?.email ?? ''}
-            onOpenSidebar={() => setSidebarOpen(true)}
+      <NotificationUIProvider>
+        <div className="flex h-dvh overflow-hidden bg-[var(--background)]">
+          <Sidebar
+            tenantName={tenant.data?.name ?? 'Workspace'}
+            mobileOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
           />
-          <main
-            ref={mainRef}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-28 pt-6 lg:px-8 lg:pb-6"
-          >
-            {children}
-          </main>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <Topbar
+              fullName={session?.full_name ?? ''}
+              email={session?.email ?? ''}
+              onOpenSidebar={() => setSidebarOpen(true)}
+            />
+            <main
+              ref={mainRef}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-28 pt-6 lg:px-8 lg:pb-6"
+            >
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
-      <MobileBottomNav onOpenSidebar={() => setSidebarOpen(true)} />
-      <PushNotificationsProvider enabled={!!session} />
+        <MobileBottomNav onOpenSidebar={() => setSidebarOpen(true)} />
+        <PushNotificationsProvider enabled={!!session} />
+        <RealtimeNotificationsProvider />
+      </NotificationUIProvider>
     </SessionProvider>
   );
 }

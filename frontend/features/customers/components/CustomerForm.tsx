@@ -182,7 +182,7 @@ latitude: values.latitude ? Number(values.latitude) : null,
           await apiClient.post(`/customers/${customerId}/prices`, {
             variant_id: row.variant_id,
             price: row.override,
-            currency: 'INR',
+            currency: 'NPR',
           });
         } else if (existingPriceMap.has(row.variant_id)) {
           try {
@@ -309,7 +309,7 @@ latitude: values.latitude ? Number(values.latitude) : null,
               label="Credit limit"
               description="Optional. Caps how much this customer may owe at once. Leave blank for no limit — you will be asked to confirm before an order pushes them past it."
               placeholder="No limit"
-              prefix="₹ "
+              prefix="NPR "
               min={0}
               decimalScale={2}
               thousandSeparator=","
