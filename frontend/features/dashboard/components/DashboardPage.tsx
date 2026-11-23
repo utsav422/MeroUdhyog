@@ -29,6 +29,8 @@ import {
   ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { useSession } from '@/lib/providers';
+import { useDateMode, type DateMode } from '@/lib/date-mode';
+import { BS_MONTHS, bsMonthLength, bsMonthStartAd, bsPartsFromAd } from '@/lib/nepali-date';
 import { useOrders } from '@/features/orders/api';
 import { useReorder, ReorderBadge, canReorder } from '@/features/orders/components/Reorder';
 import {
@@ -91,56 +93,151 @@ function Panel({
   );
 }
 
-/**
- * Self-contained month calendar. Dispatch/delivery dates are derived from
- * `assigned_at ?? created_at` on active deliveries as a stand-in — swap for a
- * real `scheduled_date` field once the deliveries API exposes one.
- */
+const AD_MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function toKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseKey(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function adMonthRangeLabel(startKey: string, endKey: string): string {
+  const [startYear, startMonth] = startKey.split('-').map(Number);
+  const [endYear, endMonth] = endKey.split('-').map(Number);
+  const start = AD_MONTHS[startMonth - 1]?.slice(0, 3) ?? '';
+  const end = AD_MONTHS[endMonth - 1]?.slice(0, 3) ?? '';
+  if (startYear === endYear) {
+    return startMonth === endMonth ? `${start} ${startYear}` : `${start} – ${end} ${startYear}`;
+  }
+  return `${start} ${startYear} – ${end} ${endYear}`;
+}
+
+function bsMonthRangeLabel(startKey: string, endKey: string): string {
+  const start = bsPartsFromAd(startKey);
+  const end = bsPartsFromAd(endKey);
+  if (!start || !end) return '';
+  const startMonth = BS_MONTHS[start.month - 1] ?? `Month ${start.month}`;
+  const endMonth = BS_MONTHS[end.month - 1] ?? `Month ${end.month}`;
+  if (start.year === end.year) {
+    return start.month === end.month
+      ? `${startMonth} ${start.year}`
+      : `${startMonth} – ${endMonth} ${start.year}`;
+  }
+  return `${startMonth} ${start.year} – ${endMonth} ${end.year}`;
+}
+
+function secondaryDayLabel(date: Date, mode: DateMode): string {
+  if (mode === 'BS') {
+    const monthName = AD_MONTHS[date.getMonth()]?.slice(0, 3) ?? '';
+    return date.getDate() === 1 ? `${monthName} ${date.getDate()}` : String(date.getDate());
+  }
+  const bs = bsPartsFromAd(toKey(date));
+  if (!bs) return '—';
+  const monthName = BS_MONTHS[bs.month - 1] ?? `Month ${bs.month}`;
+  return bs.day === 1 ? `${monthName} ${bs.day}` : String(bs.day);
+}
+
 function DispatchCalendar({ eventDates }: { eventDates: Set<string> }) {
+  const mode = useDateMode();
   const today = new Date();
-  const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
-  const [selected, setSelected] = useState(today.toDateString());
+  const todayKey = toKey(today);
+  const [viewDate, setViewDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+  const [selected, setSelected] = useState(todayKey);
 
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7; // Mon-first
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells: (number | null)[] = [
-    ...Array.from({ length: firstDow }, () => null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
+  const viewBs = useMemo(() => bsPartsFromAd(toKey(viewDate)), [viewDate]);
+  const bsYear = viewBs?.year ?? 0;
+  const bsMonth = viewBs?.month ?? 0;
+  const bsStartKey = mode === 'BS' && viewBs ? bsMonthStartAd(bsYear, bsMonth) : '';
+  const startOfMonth = bsStartKey
+    ? parseKey(bsStartKey)
+    : new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+  const daysInMonth =
+    mode === 'BS' && viewBs
+      ? bsMonthLength(bsYear, bsMonth)
+      : new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() + 1, 0).getDate();
+  const leading = (startOfMonth.getDay() + 6) % 7;
+  const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7;
+  const monthEnd = new Date(
+    startOfMonth.getFullYear(),
+    startOfMonth.getMonth(),
+    startOfMonth.getDate() + daysInMonth - 1,
+  );
+  const monthStartKey = toKey(startOfMonth);
+  const monthEndKey = toKey(monthEnd);
+  const cells: (Date | null)[] = Array.from({ length: totalCells }, (_, i) => {
+    const day = i - leading + 1;
+    return day >= 1 && day <= daysInMonth
+      ? new Date(startOfMonth.getFullYear(), startOfMonth.getMonth(), startOfMonth.getDate() + day - 1)
+      : null;
+  });
 
-  const monthLabel = formatMonthYear(cursor);
-  const dateKey = (d: number) => new Date(year, month, d).toDateString();
-  const eventCount = [...eventDates].filter(
-    (d) => new Date(d).getMonth() === month && new Date(d).getFullYear() === year,
-  ).length;
+  const monthLabel = formatMonthYear(startOfMonth, mode);
+  const secondaryLabel =
+    mode === 'BS'
+      ? adMonthRangeLabel(monthStartKey, monthEndKey)
+      : bsMonthRangeLabel(monthStartKey, monthEndKey);
+  const eventCount = [...eventDates].filter((d) => d >= monthStartKey && d <= monthEndKey).length;
+
+  const navigate = (dir: -1 | 1) => {
+    if (mode === 'BS' && viewBs) {
+      let nextMonth = bsMonth + dir;
+      let nextYear = bsYear;
+      if (nextMonth < 1) {
+        nextMonth = 12;
+        nextYear -= 1;
+      } else if (nextMonth > 12) {
+        nextMonth = 1;
+        nextYear += 1;
+      }
+      const nextStart = bsMonthStartAd(nextYear, nextMonth);
+      if (nextStart) setViewDate(parseKey(nextStart));
+      return;
+    }
+    setViewDate(new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() + dir, 1));
+  };
+
+  const dayLabel = (date: Date) =>
+    mode === 'BS' ? String(bsPartsFromAd(toKey(date))?.day ?? '—') : String(date.getDate());
 
   return (
     <Panel
       title="Calendar"
       subtitle="Scheduled dispatches & deliveries"
       action={
-        <div className="flex items-center gap-2 text-xs font-medium text-[var(--foreground)]">
-          {monthLabel}
-          <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => setCursor(new Date(year, month - 1, 1))}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--muted)] hover:bg-black/5"
-              aria-label="Previous month"
-            >
-              <CaretLeft size={13} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setCursor(new Date(year, month + 1, 1))}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--muted)] hover:bg-black/5"
-              aria-label="Next month"
-            >
-              <CaretRight size={13} />
-            </button>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2 text-xs font-medium text-[var(--foreground)]">
+            {monthLabel}
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--muted)] hover:bg-black/5"
+                aria-label="Previous month"
+              >
+                <CaretLeft size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(1)}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--muted)] hover:bg-black/5"
+                aria-label="Next month"
+              >
+                <CaretRight size={13} />
+              </button>
+            </div>
           </div>
+          {secondaryLabel && (
+            <span className="text-[10px] leading-none text-[var(--muted)]">{secondaryLabel}</span>
+          )}
         </div>
       }
     >
@@ -150,24 +247,30 @@ function DispatchCalendar({ eventDates }: { eventDates: Set<string> }) {
             {d}
           </div>
         ))}
-        {cells.map((d, i) => {
-          if (d === null) return <div key={`empty-${i}`} />;
-          const key = dateKey(d);
+        {cells.map((date, i) => {
+          if (date === null) return <div key={`empty-${i}`} />;
+          const key = toKey(date);
           const hasEvent = eventDates.has(key);
           const isSelected = selected === key;
+          const isToday = todayKey === key;
           return (
             <button
               key={key}
               type="button"
               onClick={() => setSelected(key)}
-              className={`mx-auto flex h-7 w-7 flex-col items-center justify-center rounded-full text-xs transition-colors ${
+              className={`mx-auto flex h-9 w-9 flex-col items-center justify-center rounded-full text-xs transition-colors ${
                 isSelected
                   ? 'bg-brand-600 font-semibold text-white'
-                  : 'text-[var(--foreground)] hover:bg-black/5'
+                  : isToday
+                    ? 'bg-brand-50 font-semibold text-brand-700'
+                    : 'text-[var(--foreground)] hover:bg-black/5'
               }`}
             >
-              {d}
-              {hasEvent && !isSelected && <span className="-mt-1 h-1 w-1 rounded-full bg-accent-500" />}
+              <span>{dayLabel(date)}</span>
+              <span className={`text-[9px] leading-none ${isSelected ? 'text-white/70' : 'text-[var(--muted)]/50'}`}>
+                {secondaryDayLabel(date, mode)}
+              </span>
+              {hasEvent && !isSelected && <span className="-mt-0.5 h-1 w-1 rounded-full bg-accent-500" />}
             </button>
           );
         })}
@@ -296,7 +399,7 @@ export default function DashboardPage() {
     for (const d of deliveries) {
       if (['delivered', 'failed'].includes(d.status)) continue;
       const ref = d.assigned_at ?? d.created_at;
-      if (ref) set.add(new Date(ref).toDateString());
+      if (ref) set.add(toKey(new Date(ref)));
     }
     return set;
   }, [deliveries]);
