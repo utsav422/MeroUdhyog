@@ -669,3 +669,37 @@ async def test_deleting_order_shrinks_shared_payment_credit(client):
 
     after = await client.get(f"/api/v1/customers/{customer['id']}")
     assert after.json()["credit_used"] == "10.00"
+
+
+@pytest.mark.parametrize("pay_first", [False, True])
+async def test_deleting_order_clears_khata_credit_figures(client, pay_first):
+    await _tenant(client)
+    product = await _create_product(client, "Khata Release")
+    customer = await _create_customer(
+        client, "Khata Release Co", credit_limit="100.00"
+    )
+    order = await _create_order(client, product, customer)
+    await _deliver_order(order["id"])
+    if pay_first:
+        await _pay(client, customer["id"], "20.00")
+
+    before = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    assert before.status_code == 200, before.text
+    assert before.json()["total_billed"] == "20.00"
+    assert before.json()["credit_used"] == ("0.00" if pay_first else "20.00")
+
+    r = await client.delete(f"/api/v1/orders/{order['id']}")
+    assert r.status_code == 204, r.text
+
+    detail = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["total_billed"] == "0.00"
+    assert detail.json()["credit_used"] == "0.00"
+    assert detail.json()["credit_available"] == "100.00"
+
+    rows = await client.get("/api/v1/khata/customers")
+    assert rows.status_code == 200, rows.text
+    row = next(c for c in rows.json() if c["customer_id"] == customer["id"])
+    assert row["total_billed"] == "0.00"
+    assert row["credit_used"] == "0.00"
+    assert row["credit_available"] == "100.00"

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { REALTIME_FALLBACK_POLL_MS } from '@/lib/realtime';
 import { accountingKeys } from '../accounting/api';
 import { customersKeys } from '../customers/api';
 import { deliveriesKeys } from '../deliveries/api';
@@ -305,6 +306,8 @@ export function useKhataCustomers(filters: KhataCustomerFilters = {}) {
   return useQuery({
     queryKey: [...khataKeys.customers(), filters],
     queryFn: () => apiClient.get<KhataCustomerSummary[]>(`/khata/customers${suffix ? `?${suffix}` : ''}`),
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -330,6 +333,8 @@ export function useCustomerKhata(
     queryKey: [...khataKeys.customer(id ?? ''), filters],
     queryFn: () => apiClient.get<CustomerKhataDetail>(`/khata/customers/${id}${suffix ? `?${suffix}` : ''}`),
     enabled: isEnabled && !!id,
+    refetchInterval: REALTIME_FALLBACK_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
