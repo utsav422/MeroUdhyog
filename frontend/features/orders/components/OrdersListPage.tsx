@@ -45,7 +45,7 @@ import {
   StatusBadge,
 } from '@/components/shared';
 import type { Column, SortState, Filters, DateRangeValue } from '@/components/shared';
-import { EMPTY_DATE_RANGE, dateInRange } from '@/components/shared';
+import { EMPTY_DATE_RANGE, dateRangeToApi } from '@/components/shared';
 import { ApiClientError, apiClient } from '@/lib/api-client';
 import { formatMoney, formatDate, formatDateTime } from '@/lib/format';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -169,7 +169,6 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
   const meta = SCOPE_META[scope];
   const isDeliveredScope = scope === 'delivered';
   const [routeFilter, setRouteFilter] = useState<string | null>(null);
-  const ordersQuery = useOrders(routeFilter);
   const productsQuery = useProducts();
   const customersQuery = useCustomers();
   const deliveriesQuery = useDeliveries();
@@ -241,11 +240,26 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [customerFilter, setCustomerFilter] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>({ field: 'created_at', direction: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const dateRange = dateRangeToApi(dateFilter);
+  const ordersQuery = useOrders({
+    routeId: routeFilter,
+    statusScope: isDeliveredScope ? 'delivered' : 'undelivered',
+    status: statusFilter,
+    customerId: customerFilter,
+    source: sourceFilter,
+    paymentStatus: paymentStatusFilter,
+    dateFrom: dateRange.from,
+    dateTo: dateRange.to,
+    search,
+  });
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Order | null>(null);
@@ -373,18 +387,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
   }, [productsQuery.data]);
 
   const filtered = useMemo(() => {
-    let rows = [...scopedOrders];
-    if (search.trim()) {
-      const needle = search.trim().toLowerCase();
-      rows = rows.filter(
-        (o) =>
-          o.order_ref.toLowerCase().includes(needle) ||
-          (customerMap.get(o.customer_id ?? '') ?? '').toLowerCase().includes(needle),
-      );
-    }
-    if (statusFilter) rows = rows.filter((o) => o.status === statusFilter);
-    if (customerFilter) rows = rows.filter((o) => o.customer_id === customerFilter);
-    rows = rows.filter((o) => dateInRange(o.created_at, dateFilter));
+    const rows = [...scopedOrders];
     const dir = sort.direction === 'asc' ? 1 : -1;
     rows.sort((a, b) => {
       const av = a[sort.field as keyof Order] ?? '';
@@ -392,7 +395,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
       return String(av).localeCompare(String(bv)) * dir;
     });
     return rows;
-  }, [scopedOrders, search, statusFilter, customerFilter, dateFilter, sort, customerMap]);
+  }, [scopedOrders, sort]);
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -840,7 +843,12 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
   ];
 
   const hasActiveFilters =
-    !!statusFilter || !!customerFilter || dateFilter.mode !== 'all';
+    !!search ||
+    !!statusFilter ||
+    !!customerFilter ||
+    !!sourceFilter ||
+    !!paymentStatusFilter ||
+    dateFilter.mode !== 'all';
 
   const selectedOrders = useMemo(
     () => scopedOrders.filter((o) => selected.includes(o.id)),
@@ -1037,6 +1045,27 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
               options: customerOptions,
             },
             {
+              type: 'select' as const,
+              key: 'source',
+              label: 'Source',
+              placeholder: 'Any source',
+              options: [
+                { value: 'order', label: 'Order' },
+                { value: 'khata_direct', label: 'Khata past delivery' },
+              ],
+            },
+            {
+              type: 'select' as const,
+              key: 'paymentStatus',
+              label: 'Payment',
+              placeholder: 'Any payment',
+              options: [
+                { value: 'unpaid', label: 'Unpaid' },
+                { value: 'partial', label: 'Partial' },
+                { value: 'paid', label: 'Paid' },
+              ],
+            },
+            {
               type: 'rangedate' as const,
               key: 'createdRange',
               label: 'Order date',
@@ -1046,12 +1075,16 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
             {
               status: statusFilter,
               customerId: customerFilter,
+              source: sourceFilter,
+              paymentStatus: paymentStatusFilter,
               createdRange: dateFilter,
             } as Filters
           }
           onFiltersChange={(f) => {
             setStatusFilter((f.status as string | null) ?? null);
             setCustomerFilter((f.customerId as string | null) ?? null);
+            setSourceFilter((f.source as string | null) ?? null);
+            setPaymentStatusFilter((f.paymentStatus as string | null) ?? null);
             setDateFilter((f.createdRange as DateRangeValue) ?? EMPTY_DATE_RANGE);
             setPage(1);
           }}
@@ -1059,6 +1092,8 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
             setSearch('');
             setStatusFilter(null);
             setCustomerFilter(null);
+            setSourceFilter(null);
+            setPaymentStatusFilter(null);
             setDateFilter(EMPTY_DATE_RANGE);
             setRouteFilter(null);
             setSelected([]);

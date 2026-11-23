@@ -18,6 +18,7 @@ import {
 } from '@/components/shared';
 import type { Column } from '@/components/shared';
 import { apiClient } from '@/lib/api-client';
+import { formatDateTime } from '@/lib/format';
 import { useAuditRuns, useAuditFindings, auditsKeys } from '../api';
 import type { AuditFinding, AuditRun } from '../api';
 
@@ -29,7 +30,7 @@ const SEVERITY_TONE: Record<string, string> = {
 };
 
 function dateTime(value: string): string {
-  return new Date(value).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+  return formatDateTime(value);
 }
 
 export default function AuditsPage() {

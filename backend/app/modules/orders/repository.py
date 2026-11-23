@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC, date, datetime, time
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.modules.customers.models import Customer
 from app.modules.orders.models import Order, OrderItem
 from app.shared.exceptions import NotFoundError
 
@@ -22,7 +24,20 @@ class OrderRepository:
         status: str | None = None,
         customer_id: UUID | None = None,
         route_id: UUID | None = None,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        search: str | None = None,
+        source: str | None = None,
+        payment_status: str | None = None,
+        status_scope: str | None = None,
     ) -> list[Order]:
+        """Tenant-scoped list with the filters used by the orders tables.
+
+        ``status_scope`` separates the delivered and pending/undelivered pages
+        without consuming the more specific ``status`` filter. Date bounds are
+        inclusive whole UTC days, matching the rest of the API's date filters.
+        """
         stmt = (
             select(Order)
             .options(
@@ -38,6 +53,34 @@ class OrderRepository:
             stmt = stmt.where(Order.customer_id == customer_id)
         if route_id is not None:
             stmt = stmt.where(Order.route_id == route_id)
+        if status_scope == "delivered":
+            stmt = stmt.where(Order.status == "delivered")
+        elif status_scope == "undelivered":
+            stmt = stmt.where(Order.status != "delivered")
+        if source:
+            stmt = stmt.where(Order.source == source)
+        if payment_status:
+            stmt = stmt.where(Order.payment_status == payment_status)
+        if date_from:
+            stmt = stmt.where(
+                Order.created_at >= datetime.combine(date_from, time.min, tzinfo=UTC)
+            )
+        if date_to:
+            stmt = stmt.where(Order.created_at <= datetime.combine(date_to, time.max, tzinfo=UTC))
+        needle = (search or "").strip()
+        if needle:
+            stmt = stmt.join(
+                Customer,
+                (Order.customer_id == Customer.id) & (Customer.tenant_id == self.tenant_id),
+                isouter=True,
+            ).where(
+                or_(
+                    Order.order_ref.ilike(f"%{needle}%"),
+                    Customer.name.ilike(f"%{needle}%"),
+                    Customer.phone.ilike(f"%{needle}%"),
+                    Order.notes.ilike(f"%{needle}%"),
+                )
+            )
         stmt = stmt.order_by(Order.created_at.desc()).limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         return list(result.scalars().unique().all())

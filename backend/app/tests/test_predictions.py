@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 import pytest
 
@@ -394,3 +395,34 @@ async def test_delete_single_manual_history_row_requires_import_permission(clien
         },
     )
     assert r.status_code == 403
+
+
+async def test_backdated_khata_delivery_uses_delivery_date_for_predictions(client):
+    from app.core.database import get_session
+    from app.modules.predictions.service import PredictionService
+
+    tokens = await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "PredictBackdate")
+    customer = await _create_customer(client, "PredictCo")
+    r = await client.post(
+        f"/api/v1/khata/customers/{customer['id']}/delivered-orders",
+        json={
+            "items": [
+                {
+                    "product_id": product["id"],
+                    "variant_id": product["variants"][0]["id"],
+                    "quantity": 2,
+                }
+            ],
+            "entered_at": "2026-10-05T09:00:00Z",
+            "delivered_at": "2026-09-20T14:30:00Z",
+        },
+    )
+    assert r.status_code == 201, r.text
+
+    async with get_session() as session:
+        grouped = await PredictionService(
+            session, uuid.UUID(tokens["tenant_id"])
+        )._collect_events()
+    events = grouped[(str(customer["id"]), str(product["id"]))]
+    assert events[0].order_date == date(2026, 9, 20)

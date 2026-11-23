@@ -1,3 +1,4 @@
+import { formatDateShort } from '@/lib/format';
 import { STATUS_LABELS } from './constants';
 import type { Analysis } from './api';
 
@@ -67,10 +68,7 @@ export function buildPreviewSentence(
         ? 'about every day'
         : `every ~${gapDays} days`;
 
-  const when = preview.nextDate.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
+  const when = formatDateShort(preview.nextDate);
 
   const currentPart = currentPairStatus
     ? ` Today it reads “${STATUS_LABELS[currentPairStatus] ?? currentPairStatus}”. `

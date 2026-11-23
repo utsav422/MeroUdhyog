@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { Text } from '@mantine/core';
+import { formatDateShort } from '@/lib/format';
 import type {
   CustomerPrediction,
   PredictionProduct,
@@ -51,10 +52,7 @@ function cadencePhrase(gapDays: number): string {
 }
 
 function prettyDate(value: string | null): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatDateShort(value) === '—' ? '' : formatDateShort(value);
 }
 
 function expectedPhrase(

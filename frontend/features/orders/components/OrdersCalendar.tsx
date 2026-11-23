@@ -28,7 +28,9 @@ import { useDeliveries } from '@/features/deliveries/api';
 import { useRoutes } from '@/features/routes/api';
 import { useCustomers } from '@/features/customers/api';
 import { StatusBadge } from '@/components/shared';
-import { formatMoney, formatNumber, formatDateTime } from '@/lib/format';
+import { useDateMode, type DateMode } from '@/lib/date-mode';
+import { formatMoney, formatNumber, formatDateTime, formatDateShort, formatFullDate } from '@/lib/format';
+import { BS_MONTHS, bsMonthLength, bsMonthStartAd, bsPartsFromAd } from '@/lib/nepali-date';
 
 type ActivityType = 'order_created' | 'delivery_assigned' | 'order_picked_up' | 'order_delivered';
 
@@ -96,7 +98,66 @@ function timeStr(ts: string): string {
 }
 
 function fullDateLabel(d: Date): string {
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  return formatFullDate(d);
+}
+
+function secondaryDayLabel(date: Date, mode: DateMode): string {
+  const key = toKey(date);
+  if (mode === 'BS') {
+    const [, month, day] = key.split('-').map(Number);
+    const monthName = MONTHS[month - 1]?.slice(0, 3) ?? '';
+    return day === 1 ? `${monthName} ${day}` : String(day);
+  }
+  const bs = bsPartsFromAd(key);
+  if (!bs) return '—';
+  const monthName = BS_MONTHS[bs.month - 1] ?? `Month ${bs.month}`;
+  return bs.day === 1 ? `${monthName} ${bs.day}` : String(bs.day);
+}
+
+function adMonthRangeLabel(startKey: string, endKey: string): string {
+  const [startYear, startMonth] = startKey.split('-').map(Number);
+  const [endYear, endMonth] = endKey.split('-').map(Number);
+  const start = MONTHS[startMonth - 1]?.slice(0, 3) ?? '';
+  const end = MONTHS[endMonth - 1]?.slice(0, 3) ?? '';
+  if (startYear === endYear) {
+    return startMonth === endMonth ? `${start} ${startYear}` : `${start} – ${end} ${startYear}`;
+  }
+  return `${start} ${startYear} – ${end} ${endYear}`;
+}
+
+function bsMonthRangeLabel(startKey: string, endKey: string): string {
+  const start = bsPartsFromAd(startKey);
+  const end = bsPartsFromAd(endKey);
+  if (!start || !end) return '';
+  const startMonth = BS_MONTHS[start.month - 1] ?? `Month ${start.month}`;
+  const endMonth = BS_MONTHS[end.month - 1] ?? `Month ${end.month}`;
+  if (start.year === end.year) {
+    return start.month === end.month
+      ? `${startMonth} ${start.year}`
+      : `${startMonth} – ${endMonth} ${start.year}`;
+  }
+  return `${startMonth} ${start.year} – ${endMonth} ${end.year}`;
+}
+
+function adDateRangeLabel(startKey: string, endKey: string): string {
+  const start = parseKey(startKey);
+  const end = parseKey(endKey);
+  const startLabel = `${MONTHS[start.getMonth()]?.slice(0, 3) ?? ''} ${start.getDate()}`;
+  const endLabel = `${MONTHS[end.getMonth()]?.slice(0, 3) ?? ''} ${end.getDate()}`;
+  if (start.getFullYear() === end.getFullYear()) {
+    return `${startLabel} – ${endLabel}, ${end.getFullYear()}`;
+  }
+  return `${startLabel}, ${start.getFullYear()} – ${endLabel}, ${end.getFullYear()}`;
+}
+
+function bsDateRangeLabel(startKey: string, endKey: string): string {
+  const start = bsPartsFromAd(startKey);
+  const end = bsPartsFromAd(endKey);
+  if (!start || !end) return '';
+  const startLabel = `${BS_MONTHS[start.month - 1] ?? `Month ${start.month}`} ${start.day}`;
+  const endLabel = `${BS_MONTHS[end.month - 1] ?? `Month ${end.month}`} ${end.day}`;
+  if (start.year === end.year) return `${startLabel} – ${endLabel}, ${start.year}`;
+  return `${startLabel}, ${start.year} – ${endLabel}, ${end.year}`;
 }
 
 export default function OrdersCalendar() {
@@ -105,6 +166,7 @@ export default function OrdersCalendar() {
   const routesQuery = useRoutes();
   const customersQuery = useCustomers();
   const reorder = useReorder();
+  const mode = useDateMode();
 
   const [view, setView] = useState<'month' | 'week'>('month');
   const [viewDate, setViewDate] = useState(() => new Date());
@@ -352,28 +414,41 @@ export default function OrdersCalendar() {
     [weekStart],
   );
 
-  const startOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
-  const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+  const viewBs = useMemo(() => bsPartsFromAd(toKey(viewDate)), [viewDate]);
+  const bsYear = viewBs?.year ?? 0;
+  const bsMonth = viewBs?.month ?? 0;
+  const bsMonthStartValue = mode === 'BS' && viewBs ? bsMonthStartAd(bsYear, bsMonth) : '';
+  const bsMonthStart = bsMonthStartValue ? parseKey(bsMonthStartValue) : null;
+  const bsDaysInMonth = viewBs ? bsMonthLength(bsYear, bsMonth) : 0;
+
+  const startOfMonth = bsMonthStart ?? new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+  const daysInMonth = mode === 'BS' && viewBs ? bsDaysInMonth : new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
   const leading = (startOfMonth.getDay() + 6) % 7;
   const totalCells = Math.ceil((leading + daysInMonth) / 7) * 7;
+  const monthEnd = new Date(startOfMonth.getFullYear(), startOfMonth.getMonth(), startOfMonth.getDate() + daysInMonth - 1);
 
   const cells: (Date | null)[] = [];
   for (let i = 0; i < totalCells; i++) {
     const day = i - leading + 1;
-    cells.push(day >= 1 && day <= daysInMonth ? new Date(viewDate.getFullYear(), viewDate.getMonth(), day) : null);
+    cells.push(
+      day >= 1 && day <= daysInMonth
+        ? new Date(startOfMonth.getFullYear(), startOfMonth.getMonth(), startOfMonth.getDate() + day - 1)
+        : null,
+    );
   }
 
+  const monthStartKey = toKey(startOfMonth);
+  const monthEndKey = toKey(monthEnd);
   const monthEvents = filteredEvents.filter((e) => {
-    const d = new Date(e.ts);
-    return d.getFullYear() === viewDate.getFullYear() && d.getMonth() === viewDate.getMonth();
+    const key = toKey(new Date(e.ts));
+    return key >= monthStartKey && key <= monthEndKey;
   });
   const monthSummary = {
     total: monthEvents.length,
     delivered: monthEvents.filter((e) => e.type === 'order_delivered').length,
     created: monthEvents.filter((e) => e.type === 'order_created').length,
   };
-  const monthPrefix = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}`;
-  const monthNotes = Object.keys(notes).filter((k) => k.startsWith(monthPrefix)).length;
+  const monthNotes = Object.keys(notes).filter((k) => k >= monthStartKey && k <= monthEndKey).length;
 
   const allNotes = useMemo(
     () =>
@@ -390,16 +465,52 @@ export default function OrdersCalendar() {
   const customerOptions = customers.map((c) => ({ value: c.id, label: c.name }));
   const hasActiveFilters = typeFilter.length > 0 || !!statusFilter || !!routeFilter || !!customerFilter || !!search;
 
+  const weekStartBs = bsPartsFromAd(toKey(weekStart));
+  const weekEndBs = bsPartsFromAd(toKey(weekDays[6]));
+  const bsWeekLabel =
+    weekStartBs && weekEndBs
+      ? `${formatDateShort(weekStart, 'BS')}, ${weekStartBs.year} – ${formatDateShort(weekDays[6], 'BS')}, ${weekEndBs.year}`
+      : `${formatDateShort(weekStart, 'BS')} – ${formatDateShort(weekDays[6], 'BS')}`;
+
   const calendarLabel =
     view === 'month'
-      ? `${MONTHS[viewDate.getMonth()]} ${viewDate.getFullYear()}`
-      : `${MONTHS[weekStart.getMonth()].slice(0, 3)} ${weekStart.getDate()} – ${
-          MONTHS[weekDays[6].getMonth()].slice(0, 3)
-        } ${weekDays[6].getDate()}, ${weekDays[6].getFullYear()}`;
+      ? mode === 'BS' && viewBs
+        ? `${BS_MONTHS[bsMonth - 1] ?? `Month ${bsMonth}`} ${bsYear}`
+        : `${MONTHS[viewDate.getMonth()]} ${viewDate.getFullYear()}`
+      : mode === 'BS'
+        ? bsWeekLabel
+        : `${MONTHS[weekStart.getMonth()].slice(0, 3)} ${weekStart.getDate()} – ${
+            MONTHS[weekDays[6].getMonth()].slice(0, 3)
+          } ${weekDays[6].getDate()}, ${weekDays[6].getFullYear()}`;
+
+  const secondaryRangeStart = view === 'month' ? monthStartKey : toKey(weekStart);
+  const secondaryRangeEnd = view === 'month' ? monthEndKey : toKey(weekDays[6]);
+  const calendarSecondaryLabel =
+    view === 'month'
+      ? mode === 'BS'
+        ? adMonthRangeLabel(secondaryRangeStart, secondaryRangeEnd)
+        : bsMonthRangeLabel(secondaryRangeStart, secondaryRangeEnd)
+      : mode === 'BS'
+        ? adDateRangeLabel(secondaryRangeStart, secondaryRangeEnd)
+        : bsDateRangeLabel(secondaryRangeStart, secondaryRangeEnd);
 
   const navigate = (dir: -1 | 1) => {
     if (view === 'month') {
-      setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + dir, 1));
+      if (mode === 'BS' && viewBs) {
+        let nextMonth = bsMonth + dir;
+        let nextYear = bsYear;
+        if (nextMonth < 1) {
+          nextMonth = 12;
+          nextYear -= 1;
+        } else if (nextMonth > 12) {
+          nextMonth = 1;
+          nextYear += 1;
+        }
+        const nextStart = bsMonthStartAd(nextYear, nextMonth);
+        if (nextStart) setViewDate(parseKey(nextStart));
+      } else {
+        setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + dir, 1));
+      }
     } else {
       const d = new Date(weekStart);
       d.setDate(d.getDate() + 7 * dir);
@@ -409,7 +520,13 @@ export default function OrdersCalendar() {
 
   const goToday = () => {
     const now = new Date();
-    setViewDate(view === 'month' ? new Date(now.getFullYear(), now.getMonth(), 1) : startOfWeek(now));
+    setViewDate(
+      view === 'week'
+        ? startOfWeek(now)
+        : mode === 'BS'
+          ? now
+          : new Date(now.getFullYear(), now.getMonth(), 1),
+    );
     selectDay(now);
   };
 
@@ -424,9 +541,16 @@ export default function OrdersCalendar() {
   const editNoteFromList = (key: string) => {
     const d = parseKey(key);
     selectDay(d);
-    setViewDate(new Date(d.getFullYear(), d.getMonth(), 1));
+    setViewDate(
+      view === 'month' && mode === 'AD'
+        ? new Date(d.getFullYear(), d.getMonth(), 1)
+        : d,
+    );
     setNoteEditing(true);
   };
+
+  const dayLabel = (date: Date) =>
+    mode === 'BS' ? String(bsPartsFromAd(toKey(date))?.day ?? '—') : String(date.getDate());
 
   const renderGrid = (dates: (Date | null)[]) => (
     <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
@@ -461,14 +585,19 @@ export default function OrdersCalendar() {
                   : 'border-[var(--border)] bg-white hover:border-[var(--border)] hover:bg-black/5'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span
-                className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
-                  isToday ? 'bg-brand-600 text-white' : 'text-[var(--muted)]'
-                }`}
-              >
-                {date.getDate()}
-              </span>
+            <div className="flex items-start justify-between">
+              <div className="flex flex-col items-start">
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
+                    isToday ? 'bg-brand-600 text-white' : 'text-[var(--muted)]'
+                  }`}
+                >
+                  {dayLabel(date)}
+                </span>
+                <span className="mt-0.5 max-w-full truncate text-[9px] leading-none text-[var(--muted)]/45">
+                  {secondaryDayLabel(date, mode)}
+                </span>
+              </div>
               {dayEvents.length > 0 && (
                 <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-bold text-[var(--muted)]">
                   {dayEvents.length}
@@ -617,7 +746,10 @@ export default function OrdersCalendar() {
                       { value: 'week', label: 'Week' },
                     ]}
                   />
-                  <span className="ml-1 text-sm font-bold text-[var(--foreground)]">{calendarLabel}</span>
+                  <div className="ml-1 flex flex-col">
+                    <span className="text-sm font-bold leading-tight text-[var(--foreground)]">{calendarLabel}</span>
+                    <span className="text-[10px] leading-tight text-[var(--muted)]/55">{calendarSecondaryLabel}</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button

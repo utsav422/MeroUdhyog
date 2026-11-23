@@ -35,23 +35,50 @@ async def _service(db, tenant_id: UUID, user_id=None) -> KhataService:
 
 @router.get("/customers", response_model=list[KhataCustomerSummary])
 async def list_customers(
+    search: str | None = None,
+    city: str | None = None,
+    balance_status: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
     _=Depends(require_any_permission(Permissions.VIEW_ALL, Permissions.MANAGE_KHATA)),
 ):
     service = await _service(db, tenant_id)
-    return await service.list_customers()
+    return await service.list_customers(
+        search=search,
+        city=city,
+        balance_status=balance_status,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @router.get("/customers/{customer_id}", response_model=CustomerKhataDetail)
 async def customer_khata(
     customer_id: UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    entry_type: str | None = None,
+    method: str | None = None,
+    search: str | None = None,
+    ledger_limit: int | None = None,
+    ledger_offset: int = 0,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
     _=Depends(require_any_permission(Permissions.VIEW_ALL, Permissions.MANAGE_KHATA)),
 ):
     service = await _service(db, tenant_id)
-    return await service.customer_detail(customer_id)
+    return await service.customer_detail(
+        customer_id,
+        date_from=date_from,
+        date_to=date_to,
+        entry_type=entry_type,
+        method=method,
+        search=search,
+        ledger_limit=ledger_limit,
+        ledger_offset=ledger_offset,
+    )
 
 
 @router.post(

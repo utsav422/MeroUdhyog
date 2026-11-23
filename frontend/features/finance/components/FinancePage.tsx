@@ -11,12 +11,12 @@ import {
   KPICard,
 } from '@/components/shared';
 import type { Column } from '@/components/shared';
+import { formatMonthYear } from '@/lib/format';
 import { useFinanceTrends } from '../api';
 import type { MonthlySummary } from '../api';
 
 function monthLabel(month: string): string {
-  const d = new Date(`${month}T00:00:00Z`);
-  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return formatMonthYear(`${month}-01`);
 }
 
 export default function FinancePage() {

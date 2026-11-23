@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/shared';
 import { downloadCsv } from '@/lib/exportCsv';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { LedgerEntry } from '../api';
+import { paymentMethodLabel } from '../constants';
 
 function balanceLabel(balance: string, side: 'dr' | 'cr' | 'zero'): string {
   if (side === 'zero') return '—';
@@ -23,7 +24,10 @@ function refLabel(entry: LedgerEntry): string {
 }
 
 function particularLabel(entry: LedgerEntry): string {
-  return entry.entry_type === 'invoice' ? 'To Sales / Order' : 'By Payment Received';
+  if (entry.entry_type === 'invoice') return 'To Sales / Order';
+  return entry.method
+    ? `By Payment Received (${paymentMethodLabel(entry.method)})`
+    : 'By Payment Received';
 }
 
 export default function LedgerTable({

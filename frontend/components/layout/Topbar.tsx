@@ -2,9 +2,10 @@
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Avatar, Group, Indicator, Menu, Text } from '@mantine/core';
+import { Avatar, Group, Indicator, Menu, SegmentedControl, Text } from '@mantine/core';
 import { Bell, List, MagnifyingGlass, SignOut, UserCircle } from '@phosphor-icons/react';
 import { apiAssetUrl, apiClient } from '@/lib/api-client';
+import { setDateMode, useDateMode, type DateMode } from '@/lib/date-mode';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/providers';
 import { useUnreadCount } from '@/features/notifications/api';
@@ -38,6 +39,7 @@ export default function Topbar({
   const pathname = usePathname();
   const router = useRouter();
   const session = useSession();
+  const dateMode = useDateMode();
   const [searchOpen, setSearchOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const { notificationsOpen, openNotifications, closeNotifications } =
@@ -142,6 +144,17 @@ export default function Topbar({
             />
           </>
         )}
+
+        <SegmentedControl
+          size="xs"
+          aria-label="Date format"
+          value={dateMode}
+          onChange={(value) => setDateMode(value as DateMode)}
+          data={[
+            { value: 'AD', label: 'AD' },
+            { value: 'BS', label: 'BS' },
+          ]}
+        />
 
         <Indicator
           inline

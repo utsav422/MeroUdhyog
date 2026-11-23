@@ -3,8 +3,21 @@
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createContext, useContext, useState } from 'react';
+import { Fragment, createContext, useContext, useEffect, useState } from 'react';
+import { loadDateMode, subscribeDateMode } from '@/lib/date-mode';
 import { theme } from '@/lib/theme/theme';
+
+function DateModeRefresher({ children }: { children: React.ReactNode }) {
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    const unsubscribe = subscribeDateMode(() => setVersion((value) => value + 1));
+    loadDateMode();
+    return unsubscribe;
+  }, []);
+
+  return <Fragment key={version}>{children}</Fragment>;
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -24,7 +37,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <MantineProvider theme={theme} defaultColorScheme="light">
         <Notifications position="top-center" />
-        {children}
+        <DateModeRefresher>{children}</DateModeRefresher>
       </MantineProvider>
     </QueryClientProvider>
   );

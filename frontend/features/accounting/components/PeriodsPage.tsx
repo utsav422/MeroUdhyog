@@ -19,6 +19,7 @@ import { CalendarBlank, LockKey, LockOpen, Plus } from '@phosphor-icons/react';
 import { PageHeader } from '@/components/shared';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { ApiClientError } from '@/lib/api-client';
+import { formatDateTime } from '@/lib/format';
 import {
   useClosePeriod,
   useCreateFiscalYear,
@@ -128,7 +129,7 @@ export default function PeriodsPage() {
     {
       key: 'closed_at',
       header: 'Closed at',
-      render: (row) => (row.closed_at ? new Date(row.closed_at).toLocaleString() : '—'),
+      render: (row) => formatDateTime(row.closed_at),
     },
   ];
 

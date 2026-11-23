@@ -20,6 +20,28 @@ export type DateRangeValue = {
 
 export const EMPTY_DATE_RANGE: DateRangeValue = { mode: 'all', from: null, to: null };
 
+export function dateRangeToApi(value: DateRangeValue | null | undefined): {
+  from?: string;
+  to?: string;
+} {
+  if (!value || value.mode === 'all') return {};
+  const day = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  if (value.mode === 'range' && value.from && value.to) {
+    return { from: day(value.from), to: day(value.to) };
+  }
+  if (value.mode === 'today') {
+    const today = new Date();
+    return { from: day(today), to: day(today) };
+  }
+  if (value.mode === 'yesterday') {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return { from: day(yesterday), to: day(yesterday) };
+  }
+  return {};
+}
+
 /** Idle time before the search term is pushed to the caller. */
 export const SEARCH_DEBOUNCE_MS = 350;
 

@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 import pytest
 from sqlalchemy import select
@@ -473,3 +474,30 @@ async def test_deleting_delivered_order_voids_related_accounting(client):
 
         variant = await session.get(ProductVariant, uuid.UUID(product["variants"][0]["id"]))
         assert float(variant.stock_quantity) == 100
+
+
+async def test_orders_list_supports_table_filters(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "Filters")
+    customer_a = await _create_customer(client, "FilterCo")
+    customer_b = await _create_customer(client, "OtherCo")
+    order_a = await _create_order(client, product, customer_a)
+    await _create_order(client, product, customer_b)
+
+    today = date.today().isoformat()
+    r = await client.get(f"/api/v1/orders?date_from={today}&date_to={today}")
+    assert r.status_code == 200
+    assert len(r.json()) == 2
+
+    r = await client.get(f"/api/v1/orders?search={customer_a['name']}")
+    assert [o["id"] for o in r.json()] == [order_a["id"]]
+
+    r = await client.get(f"/api/v1/orders?source={order_a['source']}")
+    assert all(o["source"] == order_a["source"] for o in r.json())
+
+    r = await client.get(f"/api/v1/orders?payment_status={order_a['payment_status']}")
+    assert all(o["payment_status"] == order_a["payment_status"] for o in r.json())
+
+    r = await client.get("/api/v1/orders?status_scope=undelivered")
+    assert all(o["status"] != "delivered" for o in r.json())
+    assert order_a["id"] in {o["id"] for o in r.json()}

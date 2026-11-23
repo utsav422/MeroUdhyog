@@ -85,7 +85,15 @@ class KhataService:
 
     # ---- reading ------------------------------------------------------------------
 
-    async def list_customers(self) -> list[KhataCustomerSummary]:
+    async def list_customers(
+        self,
+        *,
+        search: str | None = None,
+        city: str | None = None,
+        balance_status: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> list[KhataCustomerSummary]:
         customers = await self.repo.list_customers()
         billed = await self.repo.billed_by_customer()
         paid = await self.repo.paid_by_customer()
@@ -105,6 +113,7 @@ class KhataService:
                     phone=c.phone,
                     company=c.company,
                     city=c.city,
+                    address=c.address,
                     total_billed=billed_total,
                     total_paid=paid_total,
                     outstanding=_q2(billed_total - paid_total),
@@ -114,13 +123,57 @@ class KhataService:
                     credit_limit=c.credit_limit,
                     credit_used=used,
                     credit_available=credit_available(c.credit_limit, used),
-                    credit_utilization=credit_utilization(c.credit_limit, used),
-                )
+                credit_utilization=credit_utilization(c.credit_limit, used),
             )
+        )
+        needle = (search or "").strip().lower()
+        if needle:
+            rows = [
+                row
+                for row in rows
+                if needle
+                in " ".join(
+                    filter(
+                        None,
+                        [row.customer_name, row.phone, row.company, row.city, row.address],
+                    )
+                ).lower()
+            ]
+        if city and city.strip():
+            wanted = city.strip().lower()
+            rows = [row for row in rows if (row.city or "").lower() == wanted]
+        if balance_status == "outstanding":
+            rows = [row for row in rows if row.outstanding > ZERO]
+        elif balance_status == "credit":
+            rows = [row for row in rows if row.outstanding < ZERO]
+        elif balance_status == "settled":
+            rows = [row for row in rows if row.outstanding == ZERO]
+        if date_from or date_to:
+            start = datetime.combine(date_from, time.min, tzinfo=UTC) if date_from else None
+            end = datetime.combine(date_to, time.max, tzinfo=UTC) if date_to else None
+            rows = [
+                row
+                for row in rows
+                if row.last_payment_date is not None
+                and (start is None or _utc(row.last_payment_date) >= start)
+                and (end is None or _utc(row.last_payment_date) <= end)
+            ]
         return rows
 
-    async def customer_detail(self, customer_id: UUID) -> CustomerKhataDetail:
+    async def customer_detail(
+        self,
+        customer_id: UUID,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        entry_type: str | None = None,
+        method: str | None = None,
+        search: str | None = None,
+        ledger_limit: int | None = None,
+        ledger_offset: int = 0,
+    ) -> CustomerKhataDetail:
         customer = await self.repo.get_customer(customer_id)
+
         orders = await self.repo.list_billable_orders(customer_id)
         payments = await self.repo.list_payments(customer_id)
         order_ids = [o.id for o in orders]
@@ -146,6 +199,18 @@ class KhataService:
         payment_reads = [self._payment_read(p) for p in payments]
 
         used = await credit_used_for(self.session, self.tenant_id, customer.id)
+        full_ledger = self._build_ledger(orders, payments, invoice_numbers, delivery_dates)
+        visible_ledger = self._filter_ledger(
+            full_ledger,
+            date_from=date_from,
+            date_to=date_to,
+            entry_type=entry_type,
+            method=method,
+            search=search,
+        )
+        ledger_total = len(visible_ledger)
+        if ledger_limit is not None:
+            visible_ledger = visible_ledger[ledger_offset : ledger_offset + ledger_limit]
         return CustomerKhataDetail(
             customer_id=customer.id,
             customer_name=customer.name,
@@ -163,8 +228,53 @@ class KhataService:
             credit_utilization=credit_utilization(customer.credit_limit, used),
             orders=order_reads,
             payments=payment_reads,
-            ledger=self._build_ledger(orders, payments, invoice_numbers, delivery_dates),
+            ledger=visible_ledger,
+            ledger_total=ledger_total,
         )
+
+    @staticmethod
+    def _filter_ledger(
+        rows: list[LedgerEntryRead],
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        entry_type: str | None = None,
+        method: str | None = None,
+        search: str | None = None,
+    ) -> list[LedgerEntryRead]:
+        """Filter displayed ledger rows without disturbing their running balances."""
+        start = datetime.combine(date_from, time.min, tzinfo=UTC) if date_from else None
+        end = datetime.combine(date_to, time.max, tzinfo=UTC) if date_to else None
+        needle = (search or "").strip().lower()
+        result: list[LedgerEntryRead] = []
+        for row in rows:
+            if start or end:
+                moment = _utc(row.date)
+                if start and moment < start:
+                    continue
+                if end and moment > end:
+                    continue
+            if entry_type and row.entry_type != entry_type:
+                continue
+            if method and (row.method or "") != method:
+                continue
+            if needle:
+                haystack = " ".join(
+                    filter(
+                        None,
+                        [
+                            row.ref,
+                            row.order_ref,
+                            row.invoice_number,
+                            row.receipt_number,
+                            row.payer_bill_no,
+                        ],
+                    )
+                ).lower()
+                if needle not in haystack:
+                    continue
+            result.append(row)
+        return result
 
     def _build_ledger(
         self,
@@ -193,6 +303,7 @@ class KhataService:
                     "payment_id": None,
                     "receipt_number": None,
                     "payer_bill_no": None,
+                    "method": None,
                     "debit": _q2(o.total_amount or ZERO),
                     "credit": None,
                 }
@@ -210,6 +321,7 @@ class KhataService:
                     "payment_id": p.id,
                     "receipt_number": p.receipt_number,
                     "payer_bill_no": p.payer_bill_no,
+                    "method": p.method,
                     "debit": None,
                     "credit": _q2(p.amount),
                 }
@@ -239,6 +351,7 @@ class KhataService:
                     payment_id=r["payment_id"],
                     receipt_number=r["receipt_number"],
                     payer_bill_no=r["payer_bill_no"],
+                    method=r.get("method"),
                     debit=r["debit"],
                     credit=r["credit"],
                     balance=running,

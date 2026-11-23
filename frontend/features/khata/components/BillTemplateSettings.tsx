@@ -417,6 +417,8 @@ function BillFormatEditor({
               logo={template.logo?.data_url ?? null}
               signature={template.signature?.data_url ?? null}
               layout={layout}
+              invoiceNumber={`${text.invoice_number_prefix || 'INV-'}${template.next_invoice_number}`}
+              receiptNumber={`${text.receipt_number_prefix || 'RCT-'}${template.next_receipt_number}`}
             />
           </div>
         </div>

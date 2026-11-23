@@ -10,6 +10,7 @@ import {
   Timer,
   Warning,
 } from '@phosphor-icons/react';
+import { formatDateShort } from '@/lib/format';
 import type { CustomerPrediction, PredictionProduct } from '../api';
 import { STATUS_COLORS, STATUS_EXPLAIN, STATUS_LABELS, STATUS_ORDER } from '../constants';
 
@@ -53,10 +54,7 @@ function statusCounts(customer: CustomerPrediction): Counts {
 }
 
 function shortDate(value: string | null): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatDateShort(value) === '—' ? '' : formatDateShort(value);
 }
 
 function sortByUrgency(products: PredictionProduct[]): PredictionProduct[] {

@@ -62,3 +62,29 @@ export function bsToAd(value: string): string {
     return '';
   }
 }
+
+export const BS_MONTHS = [
+  'Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin',
+  'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra',
+];
+
+export type BsDateParts = { year: number; month: number; day: number };
+
+export function bsPartsFromAd(value: string): BsDateParts | null {
+  const bs = adToBs(value);
+  if (!bs) return null;
+  const [year, month, day] = bs.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return { year, month, day };
+}
+
+export function bsMonthStartAd(year: number, month: number): string {
+  return bsToAd(`${String(year).padStart(4, '0')}-${pad(month)}-01`);
+}
+
+export function bsMonthLength(year: number, month: number): number {
+  for (let day = 32; day >= 1; day--) {
+    if (bsToAd(`${String(year).padStart(4, '0')}-${pad(month)}-${pad(day)}`)) return day;
+  }
+  return 30;
+}

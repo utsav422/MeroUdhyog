@@ -40,7 +40,15 @@ import {
 } from '@/features/products/api';
 import { useCustomers } from '@/features/customers/api';
 import { useDeliveries } from '@/features/deliveries/api';
-import { formatMoney, formatCompact, timeAgo, formatNumber, formatDate } from '@/lib/format';
+import {
+  formatMoney,
+  formatCompact,
+  timeAgo,
+  formatNumber,
+  formatDate,
+  formatDateTime,
+  formatMonthYear,
+} from '@/lib/format';
 import { downloadCsv } from '@/lib/exportCsv';
 
 const PIE_COLORS = ['#1b4332', '#f59e0b', '#a8c5b8', '#528a72', '#7ba695'];
@@ -102,7 +110,7 @@ function DispatchCalendar({ eventDates }: { eventDates: Set<string> }) {
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
-  const monthLabel = cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthLabel = formatMonthYear(cursor);
   const dateKey = (d: number) => new Date(year, month, d).toDateString();
   const eventCount = [...eventDates].filter(
     (d) => new Date(d).getMonth() === month && new Date(d).getFullYear() === year,
@@ -396,7 +404,7 @@ export default function DashboardPage() {
     const push = (cells: Array<string | number | null | undefined>) => rows.push(cells);
 
     push(['DASHBOARD REPORT']);
-    push(['Generated', new Date().toLocaleString()]);
+    push(['Generated', formatDateTime(new Date())]);
     push([]);
     push(['KPI', 'Value']);
     push(['Revenue (paid)', formatMoney(kpis.revenue)]);

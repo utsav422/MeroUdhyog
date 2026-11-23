@@ -7,6 +7,7 @@ import { customersKeys } from '../customers/api';
 import { deliveriesKeys } from '../deliveries/api';
 import { financeKeys } from '../finance/api';
 import { ordersKeys } from '../orders/api';
+import { predictionsKeys } from '../predictions/api';
 import { inventoryKeys, productsKeys } from '../products/api';
 
 export type KhataCustomerSummary = {
@@ -15,6 +16,7 @@ export type KhataCustomerSummary = {
   phone: string | null;
   company: string | null;
   city: string | null;
+  address: string | null;
   total_billed: string;
   total_paid: string;
   outstanding: string;
@@ -50,6 +52,7 @@ export type LedgerEntry = {
   payment_id: string | null;
   receipt_number: string | null;
   payer_bill_no: string | null;
+  method: string | null;
   debit: string | null;
   credit: string | null;
   balance: string;
@@ -98,6 +101,7 @@ export type CustomerKhataDetail = {
   orders: KhataOrder[];
   payments: Payment[];
   ledger: LedgerEntry[];
+  ledger_total: number;
 };
 
 export type RecordPaymentInput = {
@@ -262,18 +266,70 @@ export const khataKeys = {
       : ([...khataKeys.all, 'layouts'] as const),
 };
 
-export function useKhataCustomers() {
+export type KhataCustomerFilters = {
+  search?: string | null;
+  city?: string | null;
+  balanceStatus?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+};
+
+export type KhataLedgerFilters = {
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  entryType?: string | null;
+  method?: string | null;
+  search?: string | null;
+  ledgerLimit?: number | null;
+  ledgerOffset?: number;
+};
+
+function appendParams(params: URLSearchParams, values: Record<string, string | number | null | undefined>) {
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== null && value !== undefined && value !== '') {
+      params.set(key, String(value));
+    }
+  }
+}
+
+export function useKhataCustomers(filters: KhataCustomerFilters = {}) {
+  const params = new URLSearchParams();
+  appendParams(params, {
+    search: filters.search,
+    city: filters.city,
+    balance_status: filters.balanceStatus,
+    date_from: filters.dateFrom,
+    date_to: filters.dateTo,
+  });
+  const suffix = params.toString();
   return useQuery({
-    queryKey: khataKeys.customers(),
-    queryFn: () => apiClient.get<KhataCustomerSummary[]>('/khata/customers'),
+    queryKey: [...khataKeys.customers(), filters],
+    queryFn: () => apiClient.get<KhataCustomerSummary[]>(`/khata/customers${suffix ? `?${suffix}` : ''}`),
   });
 }
 
-export function useCustomerKhata(id: string | null, enabled = true) {
+export function useCustomerKhata(
+  id: string | null,
+  filtersOrEnabled: KhataLedgerFilters | boolean = {},
+  enabled = true,
+) {
+  const filters = typeof filtersOrEnabled === 'boolean' ? {} : filtersOrEnabled;
+  const isEnabled = typeof filtersOrEnabled === 'boolean' ? filtersOrEnabled : enabled;
+  const params = new URLSearchParams();
+  appendParams(params, {
+    date_from: filters.dateFrom,
+    date_to: filters.dateTo,
+    entry_type: filters.entryType,
+    method: filters.method,
+    search: filters.search,
+    ledger_limit: filters.ledgerLimit,
+    ledger_offset: filters.ledgerOffset,
+  });
+  const suffix = params.toString();
   return useQuery({
-    queryKey: khataKeys.customer(id ?? ''),
-    queryFn: () => apiClient.get<CustomerKhataDetail>(`/khata/customers/${id}`),
-    enabled: enabled && !!id,
+    queryKey: [...khataKeys.customer(id ?? ''), filters],
+    queryFn: () => apiClient.get<CustomerKhataDetail>(`/khata/customers/${id}${suffix ? `?${suffix}` : ''}`),
+    enabled: isEnabled && !!id,
   });
 }
 
@@ -324,6 +380,7 @@ export function useCreateDirectDelivery() {
       qc.invalidateQueries({ queryKey: accountingKeys.all });
       qc.invalidateQueries({ queryKey: financeKeys.all });
       qc.invalidateQueries({ queryKey: customersKeys.all });
+      qc.invalidateQueries({ queryKey: predictionsKeys.all });
     },
   });
 }

@@ -624,3 +624,48 @@ async def test_zero_limit_blocks_any_positive_order(client, limit):
         "/api/v1/orders", json=await _order_payload(customer["id"], product, "1.00")
     )
     assert r.status_code == 409, r.text
+
+
+@pytest.mark.parametrize("deliver_first", [False, True])
+async def test_deleting_order_releases_credit(client, deliver_first):
+    """Deleting a pending or delivered order frees its committed exposure."""
+    await _tenant(client)
+    product = await _create_product(client, "Release")
+    customer = await _create_customer(client, "Release Co", credit_limit="100.00")
+    order = await _create_order(client, product, customer)
+    if deliver_first:
+        await _deliver_order(order["id"])
+        await _pay(client, customer["id"], "20.00")
+
+    r = await client.delete(f"/api/v1/orders/{order['id']}")
+    assert r.status_code == 204, r.text
+
+    after = await client.get(f"/api/v1/customers/{customer['id']}")
+    assert after.json()["credit_used"] == "0.00"
+    assert after.json()["credit_available"] == "100.00"
+
+
+async def test_deleting_order_shrinks_shared_payment_credit(client):
+    """A payment split over orders must only free credit for orders that remain."""
+    await _tenant(client)
+    product = await _create_product(client, "Shared")
+    customer = await _create_customer(client, "Shared Co", credit_limit="100.00")
+    first = await _create_order(client, product, customer)
+    second = await _create_order(client, product, customer)
+    await _deliver_order(first["id"])
+    await _deliver_order(second["id"])
+    await _pay(
+        client,
+        customer["id"],
+        "20.00",
+        allocations=[
+            {"order_id": first["id"], "amount": "10.00"},
+            {"order_id": second["id"], "amount": "10.00"},
+        ],
+    )
+
+    r = await client.delete(f"/api/v1/orders/{first['id']}")
+    assert r.status_code == 204, r.text
+
+    after = await client.get(f"/api/v1/customers/{customer['id']}")
+    assert after.json()["credit_used"] == "10.00"

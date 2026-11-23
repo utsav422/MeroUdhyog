@@ -28,7 +28,13 @@ export default function LoginPage() {
         queryKey: sessionKeys.me(),
         queryFn: () => apiClient.get<{ role: string }>('/auth/me'),
       });
-      router.push(me.role === 'delivery' ? '/deliveries/portal' : '/dashboard');
+      const fallback = me.role === 'delivery' ? '/deliveries/portal' : '/dashboard';
+      const requested = new URLSearchParams(window.location.search).get('redirect');
+      const target =
+        requested && requested.startsWith('/') && !requested.startsWith('//')
+          ? requested
+          : fallback;
+      router.push(target);
       router.refresh();
     },
     onError: (err) => {

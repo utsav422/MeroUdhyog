@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -682,3 +682,39 @@ async def test_direct_delivery_uses_customer_price_without_rewriting_history(cli
     assert r.json()["items"][0]["unit_price"] == "12.00"
     r = await client.get(f"/api/v1/orders/{second['order_id']}")
     assert r.json()["items"][0]["unit_price"] == "15.00"
+
+
+async def test_khata_list_and_ledger_filters(client):
+    await _register(client, f"t{uuid.uuid4().hex[:6]}")
+    product = await _create_product(client, "KhataFilters")
+    customer = await _create_customer(
+        client, "LedgerCo", city="Kathmandu", address="Putalisadak"
+    )
+    order = await _create_order(client, product, customer)
+    await _deliver_order(order["id"])
+    await _pay(client, customer["id"], "5.00", method="cheque")
+
+    r = await client.get(
+        "/api/v1/khata/customers?search=ledgerco&city=Kathmandu&balance_status=outstanding"
+    )
+    assert r.status_code == 200
+    row = _customer_summary(r.json(), customer["id"])
+    assert row["address"] == "Putalisadak"
+
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    r = await client.get(f"/api/v1/khata/customers?date_from={tomorrow}")
+    assert r.json() == []
+
+    detail_url = f"/api/v1/khata/customers/{customer['id']}"
+    r = await client.get(f"{detail_url}?method=cheque&entry_type=payment")
+    rows = r.json()["ledger"]
+    assert len(rows) == 1
+    assert rows[0]["method"] == "cheque"
+    assert r.json()["ledger_total"] == 1
+
+    r = await client.get(f"{detail_url}?search={order['order_ref']}")
+    assert [entry["entry_type"] for entry in r.json()["ledger"]] == ["invoice"]
+
+    r = await client.get(f"{detail_url}?ledger_limit=1&ledger_offset=0")
+    assert r.json()["ledger_total"] == 2
+    assert len(r.json()["ledger"]) == 1

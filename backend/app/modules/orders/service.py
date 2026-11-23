@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -81,8 +82,27 @@ class OrderService:
         status: str | None = None,
         customer_id: UUID | None = None,
         route_id: UUID | None = None,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        search: str | None = None,
+        source: str | None = None,
+        payment_status: str | None = None,
+        status_scope: str | None = None,
     ) -> list[OrderRead]:
-        orders = await self.repo.list(limit, offset, status, customer_id, route_id)
+        orders = await self.repo.list(
+            limit,
+            offset,
+            status,
+            customer_id,
+            route_id,
+            date_from=date_from,
+            date_to=date_to,
+            search=search,
+            source=source,
+            payment_status=payment_status,
+            status_scope=status_scope,
+        )
         return [OrderRead.model_validate(o) for o in orders]
 
     async def get(self, order_id: UUID) -> OrderRead:

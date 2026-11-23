@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.customers.models import Customer
+from app.modules.deliveries.models import Delivery
 from app.modules.orders.models import Order
 from app.modules.predictions.engine import (
     OrderEvent,
@@ -287,6 +288,26 @@ class PredictionService:
             .unique()
             .all()
         )
+        # A delivered order belongs to the day the goods changed hands, not the
+        # day its row was inserted. Backdated deliveries recorded from khata
+        # carry the real date on the delivery record (`created_at` is only the
+        # entry time), so read those dates before building the event stream.
+        order_ids = [order.id for order in orders]
+        delivered_dates: dict[UUID, datetime] = {}
+        if order_ids:
+            delivered_dates = {
+                order_id: delivered_at
+                for order_id, delivered_at in (
+                    await self.session.execute(
+                        select(Delivery.order_id, Delivery.delivered_at).where(
+                            Delivery.tenant_id == self.tenant_id,
+                            Delivery.order_id.in_(order_ids),
+                            Delivery.delivered_at.is_not(None),
+                        )
+                    )
+                ).all()
+                if delivered_at is not None
+            }
         for order in orders:
             for item in order.items:
                 if item.product_id is None:
@@ -299,7 +320,7 @@ class PredictionService:
                     OrderEvent(
                         product_id=str(item.product_id),
                         product_name=item.product_name,
-                        order_date=order.created_at.date(),
+                        order_date=(delivered_dates.get(order.id) or order.created_at).date(),
                         quantity=float(item.quantity or 0),
                         variant_id=str(item.variant_id) if item.variant_id else None,
                         variant_name=item.variant_name,

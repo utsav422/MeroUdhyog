@@ -38,19 +38,15 @@ export function localDayKey(ts: string | Date): string {
   return `${y}-${m}-${day}`;
 }
 
+import { formatDateCompact } from '@/lib/format';
+
 export function dayLabel(key: string): string {
   const today = localDayKey(new Date());
   if (key === today) return 'Today';
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   if (key === localDayKey(yesterday)) return 'Yesterday';
-  const [y, m, d] = key.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  return date.toLocaleDateString(undefined, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
+  return formatDateCompact(key);
 }
 
 /** Signed change to stock for one movement (may go negative). */

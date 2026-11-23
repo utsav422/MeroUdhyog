@@ -164,6 +164,12 @@ export default function DirectDeliveryModal({
   };
 
   const submit = () => {
+    if (lines.some((line) => line.variant_id && Number(line.quantity) <= 0)) {
+      const message = 'qty must not be zero';
+      setError(message);
+      notifications.show({ color: 'red', title: 'Invalid quantity', message });
+      return;
+    }
     const validLines = lines.filter((line) => line.variant_id && Number(line.quantity) > 0);
     if (validLines.length === 0) {
       setError('Add at least one product with a quantity.');

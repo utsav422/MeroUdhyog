@@ -22,6 +22,7 @@ import {
 } from '@/components/shared';
 import type { Column, SortState, Filters } from '@/components/shared';
 import { downloadCsv } from '@/lib/exportCsv';
+import { formatFullDate } from '@/lib/format';
 import { useAllProducts, useLedgerMovements } from '../api';
 import type { LedgerParams } from '../api';
 import {
@@ -60,16 +61,7 @@ export default function TodayLedgerPage() {
   const [modalOpen, setModalOpen] = useState(false);
 
   const today = localDayKey(new Date());
-  const todayLabel = useMemo(
-    () =>
-      new Date().toLocaleDateString(undefined, {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      }),
-    [],
-  );
+  const todayLabel = useMemo(() => formatFullDate(new Date()), []);
 
   // Two catalogue reads: the unfiltered one feeds the Product / Variant
   // dropdowns (they must always list everything so you can navigate away from

@@ -10,7 +10,7 @@ import {
   Timer,
   Warning,
 } from '@phosphor-icons/react';
-import { formatMoney } from '@/lib/format';
+import { formatDateShort, formatMoney } from '@/lib/format';
 import type { ProductCustomer, ProductDetail } from '../api';
 import { STATUS_COLORS, STATUS_EXPLAIN, STATUS_LABELS, STATUS_ORDER } from '../constants';
 
@@ -36,10 +36,7 @@ const HERO_META: Record<string, { chip: string; icon: ReactNode }> = {
 };
 
 function shortDate(value: string | null | undefined): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return formatDateShort(value) === '—' ? '' : formatDateShort(value);
 }
 
 function sortByUrgency(customers: ProductCustomer[]): ProductCustomer[] {

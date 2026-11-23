@@ -8,11 +8,12 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 # Payment methods (extendable). Mirrors the enum on the model/service.
-VALID_METHODS = {"cash", "bank_transfer", "esewa", "khalti", "other"}
+VALID_METHODS = {"cash", "bank_transfer", "cheque", "esewa", "khalti", "other"}
 
 VALID_METHOD_LABELS = {
     "cash": "Cash",
     "bank_transfer": "Bank transfer",
+    "cheque": "Cheque",
     "esewa": "eSewa",
     "khalti": "Khalti",
     "other": "Other",
@@ -43,6 +44,7 @@ class KhataCustomerSummary(BaseModel):
     phone: str | None = None
     company: str | None = None
     city: str | None = None
+    address: str | None = None
     total_billed: Decimal = Decimal("0")
     total_paid: Decimal = Decimal("0")
     # outstanding = billed - paid (negative means the customer is in credit)
@@ -88,6 +90,8 @@ class LedgerEntryRead(BaseModel):
     receipt_number: str | None = None
     # Bill/voucher no supplied by the paying party (money recipient).
     payer_bill_no: str | None = None
+    # Only meaningful on payment rows; lets the ledger table filter by method.
+    method: str | None = None
     debit: Decimal | None = None
     credit: Decimal | None = None
     balance: Decimal = Decimal("0")
@@ -143,6 +147,9 @@ class CustomerKhataDetail(BaseModel):
     orders: list[KhataOrderRead] = Field(default_factory=list)
     payments: list[PaymentRead] = Field(default_factory=list)
     ledger: list[LedgerEntryRead] = Field(default_factory=list)
+    # Row count of the full ledger before display filters/pagination are
+    # applied (running balances are still computed over every row).
+    ledger_total: int = 0
 
 
 class ManualAllocation(BaseModel):

@@ -17,10 +17,22 @@ import {
   Truck,
   XCircle,
 } from '@phosphor-icons/react';
-import { CreditLimitBar, EmptyState, ErrorState, LoadingState, PageHeader, ResponsiveTable, StatusBadge } from '@/components/shared';
+import {
+  CreditLimitBar,
+  EmptyState,
+  ErrorState,
+  FilterBar,
+  LoadingState,
+  PaginationBar,
+  PageHeader,
+  ResponsiveTable,
+  StatusBadge,
+} from '@/components/shared';
+import type { DateRangeValue, Filters } from '@/components/shared';
+import { EMPTY_DATE_RANGE, dateRangeToApi } from '@/components/shared';
 import { useSession } from '@/lib/providers';
 import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
-import { paymentMethodLabel } from '../constants';
+import { PAYMENT_METHODS, paymentMethodLabel } from '../constants';
 import {
   downloadReceiptPdf,
   useCustomerKhata,
@@ -38,6 +50,7 @@ function methodIcon(method: string) {
     bank_transfer: <Bank size={18} weight="duotone" />,
     esewa: <CreditCard size={18} weight="duotone" />,
     khalti: <CreditCard size={18} weight="duotone" />,
+    cheque: <Bank size={18} weight="duotone" />,
     other: <HandCoins size={18} weight="duotone" />,
   };
   return icons[method] ?? <HandCoins size={18} weight="duotone" />;
@@ -76,7 +89,22 @@ function SummaryCard({
 export default function CustomerKhataDetail({ customerId }: { customerId: string }) {
   const router = useRouter();
   const session = useSession();
-  const detailQuery = useCustomerKhata(customerId);
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerDate, setLedgerDate] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
+  const [ledgerType, setLedgerType] = useState<string | null>(null);
+  const [ledgerMethod, setLedgerMethod] = useState<string | null>(null);
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerPageSize, setLedgerPageSize] = useState(10);
+  const ledgerRange = dateRangeToApi(ledgerDate);
+  const detailQuery = useCustomerKhata(customerId, {
+    dateFrom: ledgerRange.from,
+    dateTo: ledgerRange.to,
+    entryType: ledgerType,
+    method: ledgerMethod,
+    search: ledgerSearch,
+    ledgerLimit: ledgerPageSize,
+    ledgerOffset: (ledgerPage - 1) * ledgerPageSize,
+  });
   const voidPayment = useVoidPayment();
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [directDeliveryOpen, setDirectDeliveryOpen] = useState(false);
@@ -194,6 +222,62 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         <CreditLimitBar figures={detail} className="mt-4" />
       </div>
 
+      <FilterBar
+        searchValue={ledgerSearch}
+        onSearchChange={(value) => {
+          setLedgerSearch(value);
+          setLedgerPage(1);
+        }}
+        searchPlaceholder="Search ledger by reference or receipt…"
+        filterDefs={[
+          {
+            type: 'select' as const,
+            key: 'entryType',
+            label: 'Entry type',
+            placeholder: 'All entries',
+            options: [
+              { value: 'invoice', label: 'Invoices' },
+              { value: 'payment', label: 'Payments' },
+            ],
+          },
+          {
+            type: 'select' as const,
+            key: 'method',
+            label: 'Payment method',
+            placeholder: 'Any method',
+            options: PAYMENT_METHODS,
+          },
+          {
+            type: 'rangedate' as const,
+            key: 'date',
+            label: 'Entry date',
+          },
+        ]}
+        filterValues={
+          {
+            entryType: ledgerType,
+            method: ledgerMethod,
+            date: ledgerDate,
+          } as Filters
+        }
+        onFiltersChange={(filters) => {
+          setLedgerType((filters.entryType as string | null) ?? null);
+          setLedgerMethod((filters.method as string | null) ?? null);
+          setLedgerDate((filters.date as DateRangeValue) ?? EMPTY_DATE_RANGE);
+          setLedgerPage(1);
+        }}
+        onClear={() => {
+          setLedgerSearch('');
+          setLedgerType(null);
+          setLedgerMethod(null);
+          setLedgerDate(EMPTY_DATE_RANGE);
+          setLedgerPage(1);
+        }}
+        hasActiveFilters={
+          !!ledgerSearch || !!ledgerType || !!ledgerMethod || ledgerDate.mode !== 'all'
+        }
+      />
+
       <LedgerTable
         ledger={detail.ledger}
         customerName={detail.customer_name}
@@ -204,6 +288,17 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         onOpenReceipt={(paymentId) => {
           const payment = detail.payments.find((p) => p.id === paymentId);
           setReceiptPreview({ paymentId, receiptNumber: payment?.receipt_number ?? null });
+        }}
+      />
+
+      <PaginationBar
+        page={ledgerPage}
+        pageSize={ledgerPageSize}
+        total={detail.ledger_total}
+        onPageChange={setLedgerPage}
+        onPageSizeChange={(size) => {
+          setLedgerPageSize(size);
+          setLedgerPage(1);
         }}
       />
 

@@ -3,6 +3,7 @@ export const PAYMENT_METHODS: { value: string; label: string }[] = [
   { value: 'bank_transfer', label: 'Bank transfer' },
   { value: 'esewa', label: 'eSewa' },
   { value: 'khalti', label: 'Khalti' },
+  { value: 'cheque', label: 'Cheque' },
   { value: 'other', label: 'Other' },
 ];
 

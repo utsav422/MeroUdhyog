@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -35,13 +36,21 @@ async def _linked_transactions(
     return list(result.scalars().all())
 
 
-async def _void_order_only_payments(
+async def _detach_order_payments(
     session: AsyncSession,
     tenant_id: UUID,
     user_id: UUID | None,
     order_id: UUID,
     order_ref: str,
 ) -> set[date]:
+    """Release every active payment's stake in the order being deleted.
+
+    Payments used exclusively by the deleted order are voided. A payment split
+    across several orders is reduced by the deleted allocation instead — leaving
+    it untouched would keep freeing credit that no longer has an order behind
+    it, while voiding it all would erase money still legitimately received for
+    the other orders.
+    """
     entries = (
         (
             await session.execute(
@@ -62,13 +71,34 @@ async def _void_order_only_payments(
         .all()
     )
     khata = KhataService(session, tenant_id, user_id)
+    posting = PostingService(session, tenant_id, user_id)
     months: set[date] = set()
     for entry in entries:
         fresh = await khata.repo.get_entry(entry.id)
-        if any(allocation.order_id != order_id for allocation in fresh.allocations):
+        removed = [a for a in fresh.allocations if a.order_id == order_id]
+        if not removed:
             continue
-        await khata.void_payment_for_deletion(fresh.id, order_ref)
+        remaining = [a for a in fresh.allocations if a.order_id != order_id]
+        released = sum((a.amount_applied or Decimal("0")) for a in removed)
         months.add(month_of_dt(fresh.collected_at))
+        if not remaining or released >= fresh.amount:
+            await khata.void_payment_for_deletion(fresh.id, order_ref)
+            continue
+        fresh.amount = Decimal(str(fresh.amount)) - released
+        for allocation in removed:
+            await session.delete(allocation)
+        months.add(month_of_dt(datetime.now(UTC)))
+        receipt = (
+            await session.execute(
+                select(Transaction).where(
+                    Transaction.tenant_id == tenant_id,
+                    Transaction.external_id == f"khata-receipt:{fresh.id}",
+                )
+            )
+        ).scalar_one_or_none()
+        if receipt is not None and receipt.is_active:
+            receipt.amount = fresh.amount
+            await posting.repost_transaction(receipt)
     return months
 
 
@@ -95,7 +125,7 @@ async def void_linked_accounting(
 
     if void_payments and order_id is not None:
         months.update(
-            await _void_order_only_payments(
+            await _detach_order_payments(
                 session,
                 tenant_id,
                 user_id,

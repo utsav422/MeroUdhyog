@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
@@ -28,12 +29,30 @@ async def list_orders(
     status: str | None = None,
     customer_id: UUID | None = None,
     route_id: UUID | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    search: str | None = None,
+    source: str | None = None,
+    payment_status: str | None = None,
+    status_scope: str | None = None,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
 ):
     limit, offset = pagination
     service = await _service(db, tenant_id)
-    return await service.list(limit, offset, status_filter or status, customer_id, route_id)
+    return await service.list(
+        limit,
+        offset,
+        status_filter or status,
+        customer_id,
+        route_id,
+        date_from=date_from,
+        date_to=date_to,
+        search=search,
+        source=source,
+        payment_status=payment_status,
+        status_scope=status_scope,
+    )
 
 
 @router.post("/bulk-status", response_model=OrderBulkStatusResult)

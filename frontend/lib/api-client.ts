@@ -3,6 +3,7 @@ import axios, {
   type AxiosInstance,
   type InternalAxiosRequestConfig,
 } from 'axios';
+import { notifications } from '@mantine/notifications';
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
@@ -15,6 +16,20 @@ export function apiAssetUrl(path: string | null | undefined): string | undefined
 }
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+const NO_REFRESH_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/verify-email',
+  '/auth/verify-id',
+  '/auth/resend-verification',
+  '/auth/logout',
+];
+
+type RetryableConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
 export class ApiClientError extends Error {
   status: number;
@@ -79,6 +94,70 @@ function toApiClientError(error: unknown): ApiClientError {
   return new ApiClientError(0, 'Request failed');
 }
 
+const refreshClient: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+});
+
+refreshClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  config.headers.set('X-CSRF-Token', getCsrfToken());
+  return config;
+});
+
+let refreshPromise: Promise<boolean> | null = null;
+let expiredNoticeShown = false;
+
+function shouldRefreshSession(url: string | undefined): boolean {
+  if (!url) return true;
+  const path = url.split('?')[0];
+  return !NO_REFRESH_PATHS.some((item) => path === item || path.startsWith(`${item}/`));
+}
+
+function notifySessionExpired(): void {
+  if (expiredNoticeShown) return;
+  expiredNoticeShown = true;
+  if (typeof window === 'undefined') return;
+
+  notifications.show({
+    color: 'red',
+    title: 'Session expired',
+    message: 'Please log in again.',
+  });
+
+  const current = `${window.location.pathname}${window.location.search}`;
+  const target =
+    current.startsWith('/') && !current.startsWith('//')
+      ? `/login?redirect=${encodeURIComponent(current)}`
+      : '/login';
+  window.location.assign(target);
+}
+
+async function performRefresh(): Promise<boolean> {
+  try {
+    await refreshClient.post('/auth/refresh');
+    if (typeof window !== 'undefined') {
+      notifications.show({
+        color: 'green',
+        title: 'Session restored',
+        message: 'Your session was refreshed automatically.',
+      });
+    }
+    return true;
+  } catch {
+    notifySessionExpired();
+    return false;
+  }
+}
+
+function refreshSession(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = performRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 const client: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
@@ -93,7 +172,24 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 client.interceptors.response.use(
   (response) => response,
-  (error: unknown) => Promise.reject(toApiClientError(error)),
+  async (error: unknown) => {
+    const clientError = toApiClientError(error);
+    const original = (error as AxiosError).config as RetryableConfig | undefined;
+
+    if (
+      clientError.status === 401 &&
+      original &&
+      !original._retry &&
+      shouldRefreshSession(original.url)
+    ) {
+      original._retry = true;
+      if (await refreshSession()) {
+        return client.request(original);
+      }
+    }
+
+    return Promise.reject(clientError);
+  },
 );
 
 async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {

@@ -6,6 +6,7 @@ import { ClockCounterClockwise } from '@phosphor-icons/react';
 import { PageHeader } from '@/components/shared';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { useAuditLog, type AuditLog } from '../api';
+import { formatDateTime } from '@/lib/format';
 import ReportToolbar, { periodLabel } from './ReportToolbar';
 import { type DateFilters, EMPTY_STATEMENT_DATES, toIsoDate } from './StatementShell';
 
@@ -39,7 +40,7 @@ export default function AuditLogPage() {
     {
       key: 'created_at',
       header: 'When',
-      render: (row) => new Date(row.created_at).toLocaleString(),
+      render: (row) => formatDateTime(row.created_at),
       width: 180,
     },
     { key: 'action', header: 'Action', render: (row) => <span className="font-medium capitalize">{row.action}</span> },
@@ -113,7 +114,7 @@ export default function AuditLogPage() {
               <span className="font-mono">{selected.entity_type}</span>
             </div>
             <div className="text-xs text-[var(--muted)]">
-              {new Date(selected.created_at).toLocaleString()} · ID {selected.entity_id}
+              {formatDateTime(selected.created_at)} · ID {selected.entity_id}
             </div>
             {selected.reason && (
               <div className="rounded-lg bg-black/5 p-3 text-sm">Reason: {selected.reason}</div>

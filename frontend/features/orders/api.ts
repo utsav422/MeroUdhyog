@@ -38,6 +38,7 @@ export type Order = {
   route_id: string | null;
   route_name: string | null;
   status: string;
+  source?: string;
   payment_status: string;
   total_amount: string;
   amount_paid: string;
@@ -73,15 +74,40 @@ export const ordersKeys = {
   detail: (id: string) => [...ordersKeys.all, 'detail', id] as const,
 };
 
-export function useOrders(routeId?: string | null) {
+export type OrderFilters = {
+  routeId?: string | null;
+  status?: string | null;
+  customerId?: string | null;
+  statusScope?: 'delivered' | 'undelivered' | null;
+  source?: string | null;
+  paymentStatus?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  search?: string | null;
+};
+
+export function useOrders(filters?: string | null | OrderFilters) {
+  const options: OrderFilters =
+    typeof filters === 'object' && filters !== null
+      ? filters
+      : { routeId: filters };
+  const params = new URLSearchParams({ limit: String(MAX_FETCH) });
+  const addParam = (key: string, value: string | null | undefined) => {
+    if (value) params.set(key, value);
+  };
+  addParam('route_id', options.routeId);
+  addParam('status', options.status);
+  addParam('customer_id', options.customerId);
+  addParam('status_scope', options.statusScope);
+  addParam('source', options.source);
+  addParam('payment_status', options.paymentStatus);
+  addParam('date_from', options.dateFrom);
+  addParam('date_to', options.dateTo);
+  addParam('search', options.search);
+
   return useQuery({
-    queryKey: [...ordersKeys.list(), routeId ?? null],
-    queryFn: () =>
-      apiClient.get<Order[]>(
-        routeId
-          ? `/orders?limit=${MAX_FETCH}&route_id=${routeId}`
-          : `/orders?limit=${MAX_FETCH}`,
-      ),
+    queryKey: [...ordersKeys.list(), options],
+    queryFn: () => apiClient.get<Order[]>(`/orders?${params.toString()}`),
     refetchInterval: REALTIME_FALLBACK_POLL_MS,
     refetchIntervalInBackground: false,
   });
@@ -146,6 +172,8 @@ export function useOrderStatusUpdate() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ordersKeys.all });
       qc.invalidateQueries({ queryKey: deliveriesKeys.all });
+      qc.invalidateQueries({ queryKey: ['khata'] });
+      qc.invalidateQueries({ queryKey: ['customers'] });
     },
   });
 }
@@ -167,6 +195,8 @@ export function useBulkOrderStatusUpdate() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ordersKeys.all });
       qc.invalidateQueries({ queryKey: deliveriesKeys.all });
+      qc.invalidateQueries({ queryKey: ['khata'] });
+      qc.invalidateQueries({ queryKey: ['customers'] });
     },
   });
 }
@@ -210,6 +240,7 @@ export const DELETE_RELATED_QUERY_KEYS: string[][] = [
   ['transactions'],
   ['search'],
   ['dashboard'],
+  ['predictions'],
 ];
 
 export function invalidateOrderRelatedQueries(qc: ReturnType<typeof useQueryClient>) {
@@ -261,6 +292,8 @@ export function useUpdateDeliveryStatus() {
       qc.invalidateQueries({ queryKey: deliveriesKeys.all });
       // Delivery status drives the linked order status; refresh orders too.
       qc.invalidateQueries({ queryKey: ordersKeys.all });
+      qc.invalidateQueries({ queryKey: ['khata'] });
+      qc.invalidateQueries({ queryKey: ['customers'] });
     },
   });
 }

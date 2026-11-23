@@ -12,32 +12,43 @@ import {
   PaginationBar,
   PageHeader,
 } from '@/components/shared';
-import type { Column, SortState } from '@/components/shared';
+import type { Column, SortState, DateRangeValue, Filters } from '@/components/shared';
+import { EMPTY_DATE_RANGE, dateRangeToApi } from '@/components/shared';
 import { formatDateTime, formatMoney } from '@/lib/format';
+import { useCustomers } from '../../customers/api';
 import { useKhataCustomers } from '../api';
 import type { KhataCustomerSummary } from '../api';
 
 export default function KhataPage() {
   const router = useRouter();
-  const khataQuery = useKhataCustomers();
-
+  const customersQuery = useCustomers();
   const [search, setSearch] = useState('');
+  const [cityFilter, setCityFilter] = useState<string | null>(null);
+  const [balanceFilter, setBalanceFilter] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
+  const dateRange = dateRangeToApi(dateFilter);
+  const khataQuery = useKhataCustomers({
+    search,
+    city: cityFilter,
+    balanceStatus: balanceFilter,
+    dateFrom: dateRange.from,
+    dateTo: dateRange.to,
+  });
+
   const [sort, setSort] = useState<SortState>({ field: 'customer_name', direction: 'asc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const filtered = useMemo(() => {
-    let rows = [...(khataQuery.data ?? [])];
-    if (search.trim()) {
-      const needle = search.trim().toLowerCase();
-      rows = rows.filter(
-        (c) =>
-          c.customer_name.toLowerCase().includes(needle) ||
-          (c.phone ?? '').toLowerCase().includes(needle) ||
-          (c.company ?? '').toLowerCase().includes(needle) ||
-          (c.city ?? '').toLowerCase().includes(needle),
-      );
+  const cityOptions = useMemo(() => {
+    const cities = new Set<string>();
+    for (const customer of customersQuery.data ?? []) {
+      if (customer.city?.trim()) cities.add(customer.city.trim());
     }
+    return [...cities].sort().map((city) => ({ value: city, label: city }));
+  }, [customersQuery.data]);
+
+  const filtered = useMemo(() => {
+    const rows = [...(khataQuery.data ?? [])];
     const dir = sort.direction === 'asc' ? 1 : -1;
     rows.sort((a, b) => {
       if (sort.field === 'outstanding') {
@@ -48,7 +59,7 @@ export default function KhataPage() {
       ) * dir;
     });
     return rows;
-  }, [khataQuery.data, search, sort]);
+  }, [khataQuery.data, sort]);
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -73,7 +84,10 @@ export default function KhataPage() {
               {c.customer_name}
             </Link>
             <div className="truncate text-xs text-zinc-400">
-              {[c.company, c.phone, c.city].filter(Boolean).join(' · ') || 'No contact info'}
+              {[c.company, c.phone].filter(Boolean).join(' · ') || 'No contact info'}
+            </div>
+            <div className="truncate text-xs text-zinc-400">
+              {[c.city, c.address].filter(Boolean).join(', ') || 'No address'}
             </div>
           </div>
         </div>
@@ -152,13 +166,59 @@ export default function KhataPage() {
 
       <FilterBar
         searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search by name, phone, company…"
-        onClear={() => {
-          setSearch('');
+        onSearchChange={(value) => {
+          setSearch(value);
           setPage(1);
         }}
-        hasActiveFilters={false}
+        searchPlaceholder="Search by name, phone, company, city…"
+        filterDefs={[
+          {
+            type: 'select' as const,
+            key: 'city',
+            label: 'City',
+            placeholder: 'Any city',
+            options: cityOptions,
+          },
+          {
+            type: 'select' as const,
+            key: 'balance',
+            label: 'Balance',
+            placeholder: 'Any balance',
+            options: [
+              { value: 'outstanding', label: 'Outstanding' },
+              { value: 'credit', label: 'In credit' },
+              { value: 'settled', label: 'Settled' },
+            ],
+          },
+          {
+            type: 'rangedate' as const,
+            key: 'range',
+            label: 'Last payment',
+          },
+        ]}
+        filterValues={
+          {
+            city: cityFilter,
+            balance: balanceFilter,
+            range: dateFilter,
+          } as Filters
+        }
+        onFiltersChange={(filters) => {
+          setCityFilter((filters.city as string | null) ?? null);
+          setBalanceFilter((filters.balance as string | null) ?? null);
+          setDateFilter((filters.range as DateRangeValue) ?? EMPTY_DATE_RANGE);
+          setPage(1);
+        }}
+        onClear={() => {
+          setSearch('');
+          setCityFilter(null);
+          setBalanceFilter(null);
+          setDateFilter(EMPTY_DATE_RANGE);
+          setPage(1);
+        }}
+        hasActiveFilters={
+          !!search || !!cityFilter || !!balanceFilter || dateFilter.mode !== 'all'
+        }
       />
 
       <DataTable
