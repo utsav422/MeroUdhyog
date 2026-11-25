@@ -26,7 +26,9 @@ export default function KhataPage() {
   const [cityFilter, setCityFilter] = useState<string | null>(null);
   const [balanceFilter, setBalanceFilter] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
+  const [deliveredDateFilter, setDeliveredDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
   const dateRange = dateRangeToApi(dateFilter);
+  const deliveredDateRange = dateRangeToApi(deliveredDateFilter);
   const khataQuery = useKhataCustomers({
     search,
     city: cityFilter,
@@ -48,7 +50,15 @@ export default function KhataPage() {
   }, [customersQuery.data]);
 
   const filtered = useMemo(() => {
-    const rows = [...(khataQuery.data ?? [])];
+    const rows = [...(khataQuery.data ?? [])].filter((c) => {
+      if (deliveredDateFilter.mode === 'all') return true;
+      if (!c.last_delivered_at) return false;
+      const day = c.last_delivered_at.slice(0, 10);
+      return (
+        (!deliveredDateRange.from || day >= deliveredDateRange.from) &&
+        (!deliveredDateRange.to || day <= deliveredDateRange.to)
+      );
+    });
     const dir = sort.direction === 'asc' ? 1 : -1;
     rows.sort((a, b) => {
       if (sort.field === 'outstanding') {
@@ -59,7 +69,7 @@ export default function KhataPage() {
       ) * dir;
     });
     return rows;
-  }, [khataQuery.data, sort]);
+  }, [khataQuery.data, sort, deliveredDateFilter.mode, deliveredDateRange.from, deliveredDateRange.to]);
 
   const paged = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -134,6 +144,17 @@ export default function KhataPage() {
       render: (c) => <CreditLimitBar figures={c} compact />,
     },
     {
+      key: 'last_delivered_at',
+      header: 'Last delivery',
+      sortable: true,
+      render: (c) =>
+        c.last_delivered_at ? (
+          <Text size="sm" className="text-zinc-700">{formatDateTime(c.last_delivered_at)}</Text>
+        ) : (
+          <Text size="sm" c="dimmed">No deliveries yet</Text>
+        ),
+    },
+    {
       key: 'last_payment_date',
       header: 'Last payment',
       sortable: true,
@@ -195,18 +216,25 @@ export default function KhataPage() {
             key: 'range',
             label: 'Last payment',
           },
+          {
+            type: 'rangedate' as const,
+            key: 'deliveredRange',
+            label: 'Last delivery',
+          },
         ]}
         filterValues={
           {
             city: cityFilter,
             balance: balanceFilter,
             range: dateFilter,
+            deliveredRange: deliveredDateFilter,
           } as Filters
         }
         onFiltersChange={(filters) => {
           setCityFilter((filters.city as string | null) ?? null);
           setBalanceFilter((filters.balance as string | null) ?? null);
           setDateFilter((filters.range as DateRangeValue) ?? EMPTY_DATE_RANGE);
+          setDeliveredDateFilter((filters.deliveredRange as DateRangeValue) ?? EMPTY_DATE_RANGE);
           setPage(1);
         }}
         onClear={() => {
@@ -214,10 +242,15 @@ export default function KhataPage() {
           setCityFilter(null);
           setBalanceFilter(null);
           setDateFilter(EMPTY_DATE_RANGE);
+          setDeliveredDateFilter(EMPTY_DATE_RANGE);
           setPage(1);
         }}
         hasActiveFilters={
-          !!search || !!cityFilter || !!balanceFilter || dateFilter.mode !== 'all'
+          !!search ||
+          !!cityFilter ||
+          !!balanceFilter ||
+          dateFilter.mode !== 'all' ||
+          deliveredDateFilter.mode !== 'all'
         }
       />
 
@@ -234,7 +267,7 @@ export default function KhataPage() {
           setPage(1);
         }}
         getRowId={(c) => c.customer_id}
-        minWidth={1060}
+        minWidth={1200}
         emptyTitle="No customers yet"
         emptyDescription="Khata balances appear here as soon as customers place orders."
       />

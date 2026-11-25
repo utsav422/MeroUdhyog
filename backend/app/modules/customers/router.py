@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, UploadFile, status
 from fastapi.responses import Response
 
-from app.core.dependencies import get_current_tenant_id, get_db
+from app.core.dependencies import get_current_tenant_id, get_current_user_id, get_db
 from app.core.paginator import pagination_params
 from app.core.permissions import Permissions, require_permission
 from app.modules.customers.csv_import import build_sample_csv
@@ -18,8 +18,8 @@ from app.modules.customers.service import CustomerService
 router = APIRouter(prefix="/customers", tags=["customers"])
 
 
-async def _service(db, tenant_id) -> CustomerService:
-    return CustomerService(db, tenant_id)
+async def _service(db, tenant_id, user_id=None) -> CustomerService:
+    return CustomerService(db, tenant_id, user_id)
 
 
 @router.get("", response_model=list[CustomerRead])
@@ -108,9 +108,11 @@ async def update_customer(
 @router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_customer(
     customer_id: UUID,
+    reason: str | None = None,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.MANAGE_CUSTOMERS)),
 ):
-    service = await _service(db, tenant_id)
-    await service.delete(customer_id)
+    service = await _service(db, tenant_id, user_id)
+    await service.delete(customer_id, reason)

@@ -367,7 +367,7 @@ async def test_list_orders_filtered_by_customer(client):
 
 
 @pytest.mark.asyncio
-async def test_deleting_delivered_order_voids_related_accounting(client):
+async def test_deleting_delivered_order_moves_to_recovery_then_voids_accounting(client):
     tokens = await _register(client, f"t{uuid.uuid4().hex[:6]}")
     tenant_id = uuid.UUID(tokens["tenant_id"])
     product = await _create_product(client, "Voidable")
@@ -435,6 +435,54 @@ async def test_deleting_delivered_order_voids_related_accounting(client):
         assert await session.get(Order, order_id) is None
         assert await session.get(Delivery, delivery_id) is None
         assert await session.scalar(
+            select(Order.id)
+            .where(Order.id == order_id)
+            .execution_options(include_deleted=True)
+        ) == order_id
+        assert await session.scalar(
+            select(Delivery.id)
+            .where(Delivery.id == delivery_id)
+            .execution_options(include_deleted=True)
+        ) == delivery_id
+
+        txs = (
+            await session.execute(
+                select(Transaction).where(Transaction.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        linked = [
+            t
+            for t in txs
+            if (t.metadata_ or {}).get("order_id") == str(order_id)
+            or (t.metadata_ or {}).get("delivery_id") == str(delivery_id)
+        ]
+        assert linked
+        assert all(t.is_active for t in linked)
+
+        variant = await session.get(ProductVariant, uuid.UUID(product["variants"][0]["id"]))
+        assert float(variant.stock_quantity) == 98
+
+    recovery = await client.get("/api/v1/recovery?entity_type=order")
+    assert recovery.status_code == 200, recovery.text
+    item = next(i for i in recovery.json()["items"] if i["entity_id"] == order["id"])
+    r = await client.delete(f"/api/v1/recovery/{item['id']}")
+    assert r.status_code == 204, r.text
+
+    async with get_session() as session:
+        order_id = uuid.UUID(order["id"])
+        delivery_id = uuid.UUID(delivery["id"])
+
+        assert await session.scalar(
+            select(Order.id)
+            .where(Order.id == order_id)
+            .execution_options(include_deleted=True)
+        ) is None
+        assert await session.scalar(
+            select(Delivery.id)
+            .where(Delivery.id == delivery_id)
+            .execution_options(include_deleted=True)
+        ) is None
+        assert await session.scalar(
             select(OrderInvoice).where(OrderInvoice.order_id == order_id)
         ) is None
         assert await session.scalar(
@@ -469,8 +517,7 @@ async def test_deleting_delivered_order_voids_related_accounting(client):
                 select(LedgerEntry).where(LedgerEntry.tenant_id == tenant_id)
             )
         ).scalars().all()
-        voided_payment = next(p for p in payments if p.status == "voided")
-        assert order["order_ref"] in (voided_payment.void_reason or "")
+        assert not any(p.customer_id == uuid.UUID(customer["id"]) for p in payments)
 
         variant = await session.get(ProductVariant, uuid.UUID(product["variants"][0]["id"]))
         assert float(variant.stock_quantity) == 100

@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 from pydantic import EmailStr
 
@@ -122,3 +124,20 @@ async def create_user(
 ):
     service = UserService(db)
     return await service.create_user(tenant_id, data)
+
+
+@router.delete(
+    "/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_user(
+    user_id: UUID,
+    reason: str | None = None,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    caller_id=Depends(get_current_user_id),
+    _=Depends(require_permission(Permissions.MANAGE_USERS)),
+):
+    """Move a staff member to Recovery instead of hard-deleting them."""
+    service = UserService(db)
+    await service.delete_user(tenant_id, user_id, caller_id, reason)

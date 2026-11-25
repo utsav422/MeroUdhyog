@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Group, Table, Text } from '@mantine/core';
+import { Button, Group, Modal, Select, Table, Tabs, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
   ArrowLeft,
@@ -13,7 +13,7 @@ import {
   DownloadSimple,
   FilePdf,
   HandCoins,
-  Receipt,
+  ArrowsOut,
   Truck,
   XCircle,
 } from '@phosphor-icons/react';
@@ -95,6 +95,10 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
   const [ledgerMethod, setLedgerMethod] = useState<string | null>(null);
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerPageSize, setLedgerPageSize] = useState(10);
+  const [activeTab, setActiveTab] = useState<string | null>('ledger');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string | null>(null);
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string | null>(null);
+  const [ledgerExpanded, setLedgerExpanded] = useState(false);
   const ledgerRange = dateRangeToApi(ledgerDate);
   const detailQuery = useCustomerKhata(customerId, {
     dateFrom: ledgerRange.from,
@@ -124,6 +128,10 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
 
   const outstanding = Number(detail.outstanding);
   const isOwner = session?.role === 'owner';
+  const visiblePayments = detail.payments.filter((p) =>
+    !paymentStatusFilter ||
+    (paymentStatusFilter === 'voided' ? p.status === 'voided' : p.status !== 'voided'),
+  );
 
   const voidEntry = (payment: Payment) => {
     const reason = window.prompt('Reason for voiding this payment:');
@@ -186,9 +194,14 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="Total billed" value={formatMoney(detail.total_billed)} hint={`${detail.orders.length} orders`} />
         <SummaryCard label="Total paid" value={formatMoney(detail.total_paid)} />
+        <SummaryCard
+          label="Last delivery"
+          value={detail.last_delivered_at ? formatDate(detail.last_delivered_at) : '—'}
+          hint={detail.last_delivered_at ? formatDateTime(detail.last_delivered_at) : 'No delivered orders yet'}
+        />
         {outstanding < 0 ? (
           <SummaryCard
             label="Customer credit"
@@ -222,6 +235,24 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         <CreditLimitBar figures={detail} className="mt-4" />
       </div>
 
+      <Tabs value={activeTab} onChange={setActiveTab}>
+        <Tabs.List>
+          <Tabs.Tab value="ledger">Ledger ({detail.ledger_total})</Tabs.Tab>
+          <Tabs.Tab value="orders">Orders ({detail.orders.length})</Tabs.Tab>
+          <Tabs.Tab value="payments">Payments ({detail.payments.length})</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="ledger" pt="md">
+      <Group justify="flex-end" mb="xs">
+        <Button
+          size="compact-sm"
+          variant="light"
+          leftSection={<ArrowsOut size={14} />}
+          onClick={() => setLedgerExpanded(true)}
+        >
+          Maximize table
+        </Button>
+      </Group>
       <FilterBar
         searchValue={ledgerSearch}
         onSearchChange={(value) => {
@@ -301,15 +332,33 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
           setLedgerPage(1);
         }}
       />
+        </Tabs.Panel>
 
+        <Tabs.Panel value="orders" pt="md">
       <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm">
-        <div className="border-b border-zinc-100 px-6 py-4">
-          <Text fw={600} size="md" className="text-zinc-800">
-            Orders
-          </Text>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-6 py-4">
+          <div>
+            <Text fw={600} size="md" className="text-zinc-800">
+              Orders
+            </Text>
           <Text size="xs" c="dimmed" className="mt-0.5">
             Order balances settle through khata payments.
           </Text>
+          </div>
+        </div>
+        <div className="px-6 pt-4">
+          <Select
+            size="sm"
+            placeholder="All statuses"
+            data={[...new Set(detail.orders.map((o) => o.status))].map((status) => ({
+              value: status,
+              label: status.replace(/_/g, ' '),
+            }))}
+            value={orderStatusFilter}
+            onChange={setOrderStatusFilter}
+            clearable
+            w={200}
+          />
         </div>
         {detail.orders.length === 0 ? (
           <EmptyState title="No orders" description="Place an order before collecting a payment." />
@@ -328,7 +377,9 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {detail.orders.map((o) => {
+              {detail.orders
+                .filter((o) => !orderStatusFilter || o.status === orderStatusFilter)
+                .map((o) => {
                 const balance = Math.max(0, Number(o.total_amount) - Number(o.amount_paid));
                 return (
                   <Table.Tr key={o.order_id}>
@@ -377,98 +428,148 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
           </ResponsiveTable>
         )}
       </div>
+        </Tabs.Panel>
 
+        <Tabs.Panel value="payments" pt="md">
       <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm">
-        <div className="border-b border-zinc-100 px-6 py-4">
-          <Text fw={600} size="md" className="text-zinc-800">
-            Payments
-          </Text>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-6 py-4">
+          <div>
+            <Text fw={600} size="md" className="text-zinc-800">
+              Payments
+            </Text>
           <Text size="xs" c="dimmed" className="mt-0.5">
             Receipts are frozen at collection time and never edited — voided ones are reversed.
           </Text>
+          </div>
         </div>
-        {detail.payments.length === 0 ? (
+        <div className="px-6 pt-4">
+          <Select
+            size="sm"
+            placeholder="All payments"
+            data={[
+              { value: 'active', label: 'Active' },
+              { value: 'voided', label: 'Voided' },
+            ]}
+            value={paymentStatusFilter}
+            onChange={setPaymentStatusFilter}
+            clearable
+            w={200}
+          />
+        </div>
+        {visiblePayments.length === 0 ? (
           <EmptyState title="No payments yet" description="Record the first payment to start the ledger." />
         ) : (
-          <div className="divide-y divide-zinc-100">
-            {detail.payments.map((p) => {
-              const isVoided = p.status === 'voided';
-              return (
-                <div key={p.id} className={`flex flex-wrap items-center gap-4 px-6 py-4 ${isVoided ? 'opacity-60' : ''}`}>
-                  <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                      isVoided
-                        ? 'bg-danger-50 text-danger-600'
-                        : 'bg-brand-50 text-brand-700'
-                    }`}
-                  >
-                    {isVoided ? <XCircle size={18} weight="duotone" /> : methodIcon(p.method)}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-zinc-800">{formatMoney(p.amount)}</span>
-                      <StatusBadge status={isVoided ? 'cancelled' : 'paid'} label={isVoided ? 'Voided' : 'Active'} />
-                      {p.receipt_number && (
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
-                          <Receipt size={12} /> {p.receipt_number}
-                        </span>
+          <ResponsiveTable minWidth={760}>
+            <Table.Thead>
+              <Table.Tr className="text-zinc-400">
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Date</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Amount</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Method</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Receipt</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Collected by</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Status</Table.Th>
+                <Table.Th ta="right" />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {visiblePayments.map((p) => {
+                const isVoided = p.status === 'voided';
+                return (
+                  <Table.Tr key={p.id} className={isVoided ? 'opacity-60' : undefined}>
+                    <Table.Td className="whitespace-nowrap text-zinc-600">
+                      {formatDateTime(p.collected_at)}
+                    </Table.Td>
+                    <Table.Td fw={600} className="text-zinc-900">{formatMoney(p.amount)}</Table.Td>
+                    <Table.Td>
+                      <Group gap={6}>
+                        {isVoided ? <XCircle size={14} /> : methodIcon(p.method)}
+                        <span>{paymentMethodLabel(p.method)}</span>
+                      </Group>
+                      {p.note && <Text size="xs" c="dimmed">{p.note}</Text>}
+                      {isVoided && p.void_reason && (
+                        <Text size="xs" c="dimmed">Voided: {p.void_reason}</Text>
                       )}
-                    </div>
-                    {p.note && <Text size="xs" c="dimmed" className="mt-0.5">{p.note}</Text>}
-                    {isVoided && p.void_reason && (
-                      <Text size="xs" c="dimmed" className="mt-0.5">
-                        Voided: {p.void_reason}
-                      </Text>
-                    )}
-                    <Text size="xs" c="dimmed" className="mt-0.5">
-                      {paymentMethodLabel(p.method)} · {formatDateTime(p.collected_at)}
-                      {p.collector_name ? ` · by ${p.collector_name}` : ''}
-                    </Text>
-                  </div>
-
-                  {!isVoided && (
-                    <Group gap="xs">
-                      <Button
-                        size="compact-xs"
-                        variant="subtle"
-                        leftSection={<FilePdf size={14} />}
-                        onClick={() =>
-                          setReceiptPreview({ paymentId: p.id, receiptNumber: p.receipt_number })
-                        }
-                        disabled={!p.receipt_number}
-                      >
-                        Receipt
-                      </Button>
-                      <Button
-                        size="compact-xs"
-                        variant="subtle"
-                        leftSection={<DownloadSimple size={14} />}
-                        onClick={() => void downloadReceiptPdf(p.id)}
-                        disabled={!p.receipt_number}
-                      >
-                        Download
-                      </Button>
-                    </Group>
-                  )}
-                  {isOwner && !isVoided && (
-                    <Button
-                      size="compact-xs"
-                      variant="subtle"
-                      color="red"
-                      leftSection={<XCircle size={14} />}
-                      onClick={() => voidEntry(p)}
-                      disabled={voidPayment.isPending}
-                    >
-                      Void
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    </Table.Td>
+                    <Table.Td className="text-zinc-600">{p.receipt_number ?? '—'}</Table.Td>
+                    <Table.Td className="text-zinc-600">{p.collector_name ?? '—'}</Table.Td>
+                    <Table.Td>
+                      <StatusBadge
+                        status={isVoided ? 'cancelled' : 'paid'}
+                        label={isVoided ? 'Voided' : 'Active'}
+                      />
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Group gap={4} justify="flex-end" wrap="nowrap">
+                        {!isVoided && (
+                          <>
+                            <Button
+                              size="compact-xs"
+                              variant="subtle"
+                              leftSection={<FilePdf size={14} />}
+                              onClick={() =>
+                                setReceiptPreview({ paymentId: p.id, receiptNumber: p.receipt_number })
+                              }
+                              disabled={!p.receipt_number}
+                            >
+                              Receipt
+                            </Button>
+                            <Button
+                              size="compact-xs"
+                              variant="subtle"
+                              leftSection={<DownloadSimple size={14} />}
+                              onClick={() => void downloadReceiptPdf(p.id)}
+                              disabled={!p.receipt_number}
+                            >
+                              Download
+                            </Button>
+                          </>
+                        )}
+                        {isOwner && !isVoided && (
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            color="red"
+                            leftSection={<XCircle size={14} />}
+                            onClick={() => voidEntry(p)}
+                            disabled={voidPayment.isPending}
+                          >
+                            Void
+                          </Button>
+                        )}
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </ResponsiveTable>
         )}
       </div>
+        </Tabs.Panel>
+      </Tabs>
+
+      <Modal
+        opened={ledgerExpanded}
+        onClose={() => setLedgerExpanded(false)}
+        title={`${detail.customer_name} · Ledger`}
+        fullScreen
+        transitionProps={{ transition: 'fade', duration: 150 }}
+      >
+        <LedgerTable
+          ledger={detail.ledger}
+          customerName={detail.customer_name}
+          onOpenInvoice={(orderId) => {
+            const order = detail.orders.find((o) => o.order_id === orderId);
+            setLedgerExpanded(false);
+            setInvoicePreview({ orderId, orderRef: order?.order_ref ?? '' });
+          }}
+          onOpenReceipt={(paymentId) => {
+            const payment = detail.payments.find((p) => p.id === paymentId);
+            setLedgerExpanded(false);
+            setReceiptPreview({ paymentId, receiptNumber: payment?.receipt_number ?? null });
+          }}
+        />
+      </Modal>
 
       <RecordPaymentModal
         opened={paymentOpen}

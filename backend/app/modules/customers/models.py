@@ -2,11 +2,12 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.soft_delete import SoftDeletable
 from app.modules.routes.models import Route
 from app.modules.tenants.models import Tenant
 
@@ -15,11 +16,23 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-class Customer(Base):
+class Customer(SoftDeletable, Base):
     __tablename__ = "customers"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "email", name="uq_customers_tenant_email"),
-        UniqueConstraint("tenant_id", "pan_no", name="uq_customers_tenant_pan_no"),
+        Index(
+            "uq_customers_tenant_email",
+            "tenant_id",
+            "email",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_customers_tenant_pan_no",
+            "tenant_id",
+            "pan_no",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

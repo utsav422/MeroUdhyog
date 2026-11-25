@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Avatar, Group, Indicator, Menu, SegmentedControl, Text } from '@mantine/core';
-import { Bell, List, MagnifyingGlass, SignOut, UserCircle } from '@phosphor-icons/react';
+import { Archive, Bell, List, MagnifyingGlass, SignOut, UserCircle } from '@phosphor-icons/react';
 import { apiAssetUrl, apiClient } from '@/lib/api-client';
 import { setDateMode, useDateMode, type DateMode } from '@/lib/date-mode';
 import { useRouter } from 'next/navigation';
@@ -23,6 +23,8 @@ const TITLES: Record<string, string> = {
   '/orders': 'Orders',
   '/deliveries': 'Deliveries',
   '/customers': 'Customers',
+  '/payments': 'Payments',
+  '/recovery': 'Recovery',
   '/staff': 'Staff',
   '/profile': 'Profile',
 };
@@ -205,6 +207,12 @@ export default function Topbar({
               </Text>
             </div>
             <Menu.Divider />
+            <Menu.Item
+              leftSection={<Archive size={16} />}
+              onClick={() => router.push('/recovery')}
+            >
+              Recovery
+            </Menu.Item>
             <Menu.Item
               leftSection={<UserCircle size={16} />}
               onClick={() => router.push('/profile')}

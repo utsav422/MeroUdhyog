@@ -184,7 +184,7 @@ async def test_patch_variant_and_variant_price(client):
 
 
 @pytest.mark.asyncio
-async def test_delete_variant_rejects_last_remaining_variant(client):
+async def test_delete_last_variant_moves_it_to_recovery(client):
     await _register(client, f"t{uuid.uuid4().hex[:6]}")
     r = await client.post("/api/v1/products", json=await _create_product(client))
     assert r.status_code == 201, r.text
@@ -192,8 +192,16 @@ async def test_delete_variant_rejects_last_remaining_variant(client):
     vid = r.json()["variants"][0]["id"]
 
     r = await client.delete(f"/api/v1/products/{pid}/variants/{vid}")
-    assert r.status_code == 409
-    assert "at least one variant" in r.json()["detail"].lower()
+    assert r.status_code == 204, r.text
+
+    r = await client.get("/api/v1/products")
+    product = next(p for p in r.json() if p["id"] == pid)
+    assert product["variants"] == []
+
+    recovery = await client.get("/api/v1/recovery?entity_type=variant")
+    assert recovery.status_code == 200, recovery.text
+    item = next(i for i in recovery.json()["items"] if i["entity_id"] == vid)
+    assert item["state"] == "trashed"
 
 
 @pytest.mark.asyncio

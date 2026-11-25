@@ -100,6 +100,22 @@ class KhataRepository:
             for cid, collected_at, amount in rows.all()
         }
 
+    async def last_delivered_by_customer(self) -> dict[UUID, object]:
+        """Most recent hand-over date per customer, across delivered orders."""
+        rows = await self.session.execute(
+            select(Order.customer_id, func.max(Delivery.delivered_at))
+            .join(Delivery, Delivery.order_id == Order.id)
+            .where(
+                Delivery.tenant_id == self.tenant_id,
+                Order.tenant_id == self.tenant_id,
+                Delivery.status == "delivered",
+                Delivery.delivered_at.is_not(None),
+                Order.customer_id.is_not(None),
+            )
+            .group_by(Order.customer_id)
+        )
+        return dict(rows.all())
+
     # ---- orders ----------------------------------------------------------------
 
     async def list_billable_orders(self, customer_id: UUID) -> list[Order]:
@@ -167,6 +183,7 @@ class KhataRepository:
                 selectinload(LedgerEntry.collector),
             )
             .where(LedgerEntry.id == entry_id, LedgerEntry.tenant_id == self.tenant_id)
+            .execution_options(include_deleted=True)
         )
         entry = result.scalars().unique().one_or_none()
         if not entry:

@@ -65,9 +65,10 @@ def _int_or_default(value: str | None, default: int = 0) -> int:
 
 
 class ProductService:
-    def __init__(self, session: AsyncSession, tenant_id: UUID):
+    def __init__(self, session: AsyncSession, tenant_id: UUID, user_id: UUID | None = None):
         self.session = session
         self.tenant_id = tenant_id
+        self.user_id = user_id
         self.repo = ProductRepository(session, tenant_id)
 
     async def list(
@@ -278,9 +279,12 @@ class ProductService:
         await self.repo.update(product)
         return await self.get(product_id)
 
-    async def delete(self, product_id: UUID) -> None:
-        product = await self.repo.get(product_id)
-        await self.repo.delete(product)
+    async def delete(self, product_id: UUID, reason: str | None = None) -> None:
+        from app.modules.recovery.service import RecoveryService
+
+        await RecoveryService(self.session, self.tenant_id, self.user_id).soft_delete_product(
+            product_id, reason=reason
+        )
 
     async def add_variant(
         self, product_id: UUID, data: VariantCreate
@@ -300,15 +304,14 @@ class ProductService:
         await self._sync_low_stock([updated])
         return VariantRead.model_validate(updated)
 
-    async def delete_variant(self, product_id: UUID, variant_id: UUID) -> None:
-        variant = await self.repo.get_variant(product_id, variant_id)
-        remaining = await self.repo.count_variants(product_id)
-        if remaining <= 1:
-            raise ConflictError(
-                "A product must have at least one variant; "
-                "edit or delete the product instead"
-            )
-        await self.repo.delete_variant(variant)
+    async def delete_variant(
+        self, product_id: UUID, variant_id: UUID, reason: str | None = None
+    ) -> None:
+        from app.modules.recovery.service import RecoveryService
+
+        await RecoveryService(self.session, self.tenant_id, self.user_id).soft_delete_variant(
+            variant_id, reason=reason
+        )
 
     async def update_variant_price(
         self, product_id: UUID, variant_id: UUID, price_id: UUID, data: VariantPriceUpdate

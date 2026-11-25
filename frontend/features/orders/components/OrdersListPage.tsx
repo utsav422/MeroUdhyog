@@ -240,6 +240,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [customerFilter, setCustomerFilter] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
+  const [deliveredDateFilter, setDeliveredDateFilter] = useState<DateRangeValue>(EMPTY_DATE_RANGE);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
@@ -249,6 +250,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
   const [pageSize, setPageSize] = useState(10);
 
   const dateRange = dateRangeToApi(dateFilter);
+  const deliveredDateRange = dateRangeToApi(deliveredDateFilter);
   const ordersQuery = useOrders({
     routeId: routeFilter,
     statusScope: isDeliveredScope ? 'delivered' : 'undelivered',
@@ -258,6 +260,8 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
     paymentStatus: paymentStatusFilter,
     dateFrom: dateRange.from,
     dateTo: dateRange.to,
+    deliveredFrom: deliveredDateRange.from,
+    deliveredTo: deliveredDateRange.to,
     search,
   });
 
@@ -848,7 +852,8 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
     !!customerFilter ||
     !!sourceFilter ||
     !!paymentStatusFilter ||
-    dateFilter.mode !== 'all';
+    dateFilter.mode !== 'all' ||
+    deliveredDateFilter.mode !== 'all';
 
   const selectedOrders = useMemo(
     () => scopedOrders.filter((o) => selected.includes(o.id)),
@@ -1070,6 +1075,11 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
               key: 'createdRange',
               label: 'Order date',
             },
+            {
+              type: 'rangedate' as const,
+              key: 'deliveredRange',
+              label: 'Delivered date',
+            },
           ]}
           filterValues={
             {
@@ -1078,6 +1088,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
               source: sourceFilter,
               paymentStatus: paymentStatusFilter,
               createdRange: dateFilter,
+              deliveredRange: deliveredDateFilter,
             } as Filters
           }
           onFiltersChange={(f) => {
@@ -1086,6 +1097,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
             setSourceFilter((f.source as string | null) ?? null);
             setPaymentStatusFilter((f.paymentStatus as string | null) ?? null);
             setDateFilter((f.createdRange as DateRangeValue) ?? EMPTY_DATE_RANGE);
+            setDeliveredDateFilter((f.deliveredRange as DateRangeValue) ?? EMPTY_DATE_RANGE);
             setPage(1);
           }}
           onClear={() => {
@@ -1095,6 +1107,7 @@ export default function OrdersListPage({ scope = 'undelivered' }: { scope?: Orde
             setSourceFilter(null);
             setPaymentStatusFilter(null);
             setDateFilter(EMPTY_DATE_RANGE);
+            setDeliveredDateFilter(EMPTY_DATE_RANGE);
             setRouteFilter(null);
             setSelected([]);
             setPage(1);

@@ -5,7 +5,7 @@ import { Button, Drawer, Group, Stack, TextInput, Switch } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useForm, schemaResolver } from '@mantine/form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from '@phosphor-icons/react';
+import { Plus, Trash } from '@phosphor-icons/react';
 import {
   DataTable,
   FilterBar,
@@ -17,6 +17,7 @@ import { apiClient } from '@/lib/api-client';
 import { useCategories, categoriesKeys } from '../api';
 import type { Category } from '../api';
 import { categoryFormSchema } from '../schema';
+import { useSoftDelete } from '../../recovery/useSoftDelete';
 
 export default function CategoriesPage() {
   const qc = useQueryClient();
@@ -28,6 +29,7 @@ export default function CategoriesPage() {
   const [pageSize, setPageSize] = useState(10);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { remove } = useSoftDelete();
 
   const form = useForm({
     validate: schemaResolver(categoryFormSchema),
@@ -181,6 +183,15 @@ export default function CategoriesPage() {
         minWidth={600}
         emptyTitle="No categories found"
         emptyDescription="Create your first category to get started."
+        rowActions={[
+          {
+            label: 'Delete',
+            icon: <Trash size={16} />,
+            color: 'red',
+            onClick: (c: Category) =>
+              remove({ path: `/categories/${c.id}`, label: c.name, successTitle: 'Category deleted' }),
+          },
+        ]}
       />
 
       <PaginationBar

@@ -1,4 +1,6 @@
-from contextlib import asynccontextmanager
+import asyncio
+import logging
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,14 +13,39 @@ from app.core.config import get_settings
 from app.core.database import close_db, init_db
 from app.core.logging import setup_logging
 
+logger = logging.getLogger(__name__)
+
+
+async def _recovery_purge_loop() -> None:
+    from app.core.database import get_session
+    from app.modules.recovery.purge import purge_expired
+
+    while True:
+        await asyncio.sleep(settings.RECOVERY_PURGE_INTERVAL_SECONDS)
+        try:
+            async with get_session() as session:
+                purged = await purge_expired(session, limit=200)
+            if purged:
+                logger.info("Permanently removed %s expired recovery items", purged)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Recovery purge failed")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     init_db()
     register_models()
-    yield
-    await close_db()
+    purge_task = asyncio.create_task(_recovery_purge_loop())
+    try:
+        yield
+    finally:
+        purge_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await purge_task
+        await close_db()
 
 
 settings = get_settings()
@@ -58,6 +85,7 @@ def _register_routers(application: FastAPI) -> None:
     from app.modules.orders.router import router as orders_router
     from app.modules.predictions.router import router as predictions_router
     from app.modules.products.router import router as products_router
+    from app.modules.recovery.router import router as recovery_router
     from app.modules.roles.router import router as roles_router
     from app.modules.routes.router import router as routes_router
     from app.modules.search.router import router as search_router
@@ -85,6 +113,7 @@ def _register_routers(application: FastAPI) -> None:
     application.include_router(finance_router, prefix=settings.API_V1_PREFIX)
     application.include_router(orders_router, prefix=settings.API_V1_PREFIX)
     application.include_router(predictions_router, prefix=settings.API_V1_PREFIX)
+    application.include_router(recovery_router, prefix=settings.API_V1_PREFIX)
     application.include_router(deliveries_router, prefix=settings.API_V1_PREFIX)
     application.include_router(search_router, prefix=settings.API_V1_PREFIX)
     application.include_router(notifications_router, prefix=settings.API_V1_PREFIX)

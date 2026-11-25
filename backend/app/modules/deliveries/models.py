@@ -9,12 +9,13 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.soft_delete import SoftDeletable
 from app.modules.orders.models import Order
 from app.modules.routes.models import Route  # noqa: F401
 from app.modules.tenants.models import Tenant
@@ -25,10 +26,15 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-class Delivery(Base):
+class Delivery(SoftDeletable, Base):
     __tablename__ = "deliveries"
     __table_args__ = (
-        UniqueConstraint("order_id", name="uq_deliveries_order"),
+        Index(
+            "uq_deliveries_order",
+            "order_id",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         Index("ix_deliveries_tenant_id", "tenant_id"),
         Index("ix_deliveries_agent", "delivery_agent_id"),
     )

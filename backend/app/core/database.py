@@ -1,27 +1,53 @@
 from contextlib import asynccontextmanager
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Session, with_loader_criteria
 
 from app.core.config import get_settings
 from app.core.realtime import PENDING_EVENTS_KEY, realtime_bus
+from app.core.soft_delete import SoftDeletable
 
 
 class Base(DeclarativeBase):
     pass
 
 
+@event.listens_for(Session, "do_orm_execute")
+def _hide_soft_deleted_rows(execute_state) -> None:
+    """Keep trashed records out of ordinary application queries.
+
+    Recovery endpoints and the backend admin opt in explicitly so they can
+    still show a deleted record until its retention window closes.
+    """
+    if not execute_state.is_select:
+        return
+    if execute_state.execution_options.get("include_deleted", False):
+        return
+    if execute_state.session.info.get("include_deleted", False):
+        return
+    execute_state.statement = execute_state.statement.options(
+        with_loader_criteria(
+            SoftDeletable,
+            lambda cls: cls.deleted_at.is_(None),
+            include_aliases=True,
+            propagate_to_loaders=True,
+        )
+    )
+
+
 engine: AsyncEngine | None = None
 async_session_maker: async_sessionmaker[AsyncSession] | None = None
+admin_session_maker: async_sessionmaker[AsyncSession] | None = None
 
 
 def init_db() -> None:
-    global engine, async_session_maker
+    global engine, async_session_maker, admin_session_maker
     settings = get_settings()
 
     engine = create_async_engine(
@@ -33,6 +59,12 @@ def init_db() -> None:
     )
     async_session_maker = async_sessionmaker(
         engine, class_=AsyncSession, expire_on_commit=False
+    )
+    admin_session_maker = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        info={"include_deleted": True},
     )
 
 

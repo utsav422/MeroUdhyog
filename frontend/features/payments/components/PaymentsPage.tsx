@@ -13,6 +13,7 @@ import {
   FilePdf,
   HandCoins,
   Receipt,
+  Trash,
 } from '@phosphor-icons/react';
 import {
   DataTable,
@@ -29,6 +30,7 @@ import { PAYMENT_METHODS, paymentMethodLabel } from '../../khata/constants';
 import { usePayments, EMPTY_PAYMENTS_FILTERS } from '../api';
 import type { PaymentsFilters } from '../api';
 import type { Payment } from '../../khata/api';
+import { useSoftDelete } from '../../recovery/useSoftDelete';
 
 const METHOD_ICONS: Record<string, ReactNode> = {
   cash: <CashRegister size={18} weight="duotone" />,
@@ -61,6 +63,7 @@ export default function PaymentsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const paymentsQuery = usePayments(filters, page, pageSize);
+  const { remove } = useSoftDelete();
 
   const customerOptions = useMemo(
     () =>
@@ -145,6 +148,17 @@ export default function PaymentsPage() {
       icon: <BookOpen size={16} />,
       show: (p) => !!p.customer_id,
       onClick: (p) => router.push(`/khata/${p.customer_id}`),
+    },
+    {
+      label: 'Delete',
+      icon: <Trash size={16} />,
+      color: 'red',
+      onClick: (p) =>
+        remove({
+          path: `/khata/payments/${p.id}`,
+          label: p.receipt_number || `Payment ${p.id.slice(0, 8)}`,
+          successTitle: 'Payment deleted',
+        }),
     },
   ];
 

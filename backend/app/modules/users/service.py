@@ -165,3 +165,15 @@ class UserService:
         user.avatar_data = None
         user.avatar_updated_at = None
         await self.session.flush()
+
+    async def delete_user(
+        self,
+        tenant_id: UUID,
+        user_id: UUID,
+        caller_id: UUID,
+        reason: str | None = None,
+    ) -> None:
+        from app.modules.recovery.service import RecoveryService
+
+        service = RecoveryService(self.session, tenant_id, caller_id)
+        await service.soft_delete_staff(user_id, reason=reason)

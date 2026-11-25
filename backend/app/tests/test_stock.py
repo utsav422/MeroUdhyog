@@ -169,7 +169,7 @@ async def test_cancelling_order_restores_stock(client):
 
 
 @pytest.mark.asyncio
-async def test_deleting_draft_order_restores_stock(client):
+async def test_permanently_deleting_draft_order_restores_stock(client):
     await _register(client, "t")
     product = await _create_product(client, "Sauce", stock=10)
     order = await _create_order(client, product, "3")
@@ -177,6 +177,13 @@ async def test_deleting_draft_order_restores_stock(client):
 
     r = await client.delete(f"/api/v1/orders/{order['id']}")
     assert r.status_code == 204
+    assert await _get_variant_stock(client, product) == 7
+
+    recovery = await client.get("/api/v1/recovery?entity_type=order")
+    assert recovery.status_code == 200, recovery.text
+    item = next(i for i in recovery.json()["items"] if i["entity_id"] == order["id"])
+    r = await client.delete(f"/api/v1/recovery/{item['id']}")
+    assert r.status_code == 204, r.text
     assert await _get_variant_stock(client, product) == 10
 
 

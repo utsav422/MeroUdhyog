@@ -50,6 +50,7 @@ class KhataCustomerSummary(BaseModel):
     # outstanding = billed - paid (negative means the customer is in credit)
     outstanding: Decimal = Decimal("0")
     order_count: int = 0
+    last_delivered_at: datetime | None = None
     last_payment_date: datetime | None = None
     last_payment_amount: Decimal | None = None
     # Optional credit ceiling copied from the customer, plus the derived
@@ -136,6 +137,7 @@ class CustomerKhataDetail(BaseModel):
     company: str | None = None
     city: str | None = None
     address: str | None = None
+    last_delivered_at: datetime | None = None
     total_billed: Decimal
     total_paid: Decimal
     outstanding: Decimal

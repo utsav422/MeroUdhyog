@@ -94,6 +94,12 @@ export const SEARCH_PAGES: SearchPage[] = [
     icon: Coins,
   },
   {
+    title: 'Recovery',
+    description: 'Restore or permanently delete trashed records',
+    href: '/recovery',
+    icon: Archive,
+  },
+  {
     title: 'Staff',
     description: 'Manage team members and accounts',
     href: '/staff',

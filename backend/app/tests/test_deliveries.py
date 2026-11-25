@@ -441,7 +441,7 @@ async def test_agent_reports_location_and_owner_sees_live_agents(client):
 
 
 @pytest.mark.asyncio
-async def test_deleting_delivery_voids_accounting_and_resets_order(client):
+async def test_deleting_delivery_moves_to_recovery_then_voids_accounting(client):
     from sqlalchemy import select
 
     from app.core.database import get_session
@@ -485,6 +485,22 @@ async def test_deleting_delivery_voids_accounting_and_resets_order(client):
         delivery_id = uuid.UUID(delivery["id"])
         assert await session.get(Delivery, delivery_id) is None
 
+        txs = (
+            await session.execute(
+                select(Transaction).where(Transaction.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        linked = [t for t in txs if (t.metadata_ or {}).get("delivery_id") == str(delivery_id)]
+        assert linked
+        assert all(t.is_active for t in linked)
+
+    recovery = await client.get("/api/v1/recovery?entity_type=delivered_order")
+    assert recovery.status_code == 200, recovery.text
+    item = next(i for i in recovery.json()["items"] if i["entity_id"] == delivery["id"])
+    r = await client.delete(f"/api/v1/recovery/{item['id']}")
+    assert r.status_code == 204, r.text
+
+    async with get_session() as session:
         txs = (
             await session.execute(
                 select(Transaction).where(Transaction.tenant_id == tenant_id)

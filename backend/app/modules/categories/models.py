@@ -2,11 +2,12 @@ import re
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.soft_delete import SoftDeletable
 from app.modules.tenants.models import Tenant
 
 
@@ -19,10 +20,16 @@ def generate_slug(name: str) -> str:
     return re.sub(r"[-\s]+", "-", slug)
 
 
-class Category(Base):
+class Category(SoftDeletable, Base):
     __tablename__ = "categories"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "slug", name="uq_categories_tenant_slug"),
+        Index(
+            "uq_categories_tenant_slug",
+            "tenant_id",
+            "slug",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         Index("ix_categories_tenant_id", "tenant_id"),
     )
 

@@ -159,6 +159,20 @@ async def void_payment(
     return await service.void_payment(entry_id, data.reason)
 
 
+@router.delete("/payments/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_payment(
+    entry_id: UUID,
+    reason: str | None = None,
+    db=Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
+    _=Depends(require_permission(Permissions.MANAGE_KHATA)),
+):
+    """Move a payment to Recovery; it can be restored or purged there."""
+    service = await _service(db, tenant_id, user_id)
+    await service.delete_payment(entry_id, reason)
+
+
 @router.get("/receipts/{entry_id}", response_model=ReceiptRead)
 async def get_receipt(
     entry_id: UUID,

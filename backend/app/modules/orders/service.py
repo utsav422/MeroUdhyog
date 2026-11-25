@@ -85,6 +85,8 @@ class OrderService:
         *,
         date_from: date | None = None,
         date_to: date | None = None,
+        delivered_from: date | None = None,
+        delivered_to: date | None = None,
         search: str | None = None,
         source: str | None = None,
         payment_status: str | None = None,
@@ -98,6 +100,8 @@ class OrderService:
             route_id,
             date_from=date_from,
             date_to=date_to,
+            delivered_from=delivered_from,
+            delivered_to=delivered_to,
             search=search,
             source=source,
             payment_status=payment_status,
@@ -620,12 +624,19 @@ class OrderService:
         await self.session.flush()
         return OrderBulkStatusResult(updated=updated, skipped=skipped)
 
-    async def delete(self, order_id: UUID) -> None:
-        order = await self.repo.get(order_id)
-        deleted_order_id = order.id
-        deleted_order_ref = order.order_ref
+    async def delete(self, order_id: UUID, reason: str | None = None) -> None:
+        from app.modules.recovery.service import RecoveryService
+
+        await RecoveryService(self.session, self.tenant_id, self.user_id).soft_delete_order(
+            order_id, reason=reason
+        )
+
+    async def hard_delete(self, order: Order) -> None:
+        """Permanent removal from Recovery, after the record left the app."""
         from app.modules.accounting.voiding import void_linked_accounting
 
+        deleted_order_id = order.id
+        deleted_order_ref = order.order_ref
         await void_linked_accounting(
             self.session,
             self.tenant_id,
@@ -649,13 +660,13 @@ class OrderService:
         await self.repo.delete(order)
         await self._notify_service().notify(
             category="system",
-            title="Order deleted",
-            message=f"Order {deleted_order_ref} was deleted and its accounting voided.",
+            title="Order permanently deleted",
+            message=f"Order {deleted_order_ref} was permanently deleted from Recovery.",
             link="/orders",
             data={
                 "order_id": str(deleted_order_id),
                 "order_ref": deleted_order_ref,
-                "status": "deleted",
+                "status": "purged",
             },
             recipient_roles=BACKOFFICE_ROLES,
         )

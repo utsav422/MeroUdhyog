@@ -645,7 +645,7 @@ async def test_deleting_order_releases_credit(client, deliver_first):
     assert after.json()["credit_available"] == "100.00"
 
 
-async def test_deleting_order_shrinks_shared_payment_credit(client):
+async def test_permanently_deleting_order_shrinks_shared_payment_credit(client):
     """A payment split over orders must only free credit for orders that remain."""
     await _tenant(client)
     product = await _create_product(client, "Shared")
@@ -665,6 +665,15 @@ async def test_deleting_order_shrinks_shared_payment_credit(client):
     )
 
     r = await client.delete(f"/api/v1/orders/{first['id']}")
+    assert r.status_code == 204, r.text
+
+    after = await client.get(f"/api/v1/customers/{customer['id']}")
+    assert after.json()["credit_used"] == "0.00"
+
+    recovery = await client.get("/api/v1/recovery?entity_type=order&limit=100")
+    assert recovery.status_code == 200, recovery.text
+    item = next(i for i in recovery.json()["items"] if i["entity_id"] == first["id"])
+    r = await client.delete(f"/api/v1/recovery/{item['id']}")
     assert r.status_code == 204, r.text
 
     after = await client.get(f"/api/v1/customers/{customer['id']}")

@@ -24,6 +24,7 @@ export type KhataCustomerSummary = {
   order_count: number;
   last_payment_date: string | null;
   last_payment_amount: string | null;
+  last_delivered_at: string | null;
   /** Optional credit ceiling; null means the customer is unlimited. */
   credit_limit: string | null;
   credit_used: string;
@@ -99,6 +100,7 @@ export type CustomerKhataDetail = {
   credit_used: string;
   credit_available: string | null;
   credit_utilization: string | null;
+  last_delivered_at: string | null;
   orders: KhataOrder[];
   payments: Payment[];
   ledger: LedgerEntry[];

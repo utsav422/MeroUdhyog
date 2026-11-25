@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
-from app.core.dependencies import get_current_tenant_id, get_db
+from app.core.dependencies import get_current_tenant_id, get_current_user_id, get_db
 from app.core.paginator import pagination_params
 from app.core.permissions import Permissions, require_permission
 from app.modules.categories.schemas import CategoryCreate, CategoryRead, CategoryUpdate
@@ -11,8 +11,8 @@ from app.modules.categories.service import CategoryService
 router = APIRouter(prefix="/categories", tags=["categories"])
 
 
-async def _service(db, tenant_id) -> CategoryService:
-    return CategoryService(db, tenant_id)
+async def _service(db, tenant_id, user_id=None) -> CategoryService:
+    return CategoryService(db, tenant_id, user_id)
 
 
 @router.get("", response_model=list[CategoryRead])
@@ -62,9 +62,11 @@ async def update_category(
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_category(
     category_id: UUID,
+    reason: str | None = None,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.MANAGE_CATALOG)),
 ):
-    service = await _service(db, tenant_id)
-    await service.delete(category_id)
+    service = await _service(db, tenant_id, user_id)
+    await service.delete(category_id, reason)

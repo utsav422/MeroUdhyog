@@ -11,7 +11,6 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -19,6 +18,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.soft_delete import SoftDeletable
 from app.modules.categories.models import Category
 from app.modules.tenants.models import Tenant
 
@@ -27,11 +27,23 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-class Product(Base):
+class Product(SoftDeletable, Base):
     __tablename__ = "products"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "sku", name="uq_products_tenant_sku"),
-        UniqueConstraint("tenant_id", "slug", name="uq_products_tenant_slug"),
+        Index(
+            "uq_products_tenant_sku",
+            "tenant_id",
+            "sku",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_products_tenant_slug",
+            "tenant_id",
+            "slug",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         Index("ix_products_tenant_id", "tenant_id"),
         Index("ix_products_category_id", "category_id"),
     )
@@ -70,11 +82,16 @@ class Product(Base):
         return self.name
 
 
-class ProductVariant(Base):
+class ProductVariant(SoftDeletable, Base):
     __tablename__ = "product_variants"
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id", "product_id", "sku", name="uq_variants_tenant_product_sku"
+        Index(
+            "uq_variants_tenant_product_sku",
+            "tenant_id",
+            "product_id",
+            "sku",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
         ),
         Index("ix_product_variants_tenant_id", "tenant_id"),
         Index("ix_product_variants_product_id", "product_id"),

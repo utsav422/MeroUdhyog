@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Text } from '@mantine/core';
+import { Group, Select, Text } from '@mantine/core';
+import { DatePickerInput } from '@mantine/dates';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -39,6 +40,7 @@ import {
   defaultVariantPrice,
   useLowStock,
   useStockMovements,
+  MAX_FETCH,
 } from '@/features/products/api';
 import { useCustomers } from '@/features/customers/api';
 import { useDeliveries } from '@/features/deliveries/api';
@@ -55,10 +57,17 @@ import { downloadCsv } from '@/lib/exportCsv';
 
 const PIE_COLORS = ['#1b4332', '#f59e0b', '#a8c5b8', '#528a72', '#7ba695'];
 const PERIOD_OPTIONS = [
-  { value: '30d', label: '30D', days: 30 },
-  { value: '90d', label: '90D', days: 90 },
-  { value: '1y', label: '1Y', days: 365 },
+  { value: '2d', label: '2 days', days: 2, months: 0 },
+  { value: '7d', label: '7 days', days: 7, months: 0 },
+  { value: '15d', label: '15 days', days: 15, months: 0 },
+  { value: '1m', label: '1 month', days: 0, months: 1 },
+  { value: '2m', label: '2 months', days: 0, months: 2 },
+  { value: '3m', label: '3 months', days: 0, months: 3 },
+  { value: 'custom', label: 'Custom range', days: 0, months: 0 },
 ] as const;
+
+type PeriodValue = (typeof PERIOD_OPTIONS)[number]['value'];
+type DashboardDateRange = [Date | null, Date | null];
 
 function money(n: number): number {
   return Number.isFinite(n) ? n : 0;
@@ -108,6 +117,35 @@ function toKey(d: Date): string {
 function parseKey(key: string): Date {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m - 1, d);
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = parseKey(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function presetDateRange(period: PeriodValue): DashboardDateRange {
+  if (period === 'custom') return [null, null];
+  const option = PERIOD_OPTIONS.find((p) => p.value === period) ?? PERIOD_OPTIONS[3];
+  const end = startOfDay(new Date());
+  const start = startOfDay(end);
+  if (option.months > 0) {
+    const day = start.getDate();
+    start.setDate(1);
+    start.setMonth(start.getMonth() - option.months);
+    const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+    start.setDate(Math.min(day, lastDay));
+  } else {
+    start.setDate(start.getDate() - (option.days - 1));
+  }
+  return [start, end];
 }
 
 function adMonthRangeLabel(startKey: string, endKey: string): string {
@@ -299,17 +337,118 @@ export default function DashboardPage() {
   const categoriesQuery = useCategories();
   const customersQuery = useCustomers();
   const deliveriesQuery = useDeliveries();
-  const lowStockQuery = useLowStock(5);
-  const stockMovementsQuery = useStockMovements(10);
+  const lowStockQuery = useLowStock(MAX_FETCH);
+  const stockMovementsQuery = useStockMovements(MAX_FETCH);
   const reorder = useReorder();
-  const [period, setPeriod] = useState<(typeof PERIOD_OPTIONS)[number]['value']>('30d');
+  const [period, setPeriod] = useState<PeriodValue>('1m');
+  const [customRange, setCustomRange] = useState<DashboardDateRange>(() => presetDateRange('1m'));
+  const [productId, setProductId] = useState<string | null>(null);
+  const [variantId, setVariantId] = useState<string | null>(null);
 
-  const orders = ordersQuery.data ?? [];
-  const products = productsQuery.data ?? [];
-  const customers = customersQuery.data ?? [];
-  const deliveries = deliveriesQuery.data ?? [];
-  const lowStock = lowStockQuery.data ?? [];
-  const stockMovements = stockMovementsQuery.data ?? [];
+  const presetRange = useMemo(() => presetDateRange(period), [period]);
+  const activeRange = period === 'custom' ? customRange : presetRange;
+  const [startKey, endKey] = useMemo(
+    () => [
+      activeRange[0] ? toKey(activeRange[0]) : '',
+      activeRange[1] ? toKey(activeRange[1]) : '',
+    ],
+    [activeRange],
+  );
+  const periodLabel = PERIOD_OPTIONS.find((p) => p.value === period)?.label ?? 'Custom range';
+  const rangeLabel = useMemo(() => {
+    if (!startKey && !endKey) return 'All time';
+    if (startKey && endKey) return `${formatDate(startKey)} – ${formatDate(endKey)}`;
+    return startKey ? `From ${formatDate(startKey)}` : `Up to ${formatDate(endKey)}`;
+  }, [startKey, endKey]);
+
+  const inPeriod = useCallback(
+    (timestamp?: string | null) => {
+      if (!timestamp) return false;
+      const key = timestamp.slice(0, 10);
+      if (startKey && key < startKey) return false;
+      if (endKey && key > endKey) return false;
+      return true;
+    },
+    [startKey, endKey],
+  );
+
+  const allProducts = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
+
+  const productOptions = useMemo(
+    () =>
+      allProducts
+        .map((p) => ({ value: p.id, label: p.name }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [allProducts],
+  );
+
+  const variantOptions = useMemo(() => {
+    const selectedProduct = productId ? allProducts.filter((p) => p.id === productId) : allProducts;
+    return selectedProduct
+      .flatMap((p) =>
+        p.variants.map((v) => ({ value: v.id, label: `${p.name} · ${v.name}` })),
+      )
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allProducts, productId]);
+
+  const products = useMemo(
+    () => allProducts.filter((p) => !productId || p.id === productId),
+    [allProducts, productId],
+  );
+
+  const orders = useMemo(
+    () =>
+      (ordersQuery.data ?? [])
+        .filter((o) => inPeriod(o.created_at))
+        .map((o) => ({
+          ...o,
+          items: o.items.filter(
+            (i) =>
+              (!productId || i.product_id === productId) &&
+              (!variantId || i.variant_id === variantId),
+          ),
+        }))
+        .filter((o) => !productId && !variantId || o.items.length > 0),
+    [ordersQuery.data, inPeriod, productId, variantId],
+  );
+
+  const customers = useMemo(
+    () => (customersQuery.data ?? []).filter((c) => inPeriod(c.created_at)),
+    [customersQuery.data, inPeriod],
+  );
+
+  const deliveries = useMemo(
+    () =>
+      (deliveriesQuery.data ?? []).filter((d) =>
+        inPeriod(d.created_at ?? d.assigned_at ?? null),
+      ),
+    [deliveriesQuery.data, inPeriod],
+  );
+
+  const lowStock = useMemo(
+    () =>
+      (lowStockQuery.data ?? [])
+        .filter(
+          (v) =>
+            (!productId || v.product_id === productId) &&
+            (!variantId || v.variant_id === variantId),
+        )
+        .slice(0, 5),
+    [lowStockQuery.data, productId, variantId],
+  );
+
+  const stockMovements = useMemo(
+    () =>
+      (stockMovementsQuery.data ?? [])
+        .filter(
+          (m) =>
+            inPeriod(m.created_at) &&
+            (!productId || m.product_id === productId) &&
+            (!variantId || m.variant_id === variantId),
+        )
+        .slice(0, 10),
+    [stockMovementsQuery.data, inPeriod, productId, variantId],
+  );
 
   // Failed/cancelled orders are locked out of every revenue calculation —
   // they only ever appear as counts, never as money.
@@ -327,10 +466,24 @@ export default function DashboardPage() {
   const kpis = useMemo(() => {
     const revenuePaid = moneyOrders
       .filter((o) => o.payment_status === 'paid')
-      .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+      .reduce(
+        (s, o) =>
+          s +
+          (productId || variantId
+            ? o.items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+            : Number(o.total_amount || 0)),
+        0,
+      );
     const revenuePending = moneyOrders
       .filter((o) => o.payment_status !== 'paid')
-      .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+      .reduce(
+        (s, o) =>
+          s +
+          (productId || variantId
+            ? o.items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+            : Number(o.total_amount || 0)),
+        0,
+      );
     const activeDeliveries = deliveries.filter(
       (d) => !['delivered', 'failed', 'pending_assignment'].includes(d.status),
     ).length;
@@ -351,7 +504,7 @@ export default function DashboardPage() {
       products: products.length,
       conversionRate,
     };
-  }, [orders, deliveries, customers, products, moneyOrders]);
+  }, [orders, deliveries, customers, products, moneyOrders, productId, variantId]);
 
   const revenueByDay = useMemo(() => {
     const map = new Map<string, number>();
@@ -359,14 +512,16 @@ export default function DashboardPage() {
       if (o.payment_status !== 'paid') continue;
       const day = (o.created_at ?? '').slice(0, 10);
       if (!day) continue;
-      map.set(day, money(map.get(day) ?? 0) + Number(o.total_amount || 0));
+      const revenue =
+        productId || variantId
+          ? o.items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+          : Number(o.total_amount || 0);
+      map.set(day, money(map.get(day) ?? 0) + revenue);
     }
-    const rows = [...map.entries()]
+    return [...map.entries()]
       .map(([date, total]) => ({ date, name: date.slice(5).replace('-', '/'), total: Math.round(total) }))
       .sort((a, b) => a.date.localeCompare(b.date));
-    const days = PERIOD_OPTIONS.find((p) => p.value === period)?.days ?? 30;
-    return rows.slice(-days);
-  }, [moneyOrders, period]);
+  }, [moneyOrders, productId, variantId]);
 
   const topCategories = useMemo(() => {
     const map = new Map<string, number>();
@@ -508,6 +663,8 @@ export default function DashboardPage() {
 
     push(['DASHBOARD REPORT']);
     push(['Generated', formatDateTime(new Date())]);
+    push(['Period', periodLabel]);
+    push(['Date range', rangeLabel]);
     push([]);
     push(['KPI', 'Value']);
     push(['Revenue (paid)', formatMoney(kpis.revenue)]);
@@ -595,6 +752,63 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <Group gap="sm" wrap="wrap" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <Select
+          size="sm"
+          label="Period"
+          value={period}
+          onChange={(value) => {
+            const next = value as PeriodValue;
+            if (next === 'custom' && period !== 'custom') setCustomRange(presetRange);
+            setPeriod(next);
+          }}
+          data={PERIOD_OPTIONS.map((p) => ({ value: p.value, label: p.label }))}
+          allowDeselect={false}
+          w={150}
+        />
+        <DatePickerInput
+          size="sm"
+          label="Date range"
+          type="range"
+          clearable
+          value={activeRange}
+          onChange={(value) => {
+            const next = value ?? [null, null];
+            setCustomRange([toDate(next[0]), toDate(next[1])]);
+            setPeriod('custom');
+          }}
+          placeholder="Choose a date range"
+          valueFormat="MMM D, YYYY"
+          w={260}
+        />
+        <Select
+          size="sm"
+          label="Product"
+          value={productId}
+          onChange={(value) => {
+            setProductId(value);
+            setVariantId(null);
+          }}
+          data={productOptions}
+          placeholder="All products"
+          clearable
+          w={220}
+        />
+        <Select
+          size="sm"
+          label="Variant"
+          value={variantId}
+          onChange={setVariantId}
+          data={variantOptions}
+          placeholder="All variants"
+          clearable
+          w={220}
+        />
+        <Text size="xs" c="dimmed" className="self-end pb-2">
+          {periodLabel} · {rangeLabel} — applies to every dashboard section and the CSV export.
+        </Text>
+      </Group>
+
       {lowStock.length > 0 && (
         <div className="flex items-center gap-3 rounded-2xl border border-warning-100 bg-warning-50 px-4 py-3 text-sm text-warning-800">
           <Warning size={18} weight="duotone" className="shrink-0 text-warning-600" />
@@ -670,25 +884,7 @@ export default function DashboardPage() {
         <Panel
           className="xl:col-span-2"
           title="Revenue trend"
-          subtitle="In lakhs (NPR)"
-          action={
-            <div className="flex items-center gap-1 rounded-lg bg-black/[0.03] p-0.5">
-              {PERIOD_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setPeriod(opt.value)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                    period === opt.value
-                      ? 'bg-white text-[var(--foreground)] shadow-sm'
-                      : 'text-[var(--muted)] hover:text-[var(--foreground)]'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          }
+          subtitle={`In lakhs (NPR) · ${periodLabel} · ${rangeLabel}`}
         >
           <div className="h-[220px]">
             <ResponsiveContainer width="100%" height="100%">

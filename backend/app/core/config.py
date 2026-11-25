@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     VAPID_PRIVATE_KEY: str = ""
     VAPID_SUBJECT: str = "mailto:info@meroudhyog.com"
 
+    # Recovery window. Regular users can restore from the Recovery page for
+    # two days; the backend admin keeps the records for seven days. A periodic
+    # purge permanently removes anything older than the admin window.
+    RECOVERY_USER_DAYS: int = 2
+    RECOVERY_ADMIN_DAYS: int = 7
+    RECOVERY_PURGE_INTERVAL_SECONDS: int = 3600
+
 
 @lru_cache
 def get_settings() -> Settings:

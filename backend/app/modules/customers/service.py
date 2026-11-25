@@ -45,9 +45,10 @@ def _credit_limit(value: object) -> Decimal | None:
 
 
 class CustomerService:
-    def __init__(self, session: AsyncSession, tenant_id: UUID):
+    def __init__(self, session: AsyncSession, tenant_id: UUID, user_id: UUID | None = None):
         self.session = session
         self.tenant_id = tenant_id
+        self.user_id = user_id
         self.repo = CustomerRepository(session, tenant_id)
 
     async def _with_credit(self, customer: Customer, used: Decimal) -> CustomerRead:
@@ -135,9 +136,11 @@ class CustomerService:
             raise ValidationError("route does not belong to this tenant")
         return route_id
 
-    async def delete(self, customer_id: UUID) -> None:
-        customer = await self.repo.get(customer_id)
-        await self.repo.delete(customer)
+    async def delete(self, customer_id: UUID, reason: str | None = None) -> None:
+        from app.modules.recovery.service import RecoveryService
+
+        service = RecoveryService(self.session, self.tenant_id, self.user_id)
+        await service.soft_delete_customer(customer_id, reason=reason)
 
     async def _find_by_email(self, email: str) -> Customer | None:
         return (

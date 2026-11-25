@@ -6,7 +6,7 @@ import { notifications } from '@mantine/notifications';
 import { useForm } from '@mantine/form';
 import { schemaResolver } from '@mantine/form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, PencilSimple } from '@phosphor-icons/react';
+import { Plus, PencilSimple, Trash } from '@phosphor-icons/react';
 import {
   DataTable,
   FilterBar,
@@ -20,6 +20,7 @@ import { useUsers, staffKeys, checkStaffEmail } from '../api';
 import type { User } from '../api';
 import { staffFormSchema, ROLES } from '../schema';
 import { useRoles } from '../../roles/api';
+import { useSoftDelete } from '../../recovery/useSoftDelete';
 
 function roleTone(role: string): string {
   if (role === 'admin' || role === 'owner') return 'bg-warning-50 text-warning-600';
@@ -41,6 +42,7 @@ export default function StaffPage() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
+  const { remove } = useSoftDelete();
 
   const form = useForm({
     validate: schemaResolver(staffFormSchema),
@@ -236,6 +238,14 @@ export default function StaffPage() {
       label: 'Edit',
       icon: <PencilSimple size={16} />,
       onClick: (u: User) => openEdit(u),
+    },
+    {
+      label: 'Delete',
+      icon: <Trash size={16} />,
+      color: 'red',
+      show: (u: User) => !u.is_superadmin,
+      onClick: (u: User) =>
+        remove({ path: `/users/${u.id}`, label: u.full_name, successTitle: 'Staff member deleted' }),
     },
   ];
 

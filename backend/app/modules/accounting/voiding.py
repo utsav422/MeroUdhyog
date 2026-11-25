@@ -64,6 +64,7 @@ async def _detach_order_payments(
                     LedgerEntry.status == "active",
                     LedgerAllocation.order_id == order_id,
                 )
+                .execution_options(include_deleted=True)
             )
         )
         .scalars()

@@ -674,12 +674,14 @@ def register_models() -> None:
     Must be called after ``app.core.database.init_db()`` (lazily invoked inside
     the app lifespan) so ``async_session_maker`` is available.
     """
-    from app.core.database import async_session_maker
+    from app.core.database import admin_session_maker
 
-    if async_session_maker is None:
+    if admin_session_maker is None:
         raise RuntimeError("init_db() must run before registering FastAdmin models")
 
+    # The admin session includes soft-deleted rows for the full seven-day
+    # retention window; ordinary API sessions hide them.
     for admin_class, model in _ADMIN_CLASSES:
         register_admin_model_class(
-            admin_class, [model], sqlalchemy_sessionmaker=async_session_maker
+            admin_class, [model], sqlalchemy_sessionmaker=admin_session_maker
         )

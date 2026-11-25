@@ -11,9 +11,10 @@ from app.shared.exceptions import ConflictError
 
 
 class CategoryService:
-    def __init__(self, session: AsyncSession, tenant_id: UUID):
+    def __init__(self, session: AsyncSession, tenant_id: UUID, user_id: UUID | None = None):
         self.session = session
         self.tenant_id = tenant_id
+        self.user_id = user_id
         self.repo = CategoryRepository(session, tenant_id)
 
     async def list(self, limit: int, offset: int) -> list[CategoryRead]:
@@ -52,6 +53,9 @@ class CategoryService:
         updated = await self.repo.update(cat)
         return CategoryRead.model_validate(updated)
 
-    async def delete(self, category_id: UUID) -> None:
-        cat = await self.repo.get(category_id)
-        await self.repo.delete(cat)
+    async def delete(self, category_id: UUID, reason: str | None = None) -> None:
+        from app.modules.recovery.service import RecoveryService
+
+        await RecoveryService(self.session, self.tenant_id, self.user_id).soft_delete_category(
+            category_id, reason=reason
+        )

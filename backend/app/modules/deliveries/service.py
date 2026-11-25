@@ -411,58 +411,11 @@ class DeliveryService:
         ).post_transaction(sale)
         await self.finance_service.recalculate({month_of_dt(sale.transaction_date)})
 
-    async def delete(self, delivery_id: UUID) -> None:
-        delivery = await self.repo.get(delivery_id)
-        deleted_delivery_id = delivery.id
-        deleted_order_ref = await self._order_ref(delivery.order_id)
-        reset_order = False
-        from app.modules.accounting.voiding import void_linked_accounting
+    async def delete(self, delivery_id: UUID, reason: str | None = None) -> None:
+        from app.modules.recovery.service import RecoveryService
 
-        await void_linked_accounting(
-            self.session,
-            self.tenant_id,
-            self.user_id,
-            order_id=delivery.order_id,
-            delivery_id=delivery.id,
-        )
-        order = (
-            await self.session.execute(
-                select(Order).where(
-                    Order.id == delivery.order_id,
-                    Order.tenant_id == self.tenant_id,
-                )
-            )
-        ).scalar_one_or_none()
-        if order is not None and order.status in {
-            "assigned",
-            "picked_up",
-            "in_transit",
-            "in_delivery",
-            "delivered",
-            "failed",
-        }:
-            order.status = "ready"
-            reset_order = True
-        await self.repo.delete(delivery)
-        if reset_order and order is not None:
-            await self.session.flush()
-            await self._notify_service().order_status(
-                order.id, order.order_ref, "ready", extra="The delivery was deleted."
-            )
-        await self._notify_service().notify(
-            category="system",
-            title="Delivery deleted",
-            message=(
-                f"Delivery for order {deleted_order_ref or ''} was deleted "
-                "and its accounting voided."
-            ),
-            link="/deliveries",
-            data={
-                "delivery_id": str(deleted_delivery_id),
-                "order_ref": deleted_order_ref,
-                "status": "deleted",
-            },
-            recipient_roles=BACKOFFICE_ROLES,
+        await RecoveryService(self.session, self.tenant_id, self.user_id).soft_delete_delivery(
+            delivery_id, reason=reason
         )
 
     async def add_location(

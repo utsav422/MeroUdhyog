@@ -29,6 +29,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.soft_delete import SoftDeletable
 from app.modules.customers.models import Customer
 from app.modules.orders.models import Order
 from app.modules.users.models import User
@@ -38,7 +39,7 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-class LedgerEntry(Base):
+class LedgerEntry(SoftDeletable, Base):
     """A recorded payment (the "Khata" row). Never hard-deleted — voided."""
 
     __tablename__ = "ledger_entries"

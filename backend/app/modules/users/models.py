@@ -11,13 +11,13 @@ from sqlalchemy import (
     LargeBinary,
     Numeric,
     String,
-    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.soft_delete import SoftDeletable
 from app.modules.tenants.models import Tenant
 
 
@@ -25,11 +25,17 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-class User(Base):
+class User(SoftDeletable, Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint("status IN ('active', 'inactive', 'invited')", name="ck_users_status"),
-        UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
+        Index(
+            "uq_users_tenant_email",
+            "tenant_id",
+            "email",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         # Only a single platform superadmin may exist at any time.
         Index(
             "uq_users_single_superadmin",

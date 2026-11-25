@@ -98,6 +98,7 @@ class KhataService:
         billed = await self.repo.billed_by_customer()
         paid = await self.repo.paid_by_customer()
         last = await self.repo.last_payment_by_customer()
+        last_delivered = await self.repo.last_delivered_by_customer()
         credit_used = await credit_used_map(self.session, self.tenant_id)
 
         rows: list[KhataCustomerSummary] = []
@@ -118,6 +119,7 @@ class KhataService:
                     total_paid=paid_total,
                     outstanding=_q2(billed_total - paid_total),
                     order_count=order_count,
+                    last_delivered_at=last_delivered.get(c.id),
                     last_payment_date=last_date,
                     last_payment_amount=last_amount,
                     credit_limit=c.credit_limit,
@@ -179,6 +181,8 @@ class KhataService:
         order_ids = [o.id for o in orders]
         invoice_numbers = await self.repo.invoice_numbers_by_order(order_ids)
         delivery_dates = await self.repo.delivered_at_by_order(order_ids)
+        delivered_dates = [d for d in delivery_dates.values() if d is not None]
+        last_delivered_at = max(delivered_dates) if delivered_dates else None
         total_billed = sum(((o.total_amount or ZERO) for o in orders), ZERO)
         total_paid = sum((p.amount for p in payments if p.status == "active"), ZERO)
 
@@ -219,6 +223,7 @@ class KhataService:
             company=customer.company,
             city=customer.city,
             address=customer.address,
+            last_delivered_at=last_delivered_at,
             total_billed=_q2(total_billed),
             total_paid=_q2(total_paid),
             outstanding=_q2(total_billed - total_paid),
@@ -941,6 +946,13 @@ class KhataService:
         await self._reverse_receipt_in_ledger(entry)
         fresh = await self.repo.get_entry(entry_id)
         return self._payment_read(fresh)
+
+    async def delete_payment(self, entry_id: UUID, reason: str | None = None) -> None:
+        from app.modules.recovery.service import RecoveryService
+
+        await RecoveryService(self.session, self.tenant_id, self.user_id).soft_delete_payment(
+            entry_id, reason=reason
+        )
 
     async def void_payment_for_deletion(self, entry_id: UUID, order_ref: str) -> None:
         entry = await self.repo.get_entry(entry_id)

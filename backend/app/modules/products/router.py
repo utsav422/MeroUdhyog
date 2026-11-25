@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, UploadFile, status
 from fastapi.responses import Response
 
-from app.core.dependencies import get_current_tenant_id, get_db
+from app.core.dependencies import get_current_tenant_id, get_current_user_id, get_db
 from app.core.paginator import pagination_params
 from app.core.permissions import Permissions, require_permission
 from app.modules.customer_prices.schemas import CustomerPriceWithCustomerRead
@@ -30,8 +30,8 @@ from app.modules.products.service import ProductService
 router = APIRouter(prefix="/products", tags=["products"])
 
 
-async def _service(db, tenant_id) -> ProductService:
-    return ProductService(db, tenant_id)
+async def _service(db, tenant_id, user_id=None) -> ProductService:
+    return ProductService(db, tenant_id, user_id)
 
 
 @router.get("", response_model=list[ProductRead])
@@ -172,12 +172,14 @@ async def update_product(
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(
     product_id: UUID,
+    reason: str | None = None,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.MANAGE_CATALOG)),
 ):
-    service = await _service(db, tenant_id)
-    await service.delete(product_id)
+    service = await _service(db, tenant_id, user_id)
+    await service.delete(product_id, reason)
 
 
 @router.post(
@@ -253,12 +255,14 @@ async def add_variant_price(
 async def delete_variant(
     product_id: UUID,
     variant_id: UUID,
+    reason: str | None = None,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
+    user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.MANAGE_CATALOG)),
 ):
-    service = await _service(db, tenant_id)
-    await service.delete_variant(product_id, variant_id)
+    service = await _service(db, tenant_id, user_id)
+    await service.delete_variant(product_id, variant_id, reason)
 
 
 @router.get(

@@ -83,6 +83,8 @@ export type OrderFilters = {
   paymentStatus?: string | null;
   dateFrom?: string | null;
   dateTo?: string | null;
+  deliveredFrom?: string | null;
+  deliveredTo?: string | null;
   search?: string | null;
 };
 
@@ -103,6 +105,8 @@ export function useOrders(filters?: string | null | OrderFilters) {
   addParam('payment_status', options.paymentStatus);
   addParam('date_from', options.dateFrom);
   addParam('date_to', options.dateTo);
+  addParam('delivered_from', options.deliveredFrom);
+  addParam('delivered_to', options.deliveredTo);
   addParam('search', options.search);
 
   return useQuery({

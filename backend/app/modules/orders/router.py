@@ -31,6 +31,8 @@ async def list_orders(
     route_id: UUID | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    delivered_from: date | None = None,
+    delivered_to: date | None = None,
     search: str | None = None,
     source: str | None = None,
     payment_status: str | None = None,
@@ -48,6 +50,8 @@ async def list_orders(
         route_id,
         date_from=date_from,
         date_to=date_to,
+        delivered_from=delivered_from,
+        delivered_to=delivered_to,
         search=search,
         source=source,
         payment_status=payment_status,
@@ -118,10 +122,11 @@ async def update_order(
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_order(
     order_id: UUID,
+    reason: str | None = None,
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
     user_id=Depends(get_current_user_id),
     _=Depends(require_permission(Permissions.MANAGE_CATALOG)),
 ):
     service = await _service(db, tenant_id, user_id)
-    await service.delete(order_id)
+    await service.delete(order_id, reason)

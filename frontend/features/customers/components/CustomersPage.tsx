@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Button, Tabs } from '@mantine/core';
 import { useRouter } from 'next/navigation';
-import { Plus, PencilSimple, Package, FileCsv } from '@phosphor-icons/react';
+import { Plus, PencilSimple, Package, FileCsv, Trash } from '@phosphor-icons/react';
 import {
   DataTable,
   FilterBar,
@@ -15,6 +15,7 @@ import CustomersImportModal from './CustomersImportModal';
 import { useCustomers } from '../api';
 import type { Customer } from '../api';
 import { useRoutes } from '../../routes/api';
+import { useSoftDelete } from '../../recovery/useSoftDelete';
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function CustomersPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [importOpen, setImportOpen] = useState(false);
+  const { remove } = useSoftDelete();
 
   const filtered = useMemo(() => {
     let rows = [...(customersQuery.data ?? [])];
@@ -146,6 +148,13 @@ export default function CustomersPage() {
       label: 'Edit',
       icon: <PencilSimple size={16} />,
       onClick: (c: Customer) => router.push(`/customers/${c.id}/edit`),
+    },
+    {
+      label: 'Delete',
+      icon: <Trash size={16} />,
+      color: 'red',
+      onClick: (c: Customer) =>
+        remove({ path: `/customers/${c.id}`, label: c.name, successTitle: 'Customer deleted' }),
     },
   ];
 

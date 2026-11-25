@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.customers.models import Customer
+from app.modules.deliveries.models import Delivery
 from app.modules.orders.models import Order, OrderItem
 from app.shared.exceptions import NotFoundError
 
@@ -27,6 +28,8 @@ class OrderRepository:
         *,
         date_from: date | None = None,
         date_to: date | None = None,
+        delivered_from: date | None = None,
+        delivered_to: date | None = None,
         search: str | None = None,
         source: str | None = None,
         payment_status: str | None = None,
@@ -67,6 +70,19 @@ class OrderRepository:
             )
         if date_to:
             stmt = stmt.where(Order.created_at <= datetime.combine(date_to, time.max, tzinfo=UTC))
+        if delivered_from or delivered_to:
+            stmt = stmt.join(
+                Delivery,
+                (Delivery.order_id == Order.id) & (Delivery.tenant_id == self.tenant_id),
+            )
+            if delivered_from:
+                stmt = stmt.where(
+                    Delivery.delivered_at >= datetime.combine(delivered_from, time.min, tzinfo=UTC)
+                )
+            if delivered_to:
+                stmt = stmt.where(
+                    Delivery.delivered_at <= datetime.combine(delivered_to, time.max, tzinfo=UTC)
+                )
         needle = (search or "").strip()
         if needle:
             stmt = stmt.join(
