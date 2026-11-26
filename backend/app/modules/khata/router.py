@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response, UploadFile, status
@@ -64,6 +65,7 @@ async def customer_khata(
     search: str | None = None,
     ledger_limit: int | None = None,
     ledger_offset: int = 0,
+    ledger_sort: Literal["asc", "desc"] = "desc",
     db=Depends(get_db),
     tenant_id=Depends(get_current_tenant_id),
     _=Depends(require_any_permission(Permissions.VIEW_ALL, Permissions.MANAGE_KHATA)),
@@ -78,6 +80,7 @@ async def customer_khata(
         search=search,
         ledger_limit=ledger_limit,
         ledger_offset=ledger_offset,
+        ledger_sort=ledger_sort,
     )
 
 

@@ -2,11 +2,11 @@
 
 import { useMemo } from 'react';
 import { Button, Table, Text } from '@mantine/core';
-import { DownloadSimple, FilePdf, Receipt } from '@phosphor-icons/react';
+import { ArrowDown, ArrowUp, DownloadSimple, FilePdf, Receipt } from '@phosphor-icons/react';
 import { EmptyState } from '@/components/shared';
 import { downloadCsv } from '@/lib/exportCsv';
 import { formatDate, formatMoney } from '@/lib/format';
-import type { LedgerEntry } from '../api';
+import type { LedgerEntry, LedgerSort } from '../api';
 import { paymentMethodLabel } from '../constants';
 
 function balanceLabel(balance: string, side: 'dr' | 'cr' | 'zero'): string {
@@ -33,11 +33,15 @@ function particularLabel(entry: LedgerEntry): string {
 export default function LedgerTable({
   ledger,
   customerName,
+  sortDirection,
+  onSortChange,
   onOpenInvoice,
   onOpenReceipt,
 }: {
   ledger: LedgerEntry[];
   customerName: string;
+  sortDirection: LedgerSort;
+  onSortChange: (direction: LedgerSort) => void;
   onOpenInvoice?: (orderId: string) => void;
   onOpenReceipt?: (paymentId: string) => void;
 }) {
@@ -51,7 +55,7 @@ export default function LedgerTable({
     return { debit, credit };
   }, [ledger]);
 
-  const closing = ledger[ledger.length - 1];
+  const closing = ledger[sortDirection === 'desc' ? 0 : ledger.length - 1];
 
   const exportCsv = () => {
     const rows: Array<Array<string | number | null | undefined>> = ledger.map((entry) => [
@@ -122,7 +126,22 @@ export default function LedgerTable({
           <Table verticalSpacing="sm" horizontalSpacing="md">
             <Table.Thead>
               <Table.Tr className="text-zinc-400">
-                <Table.Th className="text-xs font-semibold uppercase tracking-wider">Date</Table.Th>
+                <Table.Th className="text-xs font-semibold uppercase tracking-wider">
+                  <button
+                    type="button"
+                    onClick={() => onSortChange(sortDirection === 'desc' ? 'asc' : 'desc')}
+                    className="inline-flex items-center gap-1 text-inherit transition-colors hover:text-zinc-700"
+                    aria-label={`Sort date ${sortDirection === 'desc' ? 'ascending' : 'descending'}`}
+                    title={`Sort date ${sortDirection === 'desc' ? 'ascending' : 'descending'}`}
+                  >
+                    Date
+                    {sortDirection === 'desc' ? (
+                      <ArrowDown size={13} weight="bold" />
+                    ) : (
+                      <ArrowUp size={13} weight="bold" />
+                    )}
+                  </button>
+                </Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Particulars</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Ref</Table.Th>
                 <Table.Th className="text-xs font-semibold uppercase tracking-wider">Money Recipient Bill No.</Table.Th>

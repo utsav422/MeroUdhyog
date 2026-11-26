@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { REALTIME_FALLBACK_POLL_MS } from '@/lib/realtime';
 import { accountingKeys } from '../accounting/api';
@@ -43,6 +43,8 @@ export type KhataOrder = {
   amount_paid: string;
   payment_status: string;
 };
+
+export type LedgerSort = 'asc' | 'desc';
 
 export type LedgerEntry = {
   date: string;
@@ -285,6 +287,7 @@ export type KhataLedgerFilters = {
   search?: string | null;
   ledgerLimit?: number | null;
   ledgerOffset?: number;
+  ledgerSort?: LedgerSort;
 };
 
 function appendParams(params: URLSearchParams, values: Record<string, string | number | null | undefined>) {
@@ -308,6 +311,7 @@ export function useKhataCustomers(filters: KhataCustomerFilters = {}) {
   return useQuery({
     queryKey: [...khataKeys.customers(), filters],
     queryFn: () => apiClient.get<KhataCustomerSummary[]>(`/khata/customers${suffix ? `?${suffix}` : ''}`),
+    placeholderData: keepPreviousData,
     refetchInterval: REALTIME_FALLBACK_POLL_MS,
     refetchIntervalInBackground: false,
   });
@@ -329,12 +333,14 @@ export function useCustomerKhata(
     search: filters.search,
     ledger_limit: filters.ledgerLimit,
     ledger_offset: filters.ledgerOffset,
+    ledger_sort: filters.ledgerSort,
   });
   const suffix = params.toString();
   return useQuery({
     queryKey: [...khataKeys.customer(id ?? ''), filters],
     queryFn: () => apiClient.get<CustomerKhataDetail>(`/khata/customers/${id}${suffix ? `?${suffix}` : ''}`),
     enabled: isEnabled && !!id,
+    placeholderData: keepPreviousData,
     refetchInterval: REALTIME_FALLBACK_POLL_MS,
     refetchIntervalInBackground: false,
   });

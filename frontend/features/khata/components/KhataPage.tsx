@@ -258,7 +258,7 @@ export default function KhataPage() {
         columns={columns}
         data={paged}
         loading={khataQuery.isLoading}
-        error={khataQuery.isError}
+        error={khataQuery.isError && !khataQuery.data}
         retry={() => khataQuery.refetch()}
         isPermissionDenied={(khataQuery.error as { status?: number } | undefined)?.status === 403}
         sortState={sort}

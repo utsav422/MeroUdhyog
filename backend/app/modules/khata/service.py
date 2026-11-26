@@ -173,6 +173,7 @@ class KhataService:
         search: str | None = None,
         ledger_limit: int | None = None,
         ledger_offset: int = 0,
+        ledger_sort: str = "desc",
     ) -> CustomerKhataDetail:
         customer = await self.repo.get_customer(customer_id)
 
@@ -213,6 +214,8 @@ class KhataService:
             search=search,
         )
         ledger_total = len(visible_ledger)
+        if ledger_sort == "desc":
+            visible_ledger.sort(key=lambda row: row.date, reverse=True)
         if ledger_limit is not None:
             visible_ledger = visible_ledger[ledger_offset : ledger_offset + ledger_limit]
         return CustomerKhataDetail(

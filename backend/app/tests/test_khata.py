@@ -483,7 +483,7 @@ async def test_customer_ledger_debit_credit_running_balance(client):
     payment = await _pay(client, customer["id"], "25.00", payer_bill_no="BILL-42")
     assert payment["payer_bill_no"] == "BILL-42"
 
-    r = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    r = await client.get(f"/api/v1/khata/customers/{customer['id']}?ledger_sort=asc")
     detail = r.json()
     ledger = detail["ledger"]
 
@@ -506,6 +506,11 @@ async def test_customer_ledger_debit_credit_running_balance(client):
     assert ledger[-1]["balance"] == "15.00"
     assert ledger[-1]["balance_side"] == "dr"
 
+    # Default view is newest first: today's entries sit above yesterday's.
+    newest = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    assert newest.json()["ledger"][0]["entry_type"] == "payment"
+    assert newest.json()["ledger"][0]["balance"] == detail["outstanding"]
+
     # The payer's bill number also flows through to the receipt detail.
     r = await client.get(f"/api/v1/khata/receipts/{payment['id']}")
     assert r.json()["payer_bill_no"] == "BILL-42"
@@ -520,7 +525,7 @@ async def test_customer_ledger_credit_when_paid_ahead(client):
 
     await _pay(client, customer["id"], "60.00")
 
-    r = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    r = await client.get(f"/api/v1/khata/customers/{customer['id']}?ledger_sort=asc")
     detail = r.json()
     ledger = detail["ledger"]
 
@@ -537,7 +542,7 @@ async def test_customer_ledger_credit_when_paid_ahead(client):
     )
     assert r.status_code == 200
 
-    r = await client.get(f"/api/v1/khata/customers/{customer['id']}")
+    r = await client.get(f"/api/v1/khata/customers/{customer['id']}?ledger_sort=asc")
     detail = r.json()
     assert len(detail["ledger"]) == 3  # 2 invoices + 2 payments, of which one is voided
     assert detail["ledger"][-1]["balance"] == detail["outstanding"]
@@ -603,7 +608,7 @@ async def test_direct_delivery_is_fully_integrated(client):
     assert datetime.fromisoformat(
         khata_order["delivered_at"].replace("Z", "+00:00")
     ) == datetime.fromisoformat(result["delivered_at"].replace("Z", "+00:00"))
-    assert [row["entry_type"] for row in detail["ledger"]] == ["invoice", "payment"]
+    assert [row["entry_type"] for row in detail["ledger"]] == ["payment", "invoice"]
 
     r = await client.get(f"/api/v1/orders/{order_id}")
     assert r.status_code == 200

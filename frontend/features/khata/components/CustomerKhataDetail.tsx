@@ -38,7 +38,7 @@ import {
   useCustomerKhata,
   useVoidPayment,
 } from '../api';
-import type { Payment } from '../api';
+import type { LedgerSort, Payment } from '../api';
 import RecordPaymentModal from './RecordPaymentModal';
 import DirectDeliveryModal from './DirectDeliveryModal';
 import LedgerTable from './LedgerTable';
@@ -95,6 +95,7 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
   const [ledgerMethod, setLedgerMethod] = useState<string | null>(null);
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerPageSize, setLedgerPageSize] = useState(10);
+  const [ledgerSort, setLedgerSort] = useState<LedgerSort>('desc');
   const [activeTab, setActiveTab] = useState<string | null>('ledger');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string | null>(null);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string | null>(null);
@@ -108,6 +109,7 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
     search: ledgerSearch,
     ledgerLimit: ledgerPageSize,
     ledgerOffset: (ledgerPage - 1) * ledgerPageSize,
+    ledgerSort,
   });
   const voidPayment = useVoidPayment();
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -121,9 +123,9 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
     receiptNumber: string | null;
   } | null>(null);
 
-  if (detailQuery.isLoading) return <LoadingState />;
-  if (detailQuery.isError) return <ErrorState retry={() => detailQuery.refetch()} />;
   const detail = detailQuery.data;
+  if (detailQuery.isLoading) return <LoadingState />;
+  if (detailQuery.isError && !detail) return <ErrorState retry={() => detailQuery.refetch()} />;
   if (!detail) return null;
 
   const outstanding = Number(detail.outstanding);
@@ -312,6 +314,11 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
       <LedgerTable
         ledger={detail.ledger}
         customerName={detail.customer_name}
+        sortDirection={ledgerSort}
+        onSortChange={(direction) => {
+          setLedgerSort(direction);
+          setLedgerPage(1);
+        }}
         onOpenInvoice={(orderId) => {
           const order = detail.orders.find((o) => o.order_id === orderId);
           setInvoicePreview({ orderId, orderRef: order?.order_ref ?? '' });
@@ -558,6 +565,8 @@ export default function CustomerKhataDetail({ customerId }: { customerId: string
         <LedgerTable
           ledger={detail.ledger}
           customerName={detail.customer_name}
+          sortDirection={ledgerSort}
+          onSortChange={setLedgerSort}
           onOpenInvoice={(orderId) => {
             const order = detail.orders.find((o) => o.order_id === orderId);
             setLedgerExpanded(false);
